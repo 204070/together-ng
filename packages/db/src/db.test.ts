@@ -1,0 +1,114 @@
+import { beforeEach, describe, expect, test } from 'bun:test';
+import postgres from 'postgres';
+import { CATEGORIES, loadEnv, migrate, seedCategories } from './index';
+
+loadEnv();
+
+const databaseUrl = process.env.DATABASE_URL ?? '';
+
+describe.skipIf(databaseUrl.length === 0)('database schema and migrations', () => {
+	const sql = postgres(databaseUrl, { max: 10, onnotice: () => {} });
+
+	beforeEach(async () => {
+		await migrate(databaseUrl);
+	});
+
+	test('applying migrations twice is idempotent', async () => {
+		await migrate(databaseUrl);
+		const rows = await sql`SELECT file_name FROM public.drizzle_migrations`;
+		expect(rows.length).toBeGreaterThan(0);
+	});
+
+	test('seed inserts Section 7.3 categories and is idempotent', async () => {
+		const countCategories = async (): Promise<number> => {
+			const rows = await sql<{ count: number }[]>`
+				SELECT count(*)::int AS count FROM public.categories
+			`;
+			return rows[0]?.count ?? 0;
+		};
+
+		const before = await countCategories();
+		const firstInsert = await seedCategories(databaseUrl);
+		const afterFirst = await countCategories();
+		expect(afterFirst).toBe(before + firstInsert);
+		if (before === 0) {
+			expect(firstInsert).toBe(CATEGORIES.length);
+		}
+		expect(afterFirst).toBeGreaterThanOrEqual(17);
+
+		const secondInsert = await seedCategories(databaseUrl);
+		const afterSecond = await countCategories();
+		expect(secondInsert).toBe(0);
+		expect(afterSecond).toBe(afterFirst);
+	});
+
+	const REQUIRED_TABLES = [
+		'users',
+		'profiles',
+		'categories',
+		'skills',
+		'contributor_capabilities',
+		'requests',
+		'request_responses',
+		'contributions',
+		'outcome_confirmations',
+		'votes',
+		'notifications',
+		'notification_preferences',
+		'request_matches',
+		'reports',
+		'audit_log',
+		'badges',
+	];
+
+	test('all required tables exist', async () => {
+		const rows = await sql<{ table_name: string }[]>`
+			SELECT table_name
+			FROM information_schema.tables
+			WHERE table_schema = 'public'
+		`;
+		const tableNames = rows.map((row) => row.table_name);
+		for (const table of REQUIRED_TABLES) {
+			expect(tableNames, `expected table ${table}`).toContain(table);
+		}
+	});
+
+	test('requests has tsvector search column, vector embedding and GIN index', async () => {
+		const columns = await sql<{ column_name: string; type: string }[]>`
+			SELECT a.attname AS column_name, format_type(a.atttypid, a.atttypmod) AS type
+			FROM pg_attribute a
+			JOIN pg_class c ON c.oid = a.attrelid
+			WHERE c.relname = 'requests' AND c.relnamespace = 'public'::regnamespace
+				AND a.attnum > 0 AND NOT a.attisdropped
+		`;
+		expect(columns.some((c) => c.column_name === 'search_vector' && c.type === 'tsvector')).toBe(
+			true,
+		);
+		expect(columns.some((c) => c.column_name === 'embedding' && c.type === 'vector(384)')).toBe(
+			true,
+		);
+
+		const ginIndexes = await sql<{ indexname: string }[]>`
+			SELECT indexname
+			FROM pg_indexes
+			WHERE schemaname = 'public' AND tablename = 'requests' AND indexdef ILIKE '%USING gin%'
+		`;
+		expect(ginIndexes.length).toBeGreaterThan(0);
+	});
+
+	test('votes enforces UNIQUE (user_id, request_id)', async () => {
+		const constraints = await sql<{ conname: string }[]>`
+			SELECT conname
+			FROM pg_constraint
+			WHERE conrelid = 'public.votes'::regclass AND contype = 'u'
+		`;
+		expect(constraints.some((c) => c.conname === 'votes_user_request_unique')).toBe(true);
+	});
+
+	test('pg_trgm and vector extensions are enabled', async () => {
+		const extensions = await sql<{ extname: string }[]>`
+			SELECT extname FROM pg_extension WHERE extname IN ('vector', 'pg_trgm')
+		`;
+		expect(extensions.map((e) => e.extname).sort()).toEqual(['pg_trgm', 'vector']);
+	});
+});

@@ -1,0 +1,3 @@
+# Bun configuration for the Together monorepo.
+# Task caching/orchestration across workspaces is provided by Bun's
+# native `--filter` runner; Turborepo can be added later if needed.

@@ -1,0 +1,19 @@
+{
+	"name": "@together/api",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"dependencies": {
+		"@together/schemas": "workspace:*"
+	},
+	"devDependencies": {
+		"@together/config": "workspace:*"
+	},
+	"scripts": {
+		"dev": "bun run src/index.ts",
+		"build": "bun build ./src/index.ts --outdir ./dist",
+		"start": "bun run ./dist/index.js",
+		"lint": "biome check .",
+		"typecheck": "tsc --noEmit"
+	}
+}

@@ -4,8 +4,9 @@
 **Product:** Together  
 **Working domain:** together.ng  
 **Status:** Detailed product specification  
-**Scope:** Product behavior, workflows, business rules, functional requirements, and acceptance criteria  
-**Explicitly excluded for now:** Technology choices, system architecture, infrastructure, implementation code, matching algorithms, AI implementation, and detailed data schemas
+**Scope:** Product behavior, workflows, business rules, functional requirements, acceptance criteria, technical architecture, technology stack, matching algorithm, and AI implementation approach  
+**Revision note:** This revision adds Section 65 (Technical Implementation Plan) and Section 66 (Low-Fidelity Wireframes). Sections 1–64 remain the product specification and are unchanged in substance.  
+**Companion file:** Wireframes and the system architecture diagram are in `together-wireframes.html` (see Section 66).
 
 ---
 
@@ -1933,3 +1934,140 @@ The fundamental relationship remains:
 > **You can help someone else.**
 
 > **Together, we can all become more capable.**
+
+# 65. Technical Implementation Plan
+
+## 65.1 Approach and constraints
+
+This section defines how the product described in Sections 1–64 gets built. It assumes:
+
+- A small team shipping an MVP quickly, then iterating based on the Phase 1–4 roadmap in Section 61.
+- A single relational source of truth, because almost every core object in this product (requests, offers, votes, lending agreements, reputation) is transactional and relationally connected — this is not a document-shaped or event-sourced-first problem.
+- AI is a coordination layer that assists request quality, categorization, and matching (per Section 44 and the Vision document's "AI as a Coordination Layer"), not a decision-maker for trust, moderation outcomes, or account actions.
+- Cost discipline appropriate for an early-stage Nigeria-first product: prefer usage-based and self-hostable infrastructure over commitments that assume scale the product hasn't earned yet.
+
+## 65.2 Recommended stack
+
+| Layer                            | Choice                                                                                                                                                                                                                                                   | Why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Public/user web app              | **TanStack Start** (React, file-based routing, SSR + streaming)                                                                                                                                                                                          | Featured feeds, category pages, and request detail pages benefit from server rendering for fast first paint and shareability (Section 14, sharing requests). TanStack Start gives loader/action patterns similar to Remix with full type inference end-to-end, and the same React skills carry over to the admin app.                                                                                                                                                                                                                |
+| Admin app                        | **React + Vite (SPA)**                                                                                                                                                                                                                                   | Admin has no SEO or public-sharing requirement (Section 50) and is authenticated-only, so a plain client-rendered SPA is simpler, cheaper to host (static bundle), and faster to iterate on than paying for SSR infrastructure it doesn't need.                                                                                                                                                                                                                                                                                      |
+| API                              | **Bun + Elysia**                                                                                                                                                                                                                                         | Elysia's schema-first routing (TypeBox) gives runtime validation and compile-time types for free; combined with Bun's fast startup and native WebSocket/TCP support, one process can comfortably serve REST, SSE, and WebSocket (chat, live vote/response counts) without bolting on a separate realtime service for MVP scale. Elysia's Eden Treaty lets both the TanStack Start server and the Vite admin app call the API with full type inference, so a request/response shape change is caught at compile time in both clients. |
+| Database                         | **PostgreSQL**                                                                                                                                                                                                                                           | The domain is relational (Section 55.x journeys touch requests → offers → contributions → outcomes → reputation as connected rows). Postgres also removes the need for several separate services early on: `tsvector`/`pg_trgm` cover MVP search (Section 12.3), `pgvector` covers embedding similarity for duplicate detection and semantic matching (Section 42, Section 44) without a dedicated vector database, and `LISTEN/NOTIFY` can drive lightweight realtime fan-out before Redis pub/sub is needed.                       |
+| Cache / queue / realtime fan-out | **Redis**                                                                                                                                                                                                                                                | Rate limiting for anti-abuse (Section 53, Section 31), session/token storage, and pub/sub so WebSocket notifications and live counters work correctly once the API runs on more than one instance.                                                                                                                                                                                                                                                                                                                                   |
+| Background jobs                  | **Bun worker process(es)**, jobs stored in a Postgres-backed queue (e.g. `pg-boss` or `graphile-worker`)                                                                                                                                                 | Matching recomputation, notification dispatch, embedding generation, and digest emails are all async and can tolerate a few seconds of latency. A Postgres-backed queue avoids introducing a second stateful system (Redis-backed queue) purely for jobs while the volume is still small; Redis remains available if throughput later demands a dedicated queue.                                                                                                                                                                     |
+| Object storage                   | **S3-compatible storage** (e.g. Cloudflare R2 or Backblaze B2)                                                                                                                                                                                           | Profile photos and lending condition-record photos (Section 28, Step 5) are the only binary assets in the product. R2/B2-class storage avoids egress fees, which matters for an image-heavy, cost-sensitive product.                                                                                                                                                                                                                                                                                                                 |
+| Auth                             | **better-auth** (or a hand-rolled JWT + refresh-token flow) on top of Elysia, plus email and phone/SMS OTP                                                                                                                                               | Together's accessibility principle (Section 5.5) means low-risk actions (browsing, asking for help) should require minimal friction, while higher-risk actions (lending high-value resources, Section 29) can require a verified phone number or ID check layered on top of the same auth session. Given the Nigeria-first audience, phone-number OTP (via a local aggregator such as Termii or Africa's Talking) is likely to convert better than email-only auth.                                                                  |
+| LLM provider                     | **Claude API** (model chosen per task — a small/fast model for cheap, high-volume tasks like categorization; a larger model only where reasoning quality matters)                                                                                        | Used only for the assistive features enumerated in Section 44 — never for trust, moderation _decisions_, or reputation calculations, consistent with Section 5.4 and the Vision document's "AI as a Coordination Layer."                                                                                                                                                                                                                                                                                                             |
+| Hosting                          | API + worker on a container platform with Bun support (Fly.io, Railway, or a VPS); web app wherever TanStack Start's Nitro-based output deploys cleanly (Vercel/Netlify/Node host); admin app as a static build behind a CDN, IP-restricted or SSO-gated | Keeps each surface independently deployable and scaled; the admin app in particular should not be reachable from the same public edge as the marketing/feed pages.                                                                                                                                                                                                                                                                                                                                                                   |
+
+> A system architecture diagram (clients → API → data/services layers) is provided in the companion file **`together-wireframes.html`**.
+
+### Is this a good stack? An honest assessment
+
+- **TanStack Start** is the right call for the public/user-facing app. It gets you SSR for the feed/detail pages that need to be fast and shareable, without the heavier conventions of Next.js's app router. The main risk is ecosystem maturity — it's newer than Next.js/Remix, so expect to write a few things (e.g. some SSR edge cases, deployment adapters) yourself rather than finding a plug-in. For a small, technically strong team that's an acceptable trade for a simpler mental model.
+- **Vite SPA for admin** is correct and arguably the more important simplification in this stack: admin tools rarely need SSR, and keeping it a plain SPA means one less deployment target to get SSR-right on.
+- **Bun + Elysia** is a strong, modern choice for developer velocity and end-to-end type safety, and Bun's speed genuinely helps iteration loops and cold starts. The trade-off to go in with eyes open: Bun's ecosystem and some native-module compatibility are less battle-tested than Node's, so plan a short spike verifying that your specific dependencies (image processing, PDF/report generation if added later, any native SDKs) work cleanly on Bun before committing hard. If something doesn't, Elysia's design ports to Node without a rewrite of route logic.
+- **Postgres** is unambiguously right for this domain, and it's worth resisting the temptation to add a search engine (Typesense/Meilisearch), a vector database, or a queue broker on day one — Postgres extensions cover all three adequately until real scale says otherwise. This keeps operational surface area small for a small team.
+- **One gap in the original proposal:** a plan for realtime (chat in Section 19, live vote/response counts, notification delivery) and for background/async work (matching, notification fan-out, embedding generation) wasn't specified. Elysia's native WebSocket support plus a Postgres-backed job queue closes that gap without adding new infrastructure categories.
+
+## 65.3 Monorepo layout
+
+```
+together/
+├── apps/
+│   ├── web/            # TanStack Start — public + authenticated user app
+│   ├── admin/          # React + Vite — internal admin SPA
+│   └── api/             # Bun + Elysia — HTTP, WebSocket, and worker entrypoints
+├── packages/
+│   ├── schemas/        # Shared TypeBox/Zod schemas — single source of truth for
+│   │                    # request/response shapes, consumed by api, web, and admin
+│   ├── db/              # Drizzle/Kysely schema + migrations, query helpers
+│   └── config/          # Shared eslint/tsconfig/tailwind config
+└── turbo.json / bunfig.toml
+```
+
+Bun workspaces (or Turborepo on top of them) keep the three apps and shared packages in one repo so a schema change in `packages/schemas` produces type errors in all three consumers immediately.
+
+## 65.4 Core data model (entities, not full DDL)
+
+| Entity                                                 | Purpose                                                                                                                | Notes                                                                                                                                                                |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `users`, `profiles`                                    | Account + public profile (Sections 7–8)                                                                                | Private contact fields live in a separate table/column set that is never serialized in public API responses (Section 47).                                            |
+| `categories`, `skills`                                 | Evolving taxonomy (Sections 7.3, 51)                                                                                   | Soft-deletable (`retired_at`), never hard-deleted, so historical requests keep valid references (Section 51's "changes should avoid destroying historical records"). |
+| `contributor_capabilities`                             | Join of user ↔ skill/category ↔ availability preferences                                                               | Drives matching (Section 15).                                                                                                                                        |
+| `requests`                                             | The core object; goal/barrier/help-needed text, category, optional structured fields, `state` enum matching Section 11 | `search_vector` (`tsvector`) and `embedding` (`vector`) generated columns for search and semantic matching/duplicate detection.                                      |
+| `request_responses` (offers)                           | A contributor's "I can help" response (Section 17)                                                                     | Independent of full commitment — supports Section 18's multiple/partial offers.                                                                                      |
+| `contributions`                                        | An accepted, in-progress-or-completed unit of help                                                                     | Links a request, one or more responses, and completion/outcome data (Sections 20–22).                                                                                |
+| `outcome_confirmations`                                | Recipient's "did this help you move forward?" answer (Section 21)                                                      | Structured enum + optional free text.                                                                                                                                |
+| `votes`                                                | Upvotes on requests (Section 13)                                                                                       | Unique constraint on `(user_id, request_id)`; rate-limited at the API layer.                                                                                         |
+| `resources`, `lending_agreements`, `condition_records` | Physical resource lending (Sections 27–30)                                                                             | `condition_records` reference object-storage photo keys, not raw files.                                                                                              |
+| `reports`, `moderation_actions`, `audit_log`           | Trust & safety (Sections 34–36, 49–50)                                                                                 | `audit_log` is append-only and covers every admin action, per Section 50's "administrative actions should be auditable."                                             |
+| `badges`, `user_badges`                                | Recognition (Section 25)                                                                                               | Never affects ranking or access.                                                                                                                                     |
+| `notifications`, `notification_preferences`            | Section 16, 37                                                                                                         | Preferences gate both in-app and off-platform (email/SMS/push) delivery.                                                                                             |
+| `request_matches`                                      | Precomputed request↔contributor relevance scores                                                                       | Recomputed by the worker on publish/edit; read at notification-dispatch and "recommended for you" time rather than computed live.                                    |
+
+## 65.5 Matching algorithm
+
+**Phase 1 (MVP) — deterministic, explainable scoring.** On publish or edit, the worker computes a candidate set (contributors whose `contributor_capabilities` intersect the request's category/skills) and scores each candidate as a weighted sum of:
+
+1. **Capability match** — exact skill/category overlap (highest weight).
+2. **Modality fit** — remote/in-person/either compatibility (Section 46).
+3. **Location proximity**, only when the request requires it.
+4. **Availability & notification preferences** — never notify a user outside their stated preferences (Section 16).
+5. **Reliability** — a function of completed contributions and confirmed-helpful outcomes, not popularity (Section 5.4, 23).
+6. **Recency/fatigue dampening** — an exponential penalty based on how recently/often a given contributor was already notified, so the same top contributors aren't always the ones paged (fairness, and a direct mitigation for "attention only flows to the most visible contributors").
+7. **Request quality** — better-formed requests (Section 10) are easier to act on and are weighted slightly higher, which also gives requesters a concrete incentive to use the guided request builder.
+
+This produces a ranked list stored in `request_matches`; the notification dispatcher reads from it and respects per-user frequency caps. Because it's a transparent weighted sum, "why was I matched" (Section 44) can be explained with the actual contributing factors rather than a black-box output.
+
+**Phase 2 — embedding-assisted matching, layered on top, not replacing Phase 1.** Generate an embedding for each request's free text and for each contributor's bio/capability text, store them in `pgvector` columns, and blend cosine similarity into the Phase-1 score. This catches semantically relevant matches that miss on exact taxonomy (e.g. a request mentioning "soldering" matching a contributor who listed "electronics repair" but not "soldering" specifically). The same embeddings power duplicate/related-request detection (Section 42) and a "similar requests" module (see the Request Detail wireframe below).
+
+## 65.6 AI-assisted features → implementation mapping
+
+| Section 44 capability                                                   | Implementation                                                                                                                                                                                                                                                                                                                                                               |
+| ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Improving vague requests, clarifying questions                          | Best-effort LLM call at draft time in the request builder; streamed as inline suggestions (see wireframe below); never blocks publishing if the call fails or is slow.                                                                                                                                                                                                       |
+| Categorizing requests                                                   | LLM suggests a category/skills the user confirms or overrides — the user is always the final decision-maker, consistent with "the user should remain in control" (Section 15).                                                                                                                                                                                               |
+| Finding related/duplicate requests                                      | `pgvector` cosine similarity, with an LLM used only to double-check borderline matches before surfacing them, to reduce false "this looks like a duplicate" prompts.                                                                                                                                                                                                         |
+| Explaining why a contributor is a potential match                       | Templated from the actual Phase-1 scoring factors (not LLM-generated), so the explanation is always true, cheap, and instant.                                                                                                                                                                                                                                                |
+| Summarizing long requests, contributor-side "how could I help" guidance | Small/fast LLM calls, cached per request since the underlying text rarely changes after publish.                                                                                                                                                                                                                                                                             |
+| Moderation assist                                                       | LLM-based classifier flags likely spam, fundraising language (a Non-Goal, Section 4), or policy violations into the human review queue (Section 34–35) — it never auto-suspends or auto-removes; every enforcement action stays a human decision recorded in `audit_log`, matching Section 50 and the "accountability over public shaming" principle in the Vision document. |
+
+## 65.7 Realtime and notifications
+
+- **In-app**: Elysia's native WebSocket support handles chat (Section 19), live vote/response counters, and notification badges. Redis pub/sub fans messages out once the API runs on more than one instance.
+- **Off-platform**: email for transactional and digest notifications; SMS/WhatsApp via a Nigeria-capable aggregator (e.g. Termii or Africa's Talking) for time-sensitive matches, given that push notification reach is inconsistent across the target user base; web push as a lower-priority channel.
+- All dispatch respects the per-category, per-channel, per-frequency preferences described in Section 16 and 37 — the worker checks `notification_preferences` before sending anything, and every send is logged so a user's "why did I get this" question is always answerable.
+
+## 65.8 Security, privacy, and anti-abuse
+
+- Private contact fields, exact addresses, and unverified-identity data are excluded from public API response schemas at the schema level (in `packages/schemas`), not filtered ad hoc per endpoint — this makes "never expose X publicly" (Section 8.3, 47) a compile-time property rather than a code-review hope.
+- Redis-backed rate limiting on request creation, voting, reporting, and messaging (Section 53, 31).
+- Every admin action writes to an append-only `audit_log` row (Section 50).
+- Uploaded photos pass through a basic automated content check before being shown publicly; anything flagged goes to the moderation queue rather than being auto-published or auto-rejected.
+- Nigeria Data Protection Act (NDPA) alignment for data export/erasure requests, in addition to general good practice (data minimization per Section 47).
+
+## 65.9 Observability and operations
+
+Structured logging (pino) from the API and worker, error tracking (Sentry), and OpenTelemetry metrics feeding a dashboard that tracks the Section 54 success metrics (successful contributions, match rate, time-to-first-response) as first-class operational metrics, not just product analytics — if the matching/notification pipeline breaks, that should show up as an ops alert, not just a slow week in a product review.
+
+---
+
+# 66. Low-Fidelity Wireframes
+
+Low-fidelity wireframes for the core web-application screens (Home/Discovery Feed, Create Request wizard, Request Detail, Contributor Profile) and the Admin Dashboard, plus the system architecture diagram, are maintained separately in **`together-wireframes.html`** so they can be updated, viewed, and printed independently of this document. They illustrate structure and information hierarchy only — spacing, copy, and visual design are intentionally left unresolved — and map directly to the workflows defined in Sections 9–23 and 50.
+
+---
+
+# 67. Sequencing Recommendation
+
+If the team wants a build order that matches the Phase 1–4 roadmap in Section 61:
+
+1. **Weeks 1–2**: Postgres schema for users/profiles/categories/requests/responses; Elysia API skeleton with auth; TanStack Start shell with registration, onboarding, and profile creation (Sections 7–8).
+2. **Weeks 3–5**: Request creation wizard with guidance (Sections 9–10), request states (Section 11), featured/category feeds and search (Section 12), voting (Section 13). This is the first fully demoable slice.
+3. **Weeks 6–8**: Phase-1 matching, contributor notifications, responding to requests, communication channel, completion and outcome confirmation, basic reputation (Sections 15–23) — this closes the full "Ask → Match → Help → Confirm" loop from Section 62, which is the most important thing to validate before building anything else.
+4. **Weeks 9–10**: Reporting, blocking, basic admin (reports queue, account actions, category management) — the admin app becomes real here, not before, since there's nothing to moderate yet.
+5. **Later, gated on demand seen in the data**: resource lending workflow (Sections 27–30), embedding-assisted matching and duplicate detection, LLM-assisted request guidance and moderation triage.
+
+Building AI-assisted matching or LLM request guidance before the deterministic version of the same loop exists and works would be solving a problem the team doesn't yet have data on.

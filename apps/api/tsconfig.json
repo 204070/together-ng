@@ -2,7 +2,9 @@
 	"extends": "@together/config/tsconfig",
 	"compilerOptions": {
 		"outDir": "./dist",
-		"rootDir": "./src"
+		"rootDir": "./src",
+		"declaration": false,
+		"declarationMap": false
 	},
 	"include": ["src"]
 }

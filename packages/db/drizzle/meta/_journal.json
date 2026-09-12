@@ -8,6 +8,13 @@
 			"when": 1789100053443,
 			"tag": "0000_greedy_payback",
 			"breakpoints": true
+		},
+		{
+			"idx": 1,
+			"version": "7",
+			"when": 1789251196372,
+			"tag": "0001_nappy_paibok",
+			"breakpoints": true
 		}
 	]
 }

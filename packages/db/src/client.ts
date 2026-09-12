@@ -11,3 +11,5 @@ export function createClient(databaseUrl: string = process.env.DATABASE_URL ?? '
 export function createDb(databaseUrl: string = process.env.DATABASE_URL ?? '') {
 	return drizzle(createClient(databaseUrl));
 }
+
+export type Sql = ReturnType<typeof createClient>;

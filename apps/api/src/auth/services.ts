@@ -1,0 +1,73 @@
+import { createClient, type Sql } from '@together/db';
+import { FixedWindowRateLimiter } from '../lib/rate-limit';
+import { createOtpSender, type OtpSender } from './otp-sender';
+import { AuthStore } from './store';
+
+export const LOGIN_WINDOW_MS = 60_000;
+export const LOGIN_MAX_HITS = 10;
+export const OTP_SEND_WINDOW_MS = 60_000;
+export const OTP_SEND_MAX_HITS = 1;
+export const OTP_VERIFY_WINDOW_MS = 60_000;
+export const OTP_VERIFY_MAX_HITS = 10;
+
+export interface AppEnv {
+	databaseUrl?: string;
+	jwtSecret?: string;
+	otpProvider?: 'mock' | 'termii';
+	isProduction?: boolean;
+	now?: () => Date;
+	sql?: Sql;
+}
+
+export interface AuthServices {
+	sql: Sql;
+	store: AuthStore;
+	jwtSecret: string;
+	isProduction: boolean;
+	now: () => Date;
+	otpSender: OtpSender;
+	close: () => Promise<void>;
+	limiters: {
+		login: FixedWindowRateLimiter;
+		otpSend: FixedWindowRateLimiter;
+		otpVerify: FixedWindowRateLimiter;
+	};
+}
+
+export function createAuthServices(env: AppEnv = {}): AuthServices {
+	const databaseUrl = env.databaseUrl ?? process.env.DATABASE_URL ?? '';
+	const jwtSecret = env.jwtSecret ?? process.env.JWT_SECRET ?? '';
+	const isProduction = env.isProduction ?? process.env.NODE_ENV === 'production';
+	const provider = env.otpProvider ?? (process.env.OTP_PROVIDER === 'termii' ? 'termii' : 'mock');
+	const now = env.now ?? (() => new Date());
+	const sql = (env.sql ?? createClient(databaseUrl)) as Sql;
+	const store = new AuthStore(sql);
+	const otpSender = env.sql === undefined ? createOtpSender(provider) : ensureMockSender(provider);
+	return {
+		sql,
+		store,
+		jwtSecret,
+		isProduction,
+		now,
+		otpSender,
+		close: () => (env.sql === undefined ? sql.end() : Promise.resolve()),
+		limiters: {
+			login: new FixedWindowRateLimiter(LOGIN_WINDOW_MS, LOGIN_MAX_HITS, {
+				now: () => now().getTime(),
+			}),
+			otpSend: new FixedWindowRateLimiter(OTP_SEND_WINDOW_MS, OTP_SEND_MAX_HITS, {
+				now: () => now().getTime(),
+			}),
+			otpVerify: new FixedWindowRateLimiter(OTP_VERIFY_WINDOW_MS, OTP_VERIFY_MAX_HITS, {
+				now: () => now().getTime(),
+			}),
+		},
+	};
+}
+
+function ensureMockSender(provider: string): OtpSender {
+	if (provider === 'termii') {
+		throw new Error('termii provider is not allowed when a test SQL client is injected');
+	}
+	return createOtpSender('mock');
+}

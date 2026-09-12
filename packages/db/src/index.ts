@@ -1,3 +1,4 @@
+export type { Sql } from './client';
 export { createClient, createDb } from './client';
 export { loadEnv } from './env';
 export { migrate, migrationsDir } from './migrate';

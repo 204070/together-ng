@@ -1,7 +1,14 @@
-import { name as packageName } from '@together/schemas';
+import { app } from './app';
 
-export const name = '@together/api';
+const port = Number(process.env.PORT ?? 4004);
 
-console.log(`${name} is ready, linked to ${packageName}.`);
-
-export default name;
+app
+	.listen(port, async () => {
+		if (process.env.NODE_ENV !== 'test') {
+			console.log(`@together/api listening on http://localhost:${port}`);
+		}
+	})
+	.on('error', (error) => {
+		console.error('@together/api failed to boot:', error);
+		process.exit(1);
+	});

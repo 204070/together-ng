@@ -1,12 +1,13 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
+import { env, loadEnv } from '@together/config';
 import postgres from 'postgres';
-import { CATEGORIES, loadEnv, migrate, seedCategories } from './index';
+import { CATEGORIES, migrate, seedCategories } from './index';
 
 loadEnv();
 
-const databaseUrl = process.env.DATABASE_URL ?? '';
+const databaseUrl = env.DATABASE_URL;
 
-describe.skipIf(databaseUrl.length === 0)('database schema and migrations', () => {
+describe('database schema and migrations', () => {
 	const sql = postgres(databaseUrl, { max: 10, onnotice: () => {} });
 
 	beforeEach(async () => {

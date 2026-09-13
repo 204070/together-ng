@@ -1,5 +1,5 @@
+import { env, loadEnv } from '@together/config';
 import { defineConfig } from 'drizzle-kit';
-import { loadEnv } from './src/env';
 
 loadEnv();
 
@@ -8,6 +8,6 @@ export default defineConfig({
 	schema: './src/schema/**',
 	out: './drizzle',
 	dbCredentials: {
-		url: process.env.DATABASE_URL ?? '',
+		url: env.DATABASE_URL,
 	},
 });

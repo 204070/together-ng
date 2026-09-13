@@ -1,8 +1,9 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { PINNED_VARS } from '@together/config';
 
-const PINNED = new Set(['DATABASE_URL', 'TEST_DATABASE_URL', 'PORT', 'WEB_PORT', 'ADMIN_PORT']);
+const PINNED = new Set(PINNED_VARS);
 
 const REPO_ROOT = resolve(import.meta.dir, '..');
 

@@ -1,10 +1,13 @@
+import { env, loadEnv } from '@together/config';
 import { app } from './app';
 
-const port = Number(process.env.PORT ?? 4004);
+loadEnv();
+
+const port = env.PORT;
 
 app
 	.listen(port, async () => {
-		if (process.env.NODE_ENV !== 'test') {
+		if (env.NODE_ENV !== 'test') {
 			console.log(`@together/api listening on http://localhost:${port}`);
 		}
 	})

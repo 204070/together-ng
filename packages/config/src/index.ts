@@ -1,3 +1,2 @@
-export const name = '@together/config';
-
-export default name;
+export type { ConfigEnv } from './env';
+export { env, loadEnv, PINNED_VARS } from './env';

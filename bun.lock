@@ -4,6 +4,9 @@
   "workspaces": {
     "": {
       "name": "together-ng",
+      "dependencies": {
+        "@together/config": "workspace:*",
+      },
       "devDependencies": {
         "@biomejs/biome": "2.5.13",
         "@types/bun": "^1.4.2",
@@ -26,12 +29,10 @@
       "dependencies": {
         "@elysiajs/eden": "^1.4.9",
         "@elysiajs/jwt": "^1.4.2",
+        "@together/config": "workspace:*",
         "@together/db": "workspace:*",
         "@together/schemas": "workspace:*",
         "elysia": "^1.4.30",
-      },
-      "devDependencies": {
-        "@together/config": "workspace:*",
       },
     },
     "apps/web": {
@@ -47,17 +48,23 @@
     "packages/config": {
       "name": "@together/config",
       "version": "0.0.0",
+      "dependencies": {
+        "@together/schemas": "workspace:*",
+        "dotenv": "^17.4.2",
+      },
+      "devDependencies": {
+        "@types/node": "^22.20.2",
+      },
     },
     "packages/db": {
       "name": "@together/db",
       "version": "0.0.0",
       "dependencies": {
-        "dotenv": "^17.4.2",
+        "@together/config": "workspace:*",
         "drizzle-orm": "^0.45.2",
         "postgres": "^3.4.9",
       },
       "devDependencies": {
-        "@together/config": "workspace:*",
         "@types/node": "^22.20.2",
         "drizzle-kit": "^0.31.10",
       },

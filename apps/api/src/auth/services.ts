@@ -1,3 +1,4 @@
+import { env as configEnv } from '@together/config';
 import { createClient, type Sql } from '@together/db';
 import { FixedWindowRateLimiter } from '../lib/rate-limit';
 import { createOtpSender, type OtpSender } from './otp-sender';
@@ -35,10 +36,10 @@ export interface AuthServices {
 }
 
 export function createAuthServices(env: AppEnv = {}): AuthServices {
-	const databaseUrl = env.databaseUrl ?? process.env.DATABASE_URL ?? '';
-	const jwtSecret = env.jwtSecret ?? process.env.JWT_SECRET ?? '';
-	const isProduction = env.isProduction ?? process.env.NODE_ENV === 'production';
-	const provider = env.otpProvider ?? (process.env.OTP_PROVIDER === 'termii' ? 'termii' : 'mock');
+	const databaseUrl = env.databaseUrl ?? configEnv.DATABASE_URL;
+	const jwtSecret = env.jwtSecret ?? configEnv.JWT_SECRET;
+	const isProduction = env.isProduction ?? configEnv.NODE_ENV === 'production';
+	const provider = env.otpProvider ?? configEnv.OTP_PROVIDER;
 	const now = env.now ?? (() => new Date());
 	const sql = (env.sql ?? createClient(databaseUrl)) as Sql;
 	const store = new AuthStore(sql);

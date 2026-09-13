@@ -1,5 +1,5 @@
+import { env, loadEnv } from '@together/config';
 import postgres from 'postgres';
-import { loadEnv } from './env';
 
 loadEnv();
 
@@ -23,9 +23,7 @@ export const CATEGORIES: { name: string; slug: string }[] = [
 	{ name: 'Local knowledge', slug: 'local-knowledge' },
 ];
 
-export async function seedCategories(
-	databaseUrl: string = process.env.DATABASE_URL ?? '',
-): Promise<number> {
+export async function seedCategories(databaseUrl: string = env.DATABASE_URL): Promise<number> {
 	const sql = postgres(databaseUrl, { max: 1, onnotice: () => {} });
 	try {
 		let inserted = 0;

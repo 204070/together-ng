@@ -6,13 +6,12 @@
 	"dependencies": {
 		"@elysiajs/eden": "^1.4.9",
 		"@elysiajs/jwt": "^1.4.2",
+		"@together/config": "workspace:*",
 		"@together/db": "workspace:*",
 		"@together/schemas": "workspace:*",
 		"elysia": "^1.4.30"
 	},
-	"devDependencies": {
-		"@together/config": "workspace:*"
-	},
+	"devDependencies": {},
 	"scripts": {
 		"dev": "bun run src/index.ts",
 		"build": "bun build ./src/index.ts --outdir ./dist",

@@ -1,4 +1,4 @@
-import { loadEnv } from '@together/db';
+import { loadEnv } from '@together/config';
 import { Elysia } from 'elysia';
 import { ValidationError } from 'elysia/error';
 import { HttpError } from './auth/errors';

@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { env, loadEnv } from '@together/config';
 import postgres from 'postgres';
-import { loadEnv } from './env';
 
 loadEnv();
 
@@ -15,7 +15,7 @@ function splitStatements(content: string): string[] {
 		.filter((statement) => statement.length > 0);
 }
 
-export async function migrate(databaseUrl: string = process.env.DATABASE_URL ?? ''): Promise<void> {
+export async function migrate(databaseUrl: string = env.DATABASE_URL): Promise<void> {
 	const sql = postgres(databaseUrl, { max: 1, onnotice: () => {} });
 	try {
 		await sql`CREATE TABLE IF NOT EXISTS public.drizzle_migrations (

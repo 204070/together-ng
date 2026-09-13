@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  ci:
+    name: CI
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: together
+          POSTGRES_PASSWORD: together
+          POSTGRES_DB: together
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U together -d together"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://together:together@localhost:5432/together
+      TEST_DATABASE_URL: postgresql://together:together@localhost:5432/together
+      REDIS_URL: redis://localhost:6379/0
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.12
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Lint and format
+        run: bunx biome check .
+
+      - name: Migration drift
+        run: |
+          bun run --filter @together/db db:generate
+          output="$(git status --porcelain packages/db/drizzle)"
+          if [ -n "$output" ]; then
+            echo "Migration drift detected under packages/db/drizzle:"
+            echo "$output"
+            exit 1
+          fi
+          echo "No migration drift."
+
+      - name: Test
+        run: bun run test

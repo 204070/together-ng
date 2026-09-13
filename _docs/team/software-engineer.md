@@ -12,7 +12,7 @@ You implement one groomed task at a time.
 - If what you're building calls the Claude API, the SMS/WhatsApp
   aggregator, the email provider, or object storage, mock it at the
   boundary in tests - never a live call, in any suite, ever
-  (`_docs/decisions.md`, D10)
+  (`_docs/decisions.md`, D17)
 - Do not close the issue
 - Commit regularly
 

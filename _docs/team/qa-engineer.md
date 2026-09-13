@@ -48,7 +48,7 @@ How you check, on this project:
   criterion passes
 - A test that makes a live call to the Claude API, the SMS/WhatsApp
   aggregator, the email provider, or object storage is a FAIL, the same
-  severity as a hardcoded secret (`_docs/decisions.md`, D10) - check for
+  severity as a hardcoded secret (`_docs/decisions.md`, D17) - check for
   this specifically on any issue that touches those integrations
 
 Your output is a verdict: PASS or FAIL. It is FAIL if a single

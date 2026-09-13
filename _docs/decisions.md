@@ -166,7 +166,7 @@ mirrors; introducing one the DB doesn't store is a hard FAIL.
 
 ## D13. SMS/phone provider adapter: Termii first, mockable
 
-Phone messaging goes through one `OtpSender { sendOtp(phone, code) }` interface in `apps/api`, selected by `OTP_PROVIDER` (`mock` outside prod and always in tests, D10; `termii` in prod). Termii is the Nigeria-first MVP provider (§65.2); Africa's Talking stays plug-compatible behind the same interface. Binds future phone notifications (#13, #24) as well as auth OTP.
+Phone messaging goes through one `OtpSender { sendOtp(phone, code) }` interface in `apps/api`, selected by `OTP_PROVIDER` (`mock` outside prod and always in tests, D17; `termii` in prod). Termii is the Nigeria-first MVP provider (§65.2); Africa's Talking stays plug-compatible behind the same interface. Binds future phone notifications (#13, #24) as well as auth OTP.
 
 ## D14. Token strategy: short access JWT (@elysiajs/jwt) + opaque rotating refresh
 

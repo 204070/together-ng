@@ -112,7 +112,7 @@ touches it:
 storage) alongside `DATABASE_URL`. Copying it into up to five worktrees
 at once means those keys now live in five places instead of one - use
 scoped or dev-tier keys for worktree `.env` files, never production
-credentials, and see D10 for why none of them should be called for real
+credentials, and see D17 for why none of them should be called for real
 during a test run anyway.
 
 The database part is not optional. `.env` is git-ignored and

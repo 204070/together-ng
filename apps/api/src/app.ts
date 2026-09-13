@@ -1,7 +1,7 @@
 import { loadEnv } from '@together/config';
 import { Elysia } from 'elysia';
 import { ValidationError } from 'elysia/error';
-import { HttpError } from './modules/auth/errors';
+import { HttpError } from './lib/errors';
 import { createAuthRouter } from './modules/auth/routes';
 import { type AppEnv, createAuthServices } from './modules/auth/services';
 import { createProfileRouter } from './modules/profiles/routes';
@@ -13,7 +13,10 @@ loadEnv();
 
 export function makeApp(env: AppEnv = {}) {
 	const authServices = createAuthServices(env);
-	const profileServices = createProfileServices(env, { sql: authServices.sql });
+	const profileServices = createProfileServices(env, {
+		sql: authServices.sql,
+		users: authServices.store,
+	});
 	const requestServices = createRequestServices(env, {
 		sql: authServices.sql,
 		authStore: authServices.store,

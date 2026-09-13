@@ -1,15 +1,13 @@
 import { jwt } from '@elysiajs/jwt';
 import { RequestDraftCreate, RequestPatch, Value } from '@together/schemas';
 import { Elysia, t } from 'elysia';
-import { HttpError } from '../auth/errors';
+import { requireActiveActor } from '../../lib/authentication';
+import { HttpError } from '../../lib/errors';
 import { missingFields, qualityHints } from './quality';
 import type { RequestServices } from './services';
 import { canTransition } from './state';
 import { toResponse } from './store';
 
-function unauthorized(): HttpError {
-	return new HttpError(401, 'UNAUTHORIZED', undefined, undefined, 'Authentication required');
-}
 function notFound(): HttpError {
 	return new HttpError(404, 'NOT_FOUND', undefined, undefined, 'Request not found');
 }
@@ -40,11 +38,6 @@ function categoryRetired(): HttpError {
 		'Category is retired',
 	);
 }
-function extractBearer(auth: string | undefined): string | undefined {
-	if (!auth) return undefined;
-	const m = /^Bearer\s+(.+)$/i.exec(auth.trim());
-	return m?.[1];
-}
 function collectIssues(schema: unknown, value: unknown): Record<string, string> {
 	const issues: Record<string, string> = {};
 	for (const e of Value.Errors(schema as never, value as never)) {
@@ -67,15 +60,10 @@ export function createRequestRouter(services: RequestServices) {
 		headers: Record<string, string | undefined>,
 		jwtVerify: { verify: (tok: string) => Promise<unknown> },
 	): Promise<string> {
-		const token = extractBearer(headers.authorization);
-		if (!token) throw unauthorized();
-		const payload = await jwtVerify.verify(token);
-		if (!payload || typeof (payload as Record<string, unknown>).sub !== 'string')
-			throw unauthorized();
-		const sub = (payload as Record<string, unknown>).sub as string;
-		const user = await services.findUserById(sub);
-		if (user?.status !== 'active' || user.deleted_at !== null) throw unauthorized();
-		return sub;
+		const actor = await requireActiveActor(headers, jwtVerify, {
+			findUserById: services.findUserById,
+		});
+		return actor.userId;
 	}
 	return new Elysia()
 		.use(jwt({ name: 'jwt', secret: services.jwtSecret, exp: '15m' }))

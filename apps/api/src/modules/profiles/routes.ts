@@ -1,14 +1,12 @@
 import { jwt } from '@elysiajs/jwt';
 import { ProfileCreate, ProfilePatch, ProfileReplace } from '@together/schemas';
 import { Elysia, t } from 'elysia';
+import { requireActiveActor } from '../../lib/authentication';
+import { HttpError } from '../../lib/errors';
 import { buildPhotoKey, type PhotoStorage } from '../../lib/storage';
-import { HttpError } from '../auth/errors';
 import type { ProfileServices } from './services';
-import type { ProfileRow, ProfileStore } from './store';
+import type { ProfileRow } from './store';
 
-function unauthorizedError(): HttpError {
-	return new HttpError(401, 'UNAUTHORIZED', undefined, undefined, 'Authentication required');
-}
 function forbiddenError(): HttpError {
 	return new HttpError(403, 'FORBIDDEN', undefined, undefined, 'Forbidden');
 }
@@ -17,33 +15,6 @@ function notFoundError(): HttpError {
 }
 function profileExistsError(): HttpError {
 	return new HttpError(409, 'PROFILE_EXISTS', undefined, undefined, 'Profile already exists');
-}
-
-function extractBearer(authorization: string | undefined): string | undefined {
-	if (authorization === undefined) return undefined;
-	const match = /^Bearer\s+(.+)$/i.exec(authorization.trim());
-	return match?.[1];
-}
-
-async function requireAuth(
-	headers: { authorization?: string },
-	jwtVerify: { verify: (token: string) => Promise<false | { sub: string; sid: string }> },
-	_store: ProfileStore,
-	sql: ProfileServices['sql'],
-): Promise<{ userId: string }> {
-	const token = extractBearer(headers.authorization);
-	if (token === undefined) throw unauthorizedError();
-	const payload = await jwtVerify.verify(token);
-	if (payload === false || typeof payload.sub !== 'string' || typeof payload.sid !== 'string') {
-		throw unauthorizedError();
-	}
-	// Reuse AuthStore logic: check user active
-	const rows = await sql<{ id: string; status: string; deleted_at: Date | null }[]>`
-		SELECT id, status, deleted_at FROM users WHERE id = ${payload.sub}`;
-	const user = rows[0];
-	if (user === undefined || user.status !== 'active' || user.deleted_at !== null)
-		throw unauthorizedError();
-	return { userId: payload.sub };
 }
 
 function toPublic(row: ProfileRow, contributorSince: Date | null, storage: PhotoStorage) {
@@ -143,11 +114,10 @@ export function createProfileRouter(services: ProfileServices) {
 	return new Elysia()
 		.use(jwt({ name: 'jwt', secret: services.jwtSecret, exp: '15m' }))
 		.get('/profiles/me', async ({ headers, jwt: jwtVerify }) => {
-			const { userId } = await requireAuth(
+			const { userId } = await requireActiveActor(
 				headers as { authorization?: string },
 				jwtVerify as never,
-				store,
-				services.sql,
+				services.users,
 			);
 			const row = await store.findByUserId(userId);
 			if (row === undefined) throw notFoundError();
@@ -157,11 +127,10 @@ export function createProfileRouter(services: ProfileServices) {
 		.post(
 			'/profiles',
 			async ({ body, headers, set, jwt: jwtVerify }) => {
-				const { userId } = await requireAuth(
+				const { userId } = await requireActiveActor(
 					headers as { authorization?: string },
 					jwtVerify as never,
-					store,
-					services.sql,
+					services.users,
 				);
 				const existing = await store.findByUserId(userId);
 				if (existing !== undefined) throw profileExistsError();
@@ -192,11 +161,10 @@ export function createProfileRouter(services: ProfileServices) {
 		.put(
 			'/profiles/:id',
 			async ({ params, body, headers, jwt: jwtVerify }) => {
-				const { userId } = await requireAuth(
+				const { userId } = await requireActiveActor(
 					headers as { authorization?: string },
 					jwtVerify as never,
-					store,
-					services.sql,
+					services.users,
 				);
 				const row = await store.findById(params.id);
 				if (row === undefined) throw notFoundError();
@@ -215,11 +183,10 @@ export function createProfileRouter(services: ProfileServices) {
 			'/profiles/:id',
 			async ({ params, body, headers, jwt: jwtVerify }) => {
 				// Concurrency: last-write-wins (LWW) — no If-Match/versioning this wave; each PATCH overwrites the row and bumps updatedAt.
-				const { userId } = await requireAuth(
+				const { userId } = await requireActiveActor(
 					headers as { authorization?: string },
 					jwtVerify as never,
-					store,
-					services.sql,
+					services.users,
 				);
 				const row = await store.findById(params.id);
 				if (row === undefined) throw notFoundError();
@@ -237,11 +204,10 @@ export function createProfileRouter(services: ProfileServices) {
 		.post(
 			'/profiles/:id/photo',
 			async ({ params, body, headers, jwt: jwtVerify }) => {
-				const { userId } = await requireAuth(
+				const { userId } = await requireActiveActor(
 					headers as { authorization?: string },
 					jwtVerify as never,
-					store,
-					services.sql,
+					services.users,
 				);
 				const row = await store.findById(params.id);
 				if (row === undefined) throw notFoundError();

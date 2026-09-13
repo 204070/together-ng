@@ -8,6 +8,7 @@
 	"scripts": {
 		"build": "bun run --filter './apps/*' build",
 		"dev": "bun run --filter './apps/*' dev",
+		"test": "bun run scripts/test.ts",
 		"lint": "biome check .",
 		"typecheck": "bun run --filter './apps/*' --filter './packages/*' typecheck",
 		"format": "biome format --write .",

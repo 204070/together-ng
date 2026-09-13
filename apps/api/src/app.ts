@@ -4,6 +4,7 @@ import { ValidationError } from 'elysia/error';
 import { HttpError } from './auth/errors';
 import { createAuthRouter } from './auth/routes';
 import { type AppEnv, createAuthServices } from './auth/services';
+import { createProfileRouter } from './routes/profiles/routes';
 
 loadEnv();
 
@@ -34,7 +35,8 @@ export function makeApp(env: AppEnv = {}) {
 			set.status = 500;
 			return { error: 'INTERNAL', message: 'Internal server error' };
 		})
-		.use(createAuthRouter(services));
+		.use(createAuthRouter(services))
+		.use(createProfileRouter(services));
 
 	app.decorate('services', services);
 

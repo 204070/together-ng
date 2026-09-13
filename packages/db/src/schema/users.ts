@@ -1,4 +1,13 @@
-import { boolean, index, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import {
+	boolean,
+	index,
+	jsonb,
+	pgTable,
+	text,
+	timestamp,
+	uniqueIndex,
+	uuid,
+} from 'drizzle-orm/pg-core';
 import { userStatus } from './enums';
 
 export const users = pgTable(
@@ -35,6 +44,15 @@ export const profiles = pgTable(
 		bio: text('bio'),
 		location: text('location'),
 		profilePhotoKey: text('profile_photo_key'),
+		areasOfInterest: jsonb('areas_of_interest').$type<number[]>().notNull().default([]),
+		skills: jsonb('skills').$type<number[]>().notNull().default([]),
+		resources: jsonb('resources').$type<string[]>().notNull().default([]),
+		contributionAvailability: jsonb('contribution_availability').$type<{
+			modality: 'online' | 'in_person' | 'both';
+			preferredArea?: string;
+			willingToMentor?: boolean;
+		} | null>(),
+		exactAddress: text('exact_address'),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 		updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 	},

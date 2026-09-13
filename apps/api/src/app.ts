@@ -1,16 +1,25 @@
 import { loadEnv } from '@together/config';
 import { Elysia } from 'elysia';
 import { ValidationError } from 'elysia/error';
-import { HttpError } from './auth/errors';
-import { createAuthRouter } from './auth/routes';
-import { type AppEnv, createAuthServices } from './auth/services';
-import { createProfileRouter } from './routes/profiles/routes';
-import { createRequestRouter } from './routes/requests/routes';
+import { HttpError } from './modules/auth/errors';
+import { createAuthRouter } from './modules/auth/routes';
+import { type AppEnv, createAuthServices } from './modules/auth/services';
+import { createProfileRouter } from './modules/profiles/routes';
+import { createProfileServices } from './modules/profiles/services';
+import { createRequestRouter } from './modules/requests/routes';
+import { createRequestServices } from './modules/requests/services';
 
 loadEnv();
 
 export function makeApp(env: AppEnv = {}) {
-	const services = createAuthServices(env);
+	const authServices = createAuthServices(env);
+	const profileServices = createProfileServices(env, { sql: authServices.sql });
+	const requestServices = createRequestServices(env, {
+		sql: authServices.sql,
+		authStore: authServices.store,
+		now: authServices.now,
+	});
+
 	const app = new Elysia()
 		.get('/health', () => ({ status: 'ok' as const }))
 		.onError(({ error, code, set }) => {
@@ -36,11 +45,11 @@ export function makeApp(env: AppEnv = {}) {
 			set.status = 500;
 			return { error: 'INTERNAL', message: 'Internal server error' };
 		})
-		.use(createAuthRouter(services))
-		.use(createProfileRouter(services))
-		.use(createRequestRouter(services));
+		.use(createAuthRouter(authServices))
+		.use(createProfileRouter(profileServices))
+		.use(createRequestRouter(requestServices));
 
-	app.decorate('services', services);
+	app.decorate('services', authServices);
 
 	return app;
 }

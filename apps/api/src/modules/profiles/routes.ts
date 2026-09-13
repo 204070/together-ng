@@ -1,10 +1,10 @@
 import { jwt } from '@elysiajs/jwt';
 import { ProfileCreate, ProfilePatch, ProfileReplace } from '@together/schemas';
 import { Elysia, t } from 'elysia';
-import { HttpError } from '../../auth/errors';
-import type { AuthServices } from '../../auth/services';
-import { buildPhotoKey, type PhotoStorage, photoStorage } from '../../lib/storage';
-import { type ProfileRow, ProfileStore } from './store';
+import { buildPhotoKey, type PhotoStorage } from '../../lib/storage';
+import { HttpError } from '../auth/errors';
+import type { ProfileServices } from './services';
+import type { ProfileRow, ProfileStore } from './store';
 
 function unauthorizedError(): HttpError {
 	return new HttpError(401, 'UNAUTHORIZED', undefined, undefined, 'Authentication required');
@@ -29,7 +29,7 @@ async function requireAuth(
 	headers: { authorization?: string },
 	jwtVerify: { verify: (token: string) => Promise<false | { sub: string; sid: string }> },
 	_store: ProfileStore,
-	sql: AuthServices['sql'],
+	sql: ProfileServices['sql'],
 ): Promise<{ userId: string }> {
 	const token = extractBearer(headers.authorization);
 	if (token === undefined) throw unauthorizedError();
@@ -136,8 +136,9 @@ function mapPatchBody(body: Record<string, unknown>): Partial<{
 	return patch;
 }
 
-export function createProfileRouter(services: AuthServices, storage: PhotoStorage = photoStorage) {
-	const store = new ProfileStore(services.sql);
+export function createProfileRouter(services: ProfileServices) {
+	const store = services.store;
+	const storage = services.storage;
 
 	return new Elysia()
 		.use(jwt({ name: 'jwt', secret: services.jwtSecret, exp: '15m' }))

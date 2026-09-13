@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { createClient, type Sql } from '@together/db';
-import { makeApp } from '../app';
+import { makeApp } from '../../app';
 import type { MockOtpSender } from './otp-sender';
 import type { AuthServices } from './services';
 

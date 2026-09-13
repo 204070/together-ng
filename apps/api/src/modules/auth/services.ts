@@ -1,6 +1,6 @@
 import { env as configEnv } from '@together/config';
 import { createClient, type Sql } from '@together/db';
-import { FixedWindowRateLimiter } from '../lib/rate-limit';
+import { FixedWindowRateLimiter } from '../../lib/rate-limit';
 import { createOtpSender, type OtpSender } from './otp-sender';
 import { AuthStore } from './store';
 

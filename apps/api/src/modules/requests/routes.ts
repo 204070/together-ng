@@ -1,12 +1,11 @@
 import { jwt } from '@elysiajs/jwt';
 import { RequestDraftCreate, RequestPatch, Value } from '@together/schemas';
 import { Elysia, t } from 'elysia';
-import { HttpError } from '../../auth/errors';
-import type { AuthServices } from '../../auth/services';
-import { FixedWindowRateLimiter } from '../../lib/rate-limit';
+import { HttpError } from '../auth/errors';
 import { missingFields, qualityHints } from './quality';
+import type { RequestServices } from './services';
 import { canTransition } from './state';
-import { RequestStore, toResponse } from './store';
+import { toResponse } from './store';
 
 function unauthorized(): HttpError {
 	return new HttpError(401, 'UNAUTHORIZED', undefined, undefined, 'Authentication required');
@@ -61,9 +60,9 @@ function collectIssues(schema: unknown, value: unknown): Record<string, string> 
 	}
 	return issues;
 }
-export function createRequestRouter(services: AuthServices) {
-	const store = new RequestStore(services.sql);
-	const limiter = new FixedWindowRateLimiter(60_000, 20, { now: () => services.now().getTime() });
+export function createRequestRouter(services: RequestServices) {
+	const store = services.store;
+	const limiter = services.limiter;
 	async function requireUser(
 		headers: Record<string, string | undefined>,
 		jwtVerify: { verify: (tok: string) => Promise<unknown> },
@@ -74,7 +73,7 @@ export function createRequestRouter(services: AuthServices) {
 		if (!payload || typeof (payload as Record<string, unknown>).sub !== 'string')
 			throw unauthorized();
 		const sub = (payload as Record<string, unknown>).sub as string;
-		const user = await services.store.findUserById(sub);
+		const user = await services.findUserById(sub);
 		if (user?.status !== 'active' || user.deleted_at !== null) throw unauthorized();
 		return sub;
 	}

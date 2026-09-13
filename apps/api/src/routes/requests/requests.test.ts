@@ -44,3 +44,95 @@ describe('state machine', () => {
 		expect(canTransition('draft', 'completed')).toBe(false);
 	});
 });
+describe('toResponse', () => {
+	test('does not expose searchVector', async () => {
+		const { toResponse } = await import('./store');
+		const row = {
+			id: '00000000-0000-0000-0000-000000000001',
+			author_id: '00000000-0000-0000-0000-000000000002',
+			category_id: 1,
+			title: 't',
+			goal: 'g',
+			barrier: 'b',
+			help_needed: 'h',
+			state: 'draft',
+			modality: null,
+			help_type: null,
+			location: null,
+			time_commitment: null,
+			duration: null,
+			deadline: null,
+			skill_level: null,
+			intended_outcome: null,
+			quantity: null,
+			published_at: null,
+			closed_at: null,
+			closed_reason: null,
+			under_review: false,
+			created_at: new Date('2026-01-01T00:00:00.000Z'),
+			updated_at: new Date('2026-01-01T00:00:00.000Z'),
+			search_vector: "'test':1",
+		} as never;
+		expect(toResponse(row as never)).not.toHaveProperty('searchVector');
+		expect(toResponse(row as never)).not.toHaveProperty('search_vector');
+		// also ensure stripping works even if row carries search_vector
+		const res = toResponse(row as never) as Record<string, unknown>;
+		expect('searchVector' in res).toBe(false);
+	});
+	test('returns wire shape without leaking DB internals', async () => {
+		const { toResponse } = await import('./store');
+		const row = {
+			id: '00000000-0000-0000-0000-000000000001',
+			author_id: '00000000-0000-0000-0000-000000000002',
+			category_id: 1,
+			title: 'title',
+			goal: 'goal',
+			barrier: 'barrier',
+			help_needed: 'help',
+			state: 'draft',
+			modality: null,
+			help_type: null,
+			location: null,
+			time_commitment: null,
+			duration: null,
+			deadline: null,
+			skill_level: null,
+			intended_outcome: null,
+			quantity: null,
+			published_at: null,
+			closed_at: null,
+			closed_reason: null,
+			under_review: false,
+			created_at: new Date('2026-01-01T00:00:00.000Z'),
+			updated_at: new Date('2026-01-01T00:00:00.000Z'),
+		} as never;
+		const res = toResponse(row as never) as Record<string, unknown>;
+		expect(Object.keys(res).sort()).toEqual(
+			[
+				'authorId',
+				'barrier',
+				'categoryId',
+				'closedAt',
+				'closedReason',
+				'createdAt',
+				'deadline',
+				'duration',
+				'goal',
+				'helpNeeded',
+				'helpType',
+				'id',
+				'intendedOutcome',
+				'location',
+				'modality',
+				'publishedAt',
+				'quantity',
+				'skillLevel',
+				'state',
+				'timeCommitment',
+				'title',
+				'underReview',
+				'updatedAt',
+			].sort(),
+		);
+	});
+});

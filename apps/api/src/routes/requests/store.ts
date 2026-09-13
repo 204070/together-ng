@@ -21,7 +21,7 @@ export interface RequestRow {
 	closed_at: Date | null;
 	closed_reason: string | null;
 	under_review: boolean;
-	search_vector: string | null;
+	search_vector?: string | null;
 	created_at: Date;
 	updated_at: Date;
 }
@@ -57,13 +57,13 @@ export class RequestStore {
 		const quantity = (input.quantity as string | undefined) ?? null;
 		const rows = await this.sql<
 			RequestRow[]
-		>`INSERT INTO requests (author_id, category_id, title, goal, barrier, help_needed, state, modality, help_type, location, time_commitment, duration, deadline, skill_level, intended_outcome, quantity) VALUES (${authorId}, ${categoryId}, ${title}, ${goal}, ${barrier}, ${helpNeeded}, 'draft', ${modality}, ${helpType}, ${location}, ${timeCommitment}, ${duration}, ${deadline}, ${skillLevel}, ${intendedOutcome}, ${quantity}) RETURNING id, author_id, category_id, title, goal, barrier, help_needed, state, modality, help_type, location, time_commitment, duration, deadline, skill_level, intended_outcome, quantity, published_at, closed_at, closed_reason, under_review, search_vector, created_at, updated_at`;
+		>`INSERT INTO requests (author_id, category_id, title, goal, barrier, help_needed, state, modality, help_type, location, time_commitment, duration, deadline, skill_level, intended_outcome, quantity) VALUES (${authorId}, ${categoryId}, ${title}, ${goal}, ${barrier}, ${helpNeeded}, 'draft', ${modality}, ${helpType}, ${location}, ${timeCommitment}, ${duration}, ${deadline}, ${skillLevel}, ${intendedOutcome}, ${quantity}) RETURNING id, author_id, category_id, title, goal, barrier, help_needed, state, modality, help_type, location, time_commitment, duration, deadline, skill_level, intended_outcome, quantity, published_at, closed_at, closed_reason, under_review, created_at, updated_at`;
 		return rows[0] as RequestRow;
 	}
 	async findRequestById(id: string): Promise<RequestRow | undefined> {
 		const rows = await this.sql<
 			RequestRow[]
-		>`SELECT id, author_id, category_id, title, goal, barrier, help_needed, state, modality, help_type, location, time_commitment, duration, deadline, skill_level, intended_outcome, quantity, published_at, closed_at, closed_reason, under_review, search_vector, created_at, updated_at FROM requests WHERE id = ${id}`;
+		>`SELECT id, author_id, category_id, title, goal, barrier, help_needed, state, modality, help_type, location, time_commitment, duration, deadline, skill_level, intended_outcome, quantity, published_at, closed_at, closed_reason, under_review, created_at, updated_at FROM requests WHERE id = ${id}`;
 		return rows[0];
 	}
 	async updateRequest(id: string, patch: Record<string, unknown>): Promise<RequestRow | undefined> {
@@ -105,13 +105,13 @@ export class RequestStore {
 		};
 		const rows = await this.sql<
 			RequestRow[]
-		>`UPDATE requests SET title=${next.title}, goal=${next.goal}, barrier=${next.barrier}, help_needed=${next.help_needed}, category_id=${next.category_id}, modality=${next.modality}, help_type=${next.help_type}, location=${next.location}, time_commitment=${next.time_commitment}, duration=${next.duration}, deadline=${next.deadline}, skill_level=${next.skill_level}, intended_outcome=${next.intended_outcome}, quantity=${next.quantity}, updated_at=now() WHERE id=${id} RETURNING id, author_id, category_id, title, goal, barrier, help_needed, state, modality, help_type, location, time_commitment, duration, deadline, skill_level, intended_outcome, quantity, published_at, closed_at, closed_reason, under_review, search_vector, created_at, updated_at`;
+		>`UPDATE requests SET title=${next.title}, goal=${next.goal}, barrier=${next.barrier}, help_needed=${next.help_needed}, category_id=${next.category_id}, modality=${next.modality}, help_type=${next.help_type}, location=${next.location}, time_commitment=${next.time_commitment}, duration=${next.duration}, deadline=${next.deadline}, skill_level=${next.skill_level}, intended_outcome=${next.intended_outcome}, quantity=${next.quantity}, updated_at=now() WHERE id=${id} RETURNING id, author_id, category_id, title, goal, barrier, help_needed, state, modality, help_type, location, time_commitment, duration, deadline, skill_level, intended_outcome, quantity, published_at, closed_at, closed_reason, under_review, created_at, updated_at`;
 		return rows[0];
 	}
 	async publishRequest(id: string): Promise<RequestRow | undefined> {
 		const rows = await this.sql<
 			RequestRow[]
-		>`UPDATE requests SET state='published', published_at=now(), updated_at=now() WHERE id=${id} RETURNING id, author_id, category_id, title, goal, barrier, help_needed, state, modality, help_type, location, time_commitment, duration, deadline, skill_level, intended_outcome, quantity, published_at, closed_at, closed_reason, under_review, search_vector, created_at, updated_at`;
+		>`UPDATE requests SET state='published', published_at=now(), updated_at=now() WHERE id=${id} RETURNING id, author_id, category_id, title, goal, barrier, help_needed, state, modality, help_type, location, time_commitment, duration, deadline, skill_level, intended_outcome, quantity, published_at, closed_at, closed_reason, under_review, created_at, updated_at`;
 		return rows[0];
 	}
 }
@@ -140,6 +140,5 @@ export function toResponse(row: RequestRow) {
 		underReview: row.under_review,
 		createdAt: row.created_at.toISOString(),
 		updatedAt: row.updated_at.toISOString(),
-		searchVector: row.search_vector,
 	};
 }

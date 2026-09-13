@@ -84,6 +84,61 @@ export const Request = Type.Object({
 	updatedAt: Type.String({ format: 'date-time' }),
 });
 
+export const RequestDraftCreate = Type.Object(
+	{
+		title: Type.Optional(title),
+		goal: Type.Optional(requestText),
+		barrier: Type.Optional(requestText),
+		helpNeeded: Type.Optional(requestText),
+		categoryId: Type.Optional(Type.Integer({ minimum: 1 })),
+		modality: Type.Optional(modality),
+		helpType: Type.Optional(helpType),
+		location: Type.Optional(Type.String()),
+		deadline: Type.Optional(Type.String({ format: 'date-time' })),
+		timeCommitment: Type.Optional(Type.String()),
+		duration: Type.Optional(Type.String()),
+		skillLevel: Type.Optional(skillLevel),
+		quantity: Type.Optional(Type.String()),
+		intendedOutcome: Type.Optional(Type.String()),
+	},
+	{ additionalProperties: false },
+);
+
+export const RequestPatch = Type.Object(
+	{
+		title: Type.Optional(title),
+		goal: Type.Optional(requestText),
+		barrier: Type.Optional(requestText),
+		helpNeeded: Type.Optional(requestText),
+		categoryId: Type.Optional(Type.Integer({ minimum: 1 })),
+		modality: Type.Optional(modality),
+		helpType: Type.Optional(helpType),
+		location: Type.Optional(Type.String()),
+		deadline: Type.Optional(Type.String({ format: 'date-time' })),
+		timeCommitment: Type.Optional(Type.String()),
+		duration: Type.Optional(Type.String()),
+		skillLevel: Type.Optional(skillLevel),
+		quantity: Type.Optional(Type.String()),
+		intendedOutcome: Type.Optional(Type.String()),
+	},
+	{ additionalProperties: false },
+);
+
+export const DraftResponse = Type.Intersect([
+	Request,
+	Type.Object({ qualityHints: Type.Array(Type.String()) }),
+]);
+
+export const RequestPreview = Type.Object({
+	request: Request,
+	missingFields: Type.Array(Type.String()),
+	qualityHints: Type.Array(Type.String()),
+});
+
 export type RequestStateType = Static<typeof RequestState>;
 export type RequestCreateType = Static<typeof RequestCreate>;
+export type RequestDraftCreateType = Static<typeof RequestDraftCreate>;
+export type RequestPatchType = Static<typeof RequestPatch>;
+export type DraftResponseType = Static<typeof DraftResponse>;
+export type RequestPreviewType = Static<typeof RequestPreview>;
 export type RequestType = Static<typeof Request>;

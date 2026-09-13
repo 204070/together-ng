@@ -1,0 +1,46 @@
+import { describe, expect, test } from 'bun:test';
+import { missingFields, qualityHints } from './quality';
+import { canTransition } from './state';
+
+describe('qualityHints', () => {
+	test('vague laptop goal returns laptop hint', () => {
+		expect(qualityHints({ goal: 'I need a laptop' })).toContain(
+			'What are you trying to do with the laptop?',
+		);
+	});
+	test('specific goal returns no hint', () => {
+		expect(
+			qualityHints({
+				goal: 'I am trying to learn electronics and build my first simple circuit with Arduino',
+				barrier: 'I understand theory but need practical guidance from experienced person',
+				helpNeeded: 'Someone experienced with basic electronics who can guide me',
+			}),
+		).toEqual([]);
+	});
+	test('empty goal shows missing hint', () => {
+		expect(qualityHints({})).toContain('Add a goal: what are you trying to accomplish?');
+	});
+});
+describe('missingFields', () => {
+	test('empty input reports all required fields', () => {
+		expect(
+			missingFields({ title: '', goal: '', barrier: '', helpNeeded: '', categoryId: null }),
+		).toEqual(['title', 'goal', 'barrier', 'helpNeeded', 'categoryId']);
+	});
+	test('filled input reports none', () => {
+		expect(
+			missingFields({ title: 't', goal: 'g', barrier: 'b', helpNeeded: 'h', categoryId: 1 }),
+		).toEqual([]);
+	});
+});
+describe('state machine', () => {
+	test('draft can go to published', () => {
+		expect(canTransition('draft', 'published')).toBe(true);
+	});
+	test('published cannot go to draft', () => {
+		expect(canTransition('published', 'draft')).toBe(false);
+	});
+	test('draft cannot go directly to completed', () => {
+		expect(canTransition('draft', 'completed')).toBe(false);
+	});
+});

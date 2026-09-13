@@ -5,6 +5,7 @@ import { HttpError } from './auth/errors';
 import { createAuthRouter } from './auth/routes';
 import { type AppEnv, createAuthServices } from './auth/services';
 import { createProfileRouter } from './routes/profiles/routes';
+import { createRequestRouter } from './routes/requests/routes';
 
 loadEnv();
 
@@ -36,7 +37,8 @@ export function makeApp(env: AppEnv = {}) {
 			return { error: 'INTERNAL', message: 'Internal server error' };
 		})
 		.use(createAuthRouter(services))
-		.use(createProfileRouter(services));
+		.use(createProfileRouter(services))
+		.use(createRequestRouter(services));
 
 	app.decorate('services', services);
 

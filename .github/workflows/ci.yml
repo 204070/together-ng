@@ -39,6 +39,7 @@ jobs:
       DATABASE_URL: postgresql://together:together@localhost:5432/together
       TEST_DATABASE_URL: postgresql://together:together@localhost:5432/together
       REDIS_URL: redis://localhost:6379/0
+      JWT_SECRET: ci-only-insecure-test-secret-unused-in-prod
 
     steps:
       - name: Checkout

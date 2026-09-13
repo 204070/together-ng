@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Together.ng — Wireframes &amp; Architecture Diagram</title>
+<style>
+:root {
+  --ink: #1c1e20;
+  --muted: #6b7075;
+  --line: #e4e6e8;
+  --bg-soft: #fafafb;
+  --serif: Georgia, 'Iowan Old Style', 'Palatino Linotype', serif;
+  --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: var(--sans);
+  color: var(--ink);
+  background: #fff;
+  line-height: 1.6;
+}
+.wrap {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 48px 24px 100px;
+}
+header.cover {
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 24px;
+  margin-bottom: 40px;
+}
+header.cover h1 {
+  font-family: var(--serif);
+  font-size: 30px;
+  margin: 0 0 6px;
+}
+header.cover .meta {
+  font-size: 13.5px;
+  color: var(--muted);
+}
+header.cover .meta strong { color: var(--ink); }
+nav.index {
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin-bottom: 48px;
+  font-size: 13.5px;
+}
+nav.index .label {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+nav.index ol { margin: 0; padding-left: 20px; }
+nav.index li { margin-bottom: 4px; }
+nav.index a { color: var(--ink); text-decoration: none; }
+nav.index a:hover { text-decoration: underline; }
+figure.wireframe {
+  margin: 0 0 64px;
+  scroll-margin-top: 20px;
+}
+figure.wireframe .wf-svg {
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  display: block;
+  background: #fbfbfc;
+}
+figure.wireframe h2 {
+  font-size: 18px;
+  margin: 0 0 4px;
+}
+figure.wireframe .tag {
+  display: inline-block;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+figure.wireframe figcaption.note {
+  font-size: 13.5px;
+  color: var(--muted);
+  margin-top: 12px;
+  max-width: 760px;
+}
+hr.sep {
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 0 0 64px;
+}
+@media print {
+  nav.index { display: none; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="cover">
+  <h1>Together.ng — Wireframes &amp; Architecture Diagram</h1>
+  <div class="meta">Companion to <strong>together-prd.md</strong>, Section 66. Low-fidelity: structure and information hierarchy only — spacing, copy, and visual design are intentionally left unresolved.</div>
+</header>
+
+<nav class="index"><div class="label">On this page</div><ol>
+<li><a href="#architecture">System Architecture Overview</a></li>
+<li><a href="#home">Home / Discovery Feed</a></li>
+<li><a href="#create-request">Create Request — Step 2 of 4</a></li>
+<li><a href="#request-detail">Request Detail</a></li>
+<li><a href="#profile">Contributor Profile</a></li>
+<li><a href="#admin">Admin — Reports Dashboard (React + Vite)</a></li>
+</ol></nav>
+<figure class="wireframe" id="architecture">
+<div class="tag">System diagram</div>
+<h2>System Architecture Overview</h2>
+<svg viewBox="0 0 900 520" xmlns="http://www.w3.org/2000/svg" class="wf-svg">
+<rect x="0" y="0" width="900" height="520" fill="#fbfbfc"/>
+<defs>
+<marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+<path d="M0,0 L6,3 L0,6 Z" fill="#4a4a4a"/>
+</marker>
+</defs>
+<rect x="30" y="20" width="220" height="70" rx="2" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="140.0" y="42" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#2a2c2e" font-weight="700" text-anchor="middle">Web App (public + user)</text>
+<text x="140.0" y="60" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#75797d" font-weight="normal" text-anchor="middle">TanStack Start</text>
+<text x="140.0" y="74" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#75797d" font-weight="normal" text-anchor="middle">SSR + streaming, React</text>
+<rect x="280" y="20" width="220" height="70" rx="2" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="390.0" y="42" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#2a2c2e" font-weight="700" text-anchor="middle">Admin App</text>
+<text x="390.0" y="60" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#75797d" font-weight="normal" text-anchor="middle">React + Vite SPA</text>
+<text x="390.0" y="74" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#75797d" font-weight="normal" text-anchor="middle">Internal only, staff auth</text>
+<rect x="530" y="20" width="190" height="70" rx="2" fill="#eceef0" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="625.0" y="42" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#2a2c2e" font-weight="700" text-anchor="middle">Mobile (future)</text>
+<text x="625.0" y="60" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#75797d" font-weight="normal" text-anchor="middle">React Native / PWA</text>
+<text x="625.0" y="74" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#75797d" font-weight="normal" text-anchor="middle">shares API types</text>
+<rect x="750" y="20" width="120" height="70" rx="2" fill="#eceef0" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="810.0" y="42" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#2a2c2e" font-weight="700" text-anchor="middle">Integrations</text>
+<text x="810.0" y="60" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#75797d" font-weight="normal" text-anchor="middle">Chrome / Slack</text>
+<text x="810.0" y="74" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#75797d" font-weight="normal" text-anchor="middle">(future, out of MVP)</text>
+<line x1="140" y1="90" x2="300" y2="150" stroke="#4a4a4a" stroke-width="1.3" marker-end="url(#arrow)"/>
+<rect x="182.0" y="111.0" width="76" height="14" fill="#fbfbfc"/>
+<text x="220.0" y="122.0" font-family="Helvetica, Arial, sans-serif" font-size="7.7" fill="#9aa0a6" font-weight="normal" text-anchor="middle">REST/SSE</text>
+<line x1="390" y1="90" x2="400" y2="150" stroke="#4a4a4a" stroke-width="1.3" marker-end="url(#arrow)"/>
+<rect x="357.0" y="111.0" width="76" height="14" fill="#fbfbfc"/>
+<text x="395.0" y="122.0" font-family="Helvetica, Arial, sans-serif" font-size="7.7" fill="#9aa0a6" font-weight="normal" text-anchor="middle">REST/SSE</text>
+<line x1="625" y1="90" x2="460" y2="150" stroke="#4a4a4a" stroke-width="1.3" marker-end="url(#arrow)"/>
+<rect x="230" y="150" width="340" height="80" rx="2" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="400.0" y="172" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#2a2c2e" font-weight="700" text-anchor="middle">API — Bun + Elysia</text>
+<text x="400.0" y="190" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#75797d" font-weight="normal" text-anchor="middle">Type-safe routes (Eden Treaty)</text>
+<text x="400.0" y="204" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#75797d" font-weight="normal" text-anchor="middle">REST + WebSocket (chat, live counts)</text>
+<text x="400.0" y="218" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#75797d" font-weight="normal" text-anchor="middle">Zod/TypeBox validation, authz</text>
+<rect x="600" y="150" width="150" height="80" rx="2" fill="#eceef0" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="675.0" y="172" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#2a2c2e" font-weight="700" text-anchor="middle">Auth</text>
+<text x="675.0" y="190" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#75797d" font-weight="normal" text-anchor="middle">better-auth / JWT</text>
+<text x="675.0" y="204" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#75797d" font-weight="normal" text-anchor="middle">Email + phone OTP</text>
+<rect x="30" y="150" width="170" height="80" rx="2" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="115.0" y="172" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#2a2c2e" font-weight="700" text-anchor="middle">Background Worker</text>
+<text x="115.0" y="190" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#75797d" font-weight="normal" text-anchor="middle">Bun process</text>
+<text x="115.0" y="204" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#75797d" font-weight="normal" text-anchor="middle">matching, notifications,
+embeddings, digests</text>
+<line x1="200" y1="190" x2="230" y2="190" stroke="#4a4a4a" stroke-width="1.3" marker-end="url(#arrow)"/>
+<line x1="600" y1="190" x2="570" y2="190" stroke="#4a4a4a" stroke-width="1.3" marker-end="url(#arrow)"/>
+<line x1="320" y1="230" x2="200" y2="300" stroke="#4a4a4a" stroke-width="1.3" marker-end="url(#arrow)"/>
+<rect x="222.0" y="256.0" width="76" height="14" fill="#fbfbfc"/>
+<text x="260.0" y="267.0" font-family="Helvetica, Arial, sans-serif" font-size="7.7" fill="#9aa0a6" font-weight="normal" text-anchor="middle">SQL</text>
+<line x1="400" y1="230" x2="400" y2="300" stroke="#4a4a4a" stroke-width="1.3" marker-end="url(#arrow)"/>
+<rect x="362.0" y="256.0" width="76" height="14" fill="#fbfbfc"/>
+<text x="400.0" y="267.0" font-family="Helvetica, Arial, sans-serif" font-size="7.7" fill="#9aa0a6" font-weight="normal" text-anchor="middle">SQL</text>
+<line x1="480" y1="230" x2="620" y2="300" stroke="#4a4a4a" stroke-width="1.3" marker-end="url(#arrow)"/>
+<rect x="512.0" y="256.0" width="76" height="14" fill="#fbfbfc"/>
+<text x="550.0" y="267.0" font-family="Helvetica, Arial, sans-serif" font-size="7.7" fill="#9aa0a6" font-weight="normal" text-anchor="middle">cache/queue</text>
+<line x1="100" y1="230" x2="200" y2="300" stroke="#4a4a4a" stroke-width="1.3" marker-end="url(#arrow)"/>
+<rect x="80" y="300" width="260" height="90" rx="2" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="210.0" y="322" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#2a2c2e" font-weight="700" text-anchor="middle">PostgreSQL</text>
+<text x="210.0" y="340" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#75797d" font-weight="normal" text-anchor="middle">users, requests, matches,</text>
+<text x="210.0" y="354" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#75797d" font-weight="normal" text-anchor="middle">votes, lending, audit log</text>
+<text x="210.0" y="368" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#75797d" font-weight="normal" text-anchor="middle">pgvector + tsvector + pg_trgm</text>
+<rect x="370" y="300" width="180" height="90" rx="2" fill="#eceef0" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="460.0" y="322" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#2a2c2e" font-weight="700" text-anchor="middle">Redis</text>
+<text x="460.0" y="340" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#75797d" font-weight="normal" text-anchor="middle">cache, rate limiting,</text>
+<text x="460.0" y="354" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#75797d" font-weight="normal" text-anchor="middle">pub/sub for realtime,</text>
+<text x="460.0" y="368" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#75797d" font-weight="normal" text-anchor="middle">session store</text>
+<rect x="580" y="300" width="220" height="90" rx="2" fill="#eceef0" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="690.0" y="322" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#2a2c2e" font-weight="700" text-anchor="middle">Object storage (S3-compatible)</text>
+<text x="690.0" y="340" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#75797d" font-weight="normal" text-anchor="middle">profile photos,</text>
+<text x="690.0" y="354" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#75797d" font-weight="normal" text-anchor="middle">resource condition photos</text>
+<line x1="115" y1="230" x2="115" y2="420" stroke="#4a4a4a" stroke-width="1.3" marker-end="url(#arrow)"/>
+<rect x="30" y="420" width="200" height="80" rx="2" fill="#eceef0" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="130.0" y="442" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#2a2c2e" font-weight="700" text-anchor="middle">LLM provider</text>
+<text x="130.0" y="460" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#75797d" font-weight="normal" text-anchor="middle">Claude API</text>
+<text x="130.0" y="474" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#75797d" font-weight="normal" text-anchor="middle">request guidance,</text>
+<text x="130.0" y="488" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#75797d" font-weight="normal" text-anchor="middle">categorization, moderation assist</text>
+<line x1="320" y1="230" x2="300" y2="420" stroke="#4a4a4a" stroke-width="1.3" marker-end="url(#arrow)"/>
+<rect x="250" y="420" width="200" height="80" rx="2" fill="#eceef0" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="350.0" y="442" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#2a2c2e" font-weight="700" text-anchor="middle">Notifications</text>
+<text x="350.0" y="460" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#75797d" font-weight="normal" text-anchor="middle">Email (transactional),</text>
+<text x="350.0" y="474" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#75797d" font-weight="normal" text-anchor="middle">SMS/WhatsApp (Termii/AT)</text>
+<text x="350.0" y="488" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#75797d" font-weight="normal" text-anchor="middle">Web push</text>
+<line x1="500" y1="230" x2="500" y2="420" stroke="#4a4a4a" stroke-width="1.3" marker-end="url(#arrow)"/>
+<rect x="470" y="420" width="200" height="80" rx="2" fill="#eceef0" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="570.0" y="442" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#2a2c2e" font-weight="700" text-anchor="middle">Observability</text>
+<text x="570.0" y="460" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#75797d" font-weight="normal" text-anchor="middle">Sentry, pino logs,</text>
+<text x="570.0" y="474" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#75797d" font-weight="normal" text-anchor="middle">OpenTelemetry metrics</text>
+</svg>
+<figcaption class="note">Three client surfaces (public/user web app, admin SPA, and future mobile/integrations) share one typed API. Postgres is the system of record; Redis and object storage support performance, realtime fan-out, and media. See Section 65 of together-prd.md for the full rationale.</figcaption>
+</figure>
+<hr class="sep">
+<figure class="wireframe" id="home">
+<div class="tag">Web application</div>
+<h2>Home / Discovery Feed</h2>
+<svg viewBox="0 0 900 640" xmlns="http://www.w3.org/2000/svg" class="wf-svg">
+<rect x="0" y="0" width="900" height="640" fill="#fbfbfc"/>
+<rect x="0" y="0" width="900" height="52" rx="2" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="24" y="32" font-family="Helvetica, Arial, sans-serif" font-size="16" fill="#2a2c2e" font-weight="700" text-anchor="start">Together</text>
+<text x="150" y="31" font-family="Helvetica, Arial, sans-serif" font-size="10.5" fill="#6b7075" font-weight="normal" text-anchor="start">Featured</text>
+<text x="225" y="31" font-family="Helvetica, Arial, sans-serif" font-size="10.5" fill="#6b7075" font-weight="normal" text-anchor="start">Categories</text>
+<text x="310" y="31" font-family="Helvetica, Arial, sans-serif" font-size="10.5" fill="#6b7075" font-weight="normal" text-anchor="start">Search</text>
+<circle cx="760" cy="26" r="13" fill="#d6d9dc" stroke="#4a4a4a" stroke-width="1.5"/>
+<rect x="790" y="13" width="90" height="26" rx="13.0" fill="#2a2c2e" stroke="#4a4a4a" stroke-width="1.3"/>
+<text x="835.0" y="30.0" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#ffffff" font-weight="600" text-anchor="middle">Ask for help</text>
+<line x1="0" y1="52" x2="900" y2="52" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<rect x="24" y="68" width="852" height="34" rx="17" fill="#eceef0" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="40" y="89" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#9aa0a6" font-weight="normal" text-anchor="start">Search requests, skills, or resources...</text>
+<rect x="24" y="116" width="36" height="24" rx="12" fill="#2a2c2e" stroke="#4a4a4a" stroke-width="1.2"/>
+<text x="42.0" y="132" font-family="Helvetica, Arial, sans-serif" font-size="9" fill="#fff" font-weight="normal" text-anchor="middle">All</text>
+<rect x="70" y="116" width="72" height="24" rx="12" fill="#eceef0" stroke="#4a4a4a" stroke-width="1.2"/>
+<text x="106.0" y="132" font-family="Helvetica, Arial, sans-serif" font-size="9" fill="#2a2c2e" font-weight="normal" text-anchor="middle">Education</text>
+<rect x="152" y="116" width="78" height="24" rx="12" fill="#eceef0" stroke="#4a4a4a" stroke-width="1.2"/>
+<text x="191.0" y="132" font-family="Helvetica, Arial, sans-serif" font-size="9" fill="#2a2c2e" font-weight="normal" text-anchor="middle">Technology</text>
+<rect x="240" y="116" width="48" height="24" rx="12" fill="#eceef0" stroke="#4a4a4a" stroke-width="1.2"/>
+<text x="264.0" y="132" font-family="Helvetica, Arial, sans-serif" font-size="9" fill="#2a2c2e" font-weight="normal" text-anchor="middle">Books</text>
+<rect x="298" y="116" width="48" height="24" rx="12" fill="#eceef0" stroke="#4a4a4a" stroke-width="1.2"/>
+<text x="322.0" y="132" font-family="Helvetica, Arial, sans-serif" font-size="9" fill="#2a2c2e" font-weight="normal" text-anchor="middle">Tools</text>
+<rect x="356" y="116" width="78" height="24" rx="12" fill="#eceef0" stroke="#4a4a4a" stroke-width="1.2"/>
+<text x="395.0" y="132" font-family="Helvetica, Arial, sans-serif" font-size="9" fill="#2a2c2e" font-weight="normal" text-anchor="middle">Mentorship</text>
+<rect x="444" y="116" width="42" height="24" rx="12" fill="#eceef0" stroke="#4a4a4a" stroke-width="1.2"/>
+<text x="465.0" y="132" font-family="Helvetica, Arial, sans-serif" font-size="9" fill="#2a2c2e" font-weight="normal" text-anchor="middle">Arts</text>
+<text x="24" y="172" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#9aa0a6" font-weight="700" text-anchor="start">FEATURED REQUESTS</text>
+<rect x="24" y="182" width="274" height="130" rx="2" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.5"/>
+<rect x="36" y="194" width="70" height="18" rx="9" fill="#eceef0" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="71.0" y="206.5" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#2a2c2e" font-weight="normal" text-anchor="middle">Education</text>
+<line x1="36" y1="230" x2="286" y2="230" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<line x1="36" y1="243" x2="266.0" y2="243" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<circle cx="44" cy="270" r="9" fill="#d6d9dc" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="58" y="274" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#6b7075" font-weight="normal" text-anchor="start">Amaka O.  ·  Ibadan</text>
+<rect x="206" y="282" width="80" height="20" rx="10.0" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.3"/>
+<text x="246.0" y="296.0" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#2a2c2e" font-weight="600" text-anchor="middle">I can help</text>
+<text x="36" y="297" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#9aa0a6" font-weight="normal" text-anchor="start">▲ 24</text>
+<rect x="313" y="182" width="274" height="130" rx="2" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.5"/>
+<rect x="325" y="194" width="70" height="18" rx="9" fill="#eceef0" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="360.0" y="206.5" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#2a2c2e" font-weight="normal" text-anchor="middle">Education</text>
+<line x1="325" y1="230" x2="575" y2="230" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<line x1="325" y1="243" x2="555.0" y2="243" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<circle cx="333" cy="270" r="9" fill="#d6d9dc" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="347" y="274" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#6b7075" font-weight="normal" text-anchor="start">Amaka O.  ·  Ibadan</text>
+<rect x="495" y="282" width="80" height="20" rx="10.0" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.3"/>
+<text x="535.0" y="296.0" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#2a2c2e" font-weight="600" text-anchor="middle">I can help</text>
+<text x="325" y="297" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#9aa0a6" font-weight="normal" text-anchor="start">▲ 24</text>
+<rect x="602" y="182" width="274" height="130" rx="2" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.5"/>
+<rect x="614" y="194" width="70" height="18" rx="9" fill="#eceef0" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="649.0" y="206.5" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#2a2c2e" font-weight="normal" text-anchor="middle">Education</text>
+<line x1="614" y1="230" x2="864" y2="230" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<line x1="614" y1="243" x2="844.0" y2="243" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<circle cx="622" cy="270" r="9" fill="#d6d9dc" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="636" y="274" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#6b7075" font-weight="normal" text-anchor="start">Amaka O.  ·  Ibadan</text>
+<rect x="784" y="282" width="80" height="20" rx="10.0" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.3"/>
+<text x="824.0" y="296.0" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#2a2c2e" font-weight="600" text-anchor="middle">I can help</text>
+<text x="614" y="297" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#9aa0a6" font-weight="normal" text-anchor="start">▲ 24</text>
+<line x1="24" y1="335" x2="876" y2="335" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<text x="24" y="358" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#9aa0a6" font-weight="700" text-anchor="start">TECHNOLOGY</text>
+<text x="876" y="358" font-family="Helvetica, Arial, sans-serif" font-size="9.5" fill="#6b7075" font-weight="normal" text-anchor="end">See all →</text>
+<rect x="24" y="372" width="852" height="66" rx="2" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.5"/>
+<circle cx="56" cy="405" r="16" fill="#d6d9dc" stroke="#4a4a4a" stroke-width="1.5"/>
+<rect x="90" y="384" width="76" height="18" rx="9" fill="#eceef0" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="128.0" y="396.5" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#2a2c2e" font-weight="normal" text-anchor="middle">Technology</text>
+<line x1="90" y1="412" x2="610" y2="412" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<line x1="90" y1="425" x2="568.4000000000001" y2="425" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<text x="860" y="398" font-family="Helvetica, Arial, sans-serif" font-size="9" fill="#6b7075" font-weight="normal" text-anchor="end">3 offers</text>
+<text x="860" y="414" font-family="Helvetica, Arial, sans-serif" font-size="9" fill="#9aa0a6" font-weight="normal" text-anchor="end">▲ 12</text>
+<text x="860" y="430" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#9aa0a6" font-weight="normal" text-anchor="end">2h ago</text>
+<rect x="24" y="448" width="852" height="66" rx="2" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.5"/>
+<circle cx="56" cy="481" r="16" fill="#d6d9dc" stroke="#4a4a4a" stroke-width="1.5"/>
+<rect x="90" y="460" width="76" height="18" rx="9" fill="#eceef0" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="128.0" y="472.5" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#2a2c2e" font-weight="normal" text-anchor="middle">Technology</text>
+<line x1="90" y1="488" x2="610" y2="488" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<line x1="90" y1="501" x2="568.4000000000001" y2="501" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<text x="860" y="474" font-family="Helvetica, Arial, sans-serif" font-size="9" fill="#6b7075" font-weight="normal" text-anchor="end">3 offers</text>
+<text x="860" y="490" font-family="Helvetica, Arial, sans-serif" font-size="9" fill="#9aa0a6" font-weight="normal" text-anchor="end">▲ 12</text>
+<text x="860" y="506" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#9aa0a6" font-weight="normal" text-anchor="end">2h ago</text>
+<rect x="24" y="524" width="852" height="66" rx="2" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.5"/>
+<circle cx="56" cy="557" r="16" fill="#d6d9dc" stroke="#4a4a4a" stroke-width="1.5"/>
+<rect x="90" y="536" width="76" height="18" rx="9" fill="#eceef0" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="128.0" y="548.5" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#2a2c2e" font-weight="normal" text-anchor="middle">Technology</text>
+<line x1="90" y1="564" x2="610" y2="564" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<line x1="90" y1="577" x2="568.4000000000001" y2="577" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<text x="860" y="550" font-family="Helvetica, Arial, sans-serif" font-size="9" fill="#6b7075" font-weight="normal" text-anchor="end">3 offers</text>
+<text x="860" y="566" font-family="Helvetica, Arial, sans-serif" font-size="9" fill="#9aa0a6" font-weight="normal" text-anchor="end">▲ 12</text>
+<text x="860" y="582" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#9aa0a6" font-weight="normal" text-anchor="end">2h ago</text>
+</svg>
+<figcaption class="note">The home/discovery feed deliberately puts a search bar and category tabs above the featured section, since Together needs to support both people who arrive knowing what they want (search) and people browsing to discover a worthwhile need to support (Section 12).</figcaption>
+</figure>
+<figure class="wireframe" id="create-request">
+<div class="tag">Web application</div>
+<h2>Create Request — Step 2 of 4</h2>
+<svg viewBox="0 0 900 600" xmlns="http://www.w3.org/2000/svg" class="wf-svg">
+<rect x="0" y="0" width="900" height="600" fill="#fbfbfc"/>
+<rect x="0" y="0" width="900" height="52" rx="2" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="24" y="32" font-family="Helvetica, Arial, sans-serif" font-size="16" fill="#2a2c2e" font-weight="700" text-anchor="start">Together</text>
+<line x1="0" y1="52" x2="900" y2="52" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<circle cx="60.0" cy="86" r="11" fill="#2a2c2e" stroke="#4a4a4a" stroke-width="1.3"/>
+<text x="60.0" y="90" font-family="Helvetica, Arial, sans-serif" font-size="9.5" fill="#fff" font-weight="normal" text-anchor="middle">1</text>
+<text x="60.0" y="110" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#9aa0a6" font-weight="normal" text-anchor="middle">Goal</text>
+<line x1="74.0" y1="86" x2="241.0" y2="86" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<circle cx="255.0" cy="86" r="11" fill="#2a2c2e" stroke="#4a4a4a" stroke-width="1.3"/>
+<text x="255.0" y="90" font-family="Helvetica, Arial, sans-serif" font-size="9.5" fill="#fff" font-weight="normal" text-anchor="middle">2</text>
+<text x="255.0" y="110" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#2a2c2e" font-weight="normal" text-anchor="middle">Barrier</text>
+<line x1="269.0" y1="86" x2="436.0" y2="86" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<circle cx="450.0" cy="86" r="11" fill="#eceef0" stroke="#4a4a4a" stroke-width="1.3"/>
+<text x="450.0" y="90" font-family="Helvetica, Arial, sans-serif" font-size="9.5" fill="#9aa0a6" font-weight="normal" text-anchor="middle">3</text>
+<text x="450.0" y="110" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#9aa0a6" font-weight="normal" text-anchor="middle">Requested help</text>
+<line x1="464.0" y1="86" x2="631.0" y2="86" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<circle cx="645.0" cy="86" r="11" fill="#eceef0" stroke="#4a4a4a" stroke-width="1.3"/>
+<text x="645.0" y="90" font-family="Helvetica, Arial, sans-serif" font-size="9.5" fill="#9aa0a6" font-weight="normal" text-anchor="middle">4</text>
+<text x="645.0" y="110" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#9aa0a6" font-weight="normal" text-anchor="middle">Preview</text>
+<rect x="60" y="140" width="780" height="380" rx="2" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="88" y="180" font-family="Helvetica, Arial, sans-serif" font-size="15" fill="#2a2c2e" font-weight="700" text-anchor="start">What's preventing you from moving forward?</text>
+<text x="88" y="200" font-family="Helvetica, Arial, sans-serif" font-size="9.5" fill="#6b7075" font-weight="normal" text-anchor="start">Be specific — this helps contributors understand exactly how to help.</text>
+<rect x="88" y="216" width="724" height="46" rx="8" fill="#eceef0" stroke="#4a4a4a" stroke-width="1.5" stroke-dasharray="4,3"/>
+<text x="102" y="234" font-family="Helvetica, Arial, sans-serif" font-size="9" fill="#2a2c2e" font-weight="700" text-anchor="start">💡 Example:</text>
+<line x1="102" y1="246" x2="798" y2="246" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<rect x="88" y="278" width="724" height="90" rx="2" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.5"/>
+<line x1="100" y1="298" x2="800" y2="298" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<line x1="100" y1="311" x2="744.0" y2="311" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<line x1="100" y1="324" x2="520.0" y2="324" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<line x1="100" y1="337" x2="800" y2="337" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<text x="88" y="388" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#9aa0a6" font-weight="700" text-anchor="start">OPTIONAL DETAILS</text>
+<rect x="88.0" y="398" width="233.33333333333334" height="30" rx="2" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="98.0" y="417" font-family="Helvetica, Arial, sans-serif" font-size="9" fill="#9aa0a6" font-weight="normal" text-anchor="start">Location</text>
+<rect x="333.33333333333337" y="398" width="233.33333333333334" height="30" rx="2" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="343.33333333333337" y="417" font-family="Helvetica, Arial, sans-serif" font-size="9" fill="#9aa0a6" font-weight="normal" text-anchor="start">Remote / In-person</text>
+<rect x="578.6666666666667" y="398" width="233.33333333333334" height="30" rx="2" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="588.6666666666667" y="417" font-family="Helvetica, Arial, sans-serif" font-size="9" fill="#9aa0a6" font-weight="normal" text-anchor="start">Time needed</text>
+<rect x="650" y="540" width="80" height="30" rx="15.0" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.3"/>
+<text x="690.0" y="559.0" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#2a2c2e" font-weight="600" text-anchor="middle">Back</text>
+<rect x="740" y="540" width="100" height="30" rx="15.0" fill="#2a2c2e" stroke="#4a4a4a" stroke-width="1.3"/>
+<text x="790.0" y="559.0" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#ffffff" font-weight="600" text-anchor="middle">Continue</text>
+</svg>
+<figcaption class="note">The create-request wizard shows guidance inline (Section 10) rather than as a rejection after submission — the dashed hint box represents contextual, non-blocking suggestions, and only category-relevant optional fields are shown (Section 9.6).</figcaption>
+</figure>
+<figure class="wireframe" id="request-detail">
+<div class="tag">Web application</div>
+<h2>Request Detail</h2>
+<svg viewBox="0 0 900 700" xmlns="http://www.w3.org/2000/svg" class="wf-svg">
+<rect x="0" y="0" width="900" height="700" fill="#fbfbfc"/>
+<rect x="0" y="0" width="900" height="52" rx="2" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="24" y="32" font-family="Helvetica, Arial, sans-serif" font-size="16" fill="#2a2c2e" font-weight="700" text-anchor="start">Together</text>
+<line x1="0" y1="52" x2="900" y2="52" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<rect x="24" y="76" width="76" height="18" rx="9" fill="#eceef0" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="62.0" y="88.5" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#2a2c2e" font-weight="normal" text-anchor="middle">Technology</text>
+<rect x="110" y="76" width="130" height="18" rx="9" fill="#eceef0" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="175.0" y="88.5" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#2a2c2e" font-weight="normal" text-anchor="middle">Receiving responses</text>
+<text x="24" y="118" font-family="Helvetica, Arial, sans-serif" font-size="17" fill="#2a2c2e" font-weight="700" text-anchor="start">Need a mentor for my first backend project</text>
+<circle cx="35" cy="140" r="11" fill="#d6d9dc" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="52" y="144" font-family="Helvetica, Arial, sans-serif" font-size="9" fill="#6b7075" font-weight="normal" text-anchor="start">Chidi A.  ·  Lagos  ·  Posted 3 days ago</text>
+<text x="24" y="168" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#9aa0a6" font-weight="700" text-anchor="start">GOAL</text>
+<line x1="24" y1="182" x2="594" y2="182" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<line x1="24" y1="195" x2="548.4" y2="195" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<text x="24" y="220" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#9aa0a6" font-weight="700" text-anchor="start">BARRIER</text>
+<line x1="24" y1="234" x2="594" y2="234" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<line x1="24" y1="247" x2="548.4" y2="247" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<text x="24" y="272" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#9aa0a6" font-weight="700" text-anchor="start">REQUESTED HELP</text>
+<line x1="24" y1="286" x2="594" y2="286" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<line x1="24" y1="299" x2="548.4" y2="299" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<line x1="24" y1="330" x2="594" y2="330" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<text x="24" y="354" font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#2a2c2e" font-weight="700" text-anchor="start">3 responses</text>
+<rect x="24" y="370" width="570" height="80" rx="2" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.5"/>
+<circle cx="48" cy="396" r="12" fill="#d6d9dc" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="68" y="392" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#2a2c2e" font-weight="600" text-anchor="start">Ngozi E.</text>
+<text x="68" y="404" font-family="Helvetica, Arial, sans-serif" font-size="8" fill="#9aa0a6" font-weight="normal" text-anchor="start">127 people helped</text>
+<line x1="44" y1="418" x2="494" y2="418" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<line x1="44" y1="431" x2="458.0" y2="431" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<rect x="474" y="418" width="55" height="22" rx="11.0" fill="#2a2c2e" stroke="#4a4a4a" stroke-width="1.3"/>
+<text x="501.5" y="433.0" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#ffffff" font-weight="600" text-anchor="middle">Accept</text>
+<rect x="536" y="418" width="55" height="22" rx="11.0" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.3"/>
+<text x="563.5" y="433.0" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#2a2c2e" font-weight="600" text-anchor="middle">Decline</text>
+<rect x="24" y="462" width="570" height="80" rx="2" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.5"/>
+<circle cx="48" cy="488" r="12" fill="#d6d9dc" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="68" y="484" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#2a2c2e" font-weight="600" text-anchor="start">Ngozi E.</text>
+<text x="68" y="496" font-family="Helvetica, Arial, sans-serif" font-size="8" fill="#9aa0a6" font-weight="normal" text-anchor="start">127 people helped</text>
+<line x1="44" y1="510" x2="494" y2="510" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<line x1="44" y1="523" x2="458.0" y2="523" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<rect x="474" y="510" width="55" height="22" rx="11.0" fill="#2a2c2e" stroke="#4a4a4a" stroke-width="1.3"/>
+<text x="501.5" y="525.0" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#ffffff" font-weight="600" text-anchor="middle">Accept</text>
+<rect x="536" y="510" width="55" height="22" rx="11.0" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.3"/>
+<text x="563.5" y="525.0" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#2a2c2e" font-weight="600" text-anchor="middle">Decline</text>
+<rect x="632" y="76" width="244" height="96" rx="2" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.5"/>
+<rect x="652" y="92" width="204" height="34" rx="17.0" fill="#2a2c2e" stroke="#4a4a4a" stroke-width="1.3"/>
+<text x="754.0" y="113.0" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#ffffff" font-weight="600" text-anchor="middle">I can help</text>
+<text x="652" y="146" font-family="Helvetica, Arial, sans-serif" font-size="9.5" fill="#6b7075" font-weight="normal" text-anchor="start">▲ Upvote (24)</text>
+<text x="856" y="146" font-family="Helvetica, Arial, sans-serif" font-size="9.5" fill="#6b7075" font-weight="normal" text-anchor="end">Share</text>
+<rect x="632" y="188" width="244" height="150" rx="2" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="648" y="210" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#9aa0a6" font-weight="700" text-anchor="start">SIMILAR REQUESTS</text>
+<circle cx="658" cy="232" r="9" fill="#d6d9dc" stroke="#4a4a4a" stroke-width="1.5"/>
+<line x1="674" y1="224" x2="860" y2="224" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<line x1="674" y1="237" x2="845.12" y2="237" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<circle cx="658" cy="266" r="9" fill="#d6d9dc" stroke="#4a4a4a" stroke-width="1.5"/>
+<line x1="674" y1="258" x2="860" y2="258" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<line x1="674" y1="271" x2="845.12" y2="271" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<circle cx="658" cy="300" r="9" fill="#d6d9dc" stroke="#4a4a4a" stroke-width="1.5"/>
+<line x1="674" y1="292" x2="860" y2="292" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<line x1="674" y1="305" x2="845.12" y2="305" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+</svg>
+<figcaption class="note">The request detail page separates goal/barrier/requested-help (Section 9.3–9.5) into distinct labeled blocks so a potential contributor can answer the three questions in Section 10 at a glance, and keeps "I can help," voting, and sharing in a persistent sidebar rather than buried below the fold.</figcaption>
+</figure>
+<figure class="wireframe" id="profile">
+<div class="tag">Web application</div>
+<h2>Contributor Profile</h2>
+<svg viewBox="0 0 900 560" xmlns="http://www.w3.org/2000/svg" class="wf-svg">
+<rect x="0" y="0" width="900" height="560" fill="#fbfbfc"/>
+<rect x="0" y="0" width="900" height="52" rx="2" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="24" y="32" font-family="Helvetica, Arial, sans-serif" font-size="16" fill="#2a2c2e" font-weight="700" text-anchor="start">Together</text>
+<line x1="0" y1="52" x2="900" y2="52" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<rect x="0" y="52" width="900" height="130" rx="2" fill="#eceef0" stroke="#4a4a4a" stroke-width="1.5"/>
+<circle cx="80" cy="118" r="34" fill="#d6d9dc" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="140" y="100" font-family="Helvetica, Arial, sans-serif" font-size="16" fill="#2a2c2e" font-weight="700" text-anchor="start">Amaka Obi</text>
+<line x1="140" y1="114" x2="500" y2="114" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<line x1="140" y1="127" x2="471.2" y2="127" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<rect x="140" y="148" width="90" height="18" rx="9" fill="#eceef0" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="185.0" y="160.5" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#2a2c2e" font-weight="normal" text-anchor="middle">Ibadan, NG</text>
+<rect x="238" y="148" width="130" height="18" rx="9" fill="#eceef0" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="303.0" y="160.5" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#2a2c2e" font-weight="normal" text-anchor="middle">Contributor since 2025</text>
+<rect x="24.0" y="200" width="201.0" height="60" rx="2" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="40.0" y="230" font-family="Helvetica, Arial, sans-serif" font-size="18" fill="#2a2c2e" font-weight="700" text-anchor="start">38</text>
+<text x="40.0" y="246" font-family="Helvetica, Arial, sans-serif" font-size="9" fill="#9aa0a6" font-weight="normal" text-anchor="start">People helped</text>
+<rect x="237.0" y="200" width="201.0" height="60" rx="2" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="253.0" y="230" font-family="Helvetica, Arial, sans-serif" font-size="18" fill="#2a2c2e" font-weight="700" text-anchor="start">34</text>
+<text x="253.0" y="246" font-family="Helvetica, Arial, sans-serif" font-size="9" fill="#9aa0a6" font-weight="normal" text-anchor="start">Successful</text>
+<rect x="450.0" y="200" width="201.0" height="60" rx="2" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="466.0" y="230" font-family="Helvetica, Arial, sans-serif" font-size="18" fill="#2a2c2e" font-weight="700" text-anchor="start">5</text>
+<text x="466.0" y="246" font-family="Helvetica, Arial, sans-serif" font-size="9" fill="#9aa0a6" font-weight="normal" text-anchor="start">Verified skills</text>
+<rect x="663.0" y="200" width="201.0" height="60" rx="2" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="679.0" y="230" font-family="Helvetica, Arial, sans-serif" font-size="18" fill="#2a2c2e" font-weight="700" text-anchor="start">6</text>
+<text x="679.0" y="246" font-family="Helvetica, Arial, sans-serif" font-size="9" fill="#9aa0a6" font-weight="normal" text-anchor="start">Badges</text>
+<text x="24" y="278" font-family="Helvetica, Arial, sans-serif" font-size="10.5" fill="#9aa0a6" font-weight="normal" text-anchor="start">About</text>
+<text x="87.0" y="278" font-family="Helvetica, Arial, sans-serif" font-size="10.5" fill="#9aa0a6" font-weight="normal" text-anchor="start">Skills</text>
+<text x="156.2" y="278" font-family="Helvetica, Arial, sans-serif" font-size="10.5" fill="#2a2c2e" font-weight="700" text-anchor="start">Contributions</text>
+<line x1="154.2" y1="284" x2="238.8" y2="284" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<text x="268.8" y="278" font-family="Helvetica, Arial, sans-serif" font-size="10.5" fill="#9aa0a6" font-weight="normal" text-anchor="start">Resources</text>
+<line x1="24" y1="292" x2="876" y2="292" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<text x="24" y="312" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#9aa0a6" font-weight="700" text-anchor="start">SKILLS</text>
+<rect x="24" y="322" width="49.599999999999994" height="18" rx="9" fill="#eceef0" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="48.8" y="334.5" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#2a2c2e" font-weight="normal" text-anchor="middle">Python</text>
+<rect x="81.6" y="322" width="72.0" height="18" rx="9" fill="#eceef0" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="117.6" y="334.5" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#2a2c2e" font-weight="normal" text-anchor="middle">JavaScript</text>
+<rect x="161.6" y="322" width="128.0" height="18" rx="9" fill="#eceef0" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="225.6" y="334.5" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#2a2c2e" font-weight="normal" text-anchor="middle">Backend architecture</text>
+<rect x="297.6" y="322" width="72.0" height="18" rx="9" fill="#eceef0" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="333.6" y="334.5" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#2a2c2e" font-weight="normal" text-anchor="middle">PostgreSQL</text>
+<rect x="377.6" y="322" width="44.0" height="18" rx="9" fill="#eceef0" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="399.6" y="334.5" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#2a2c2e" font-weight="normal" text-anchor="middle">Linux</text>
+<rect x="429.6" y="322" width="77.6" height="18" rx="9" fill="#eceef0" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="468.40000000000003" y="334.5" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#2a2c2e" font-weight="normal" text-anchor="middle">Code review</text>
+<text x="24" y="362" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#9aa0a6" font-weight="700" text-anchor="start">RECENT CONTRIBUTIONS</text>
+<rect x="24" y="374" width="852" height="38" rx="2" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.5"/>
+<circle cx="46" cy="393" r="10" fill="#d6d9dc" stroke="#4a4a4a" stroke-width="1.5"/>
+<line x1="64" y1="386" x2="624" y2="386" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<line x1="64" y1="399" x2="579.2" y2="399" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<rect x="760" y="383" width="100" height="18" rx="9" fill="#eceef0" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="810.0" y="395.5" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#2a2c2e" font-weight="normal" text-anchor="middle">Confirmed helpful</text>
+<rect x="24" y="420" width="852" height="38" rx="2" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.5"/>
+<circle cx="46" cy="439" r="10" fill="#d6d9dc" stroke="#4a4a4a" stroke-width="1.5"/>
+<line x1="64" y1="432" x2="624" y2="432" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<line x1="64" y1="445" x2="579.2" y2="445" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<rect x="760" y="429" width="100" height="18" rx="9" fill="#eceef0" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="810.0" y="441.5" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#2a2c2e" font-weight="normal" text-anchor="middle">Confirmed helpful</text>
+<rect x="24" y="466" width="852" height="38" rx="2" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.5"/>
+<circle cx="46" cy="485" r="10" fill="#d6d9dc" stroke="#4a4a4a" stroke-width="1.5"/>
+<line x1="64" y1="478" x2="624" y2="478" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<line x1="64" y1="491" x2="579.2" y2="491" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<rect x="760" y="475" width="100" height="18" rx="9" fill="#eceef0" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="810.0" y="487.5" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#2a2c2e" font-weight="normal" text-anchor="middle">Confirmed helpful</text>
+</svg>
+<figcaption class="note">The profile page intentionally has no follower/following counts or like totals anywhere in the layout (Section 8.2) — the stats row is limited to reliability-oriented numbers (people helped, successful contributions, verified skills).</figcaption>
+</figure>
+<figure class="wireframe" id="admin">
+<div class="tag">Web application</div>
+<h2>Admin — Reports Dashboard (React + Vite)</h2>
+<svg viewBox="0 0 900 600" xmlns="http://www.w3.org/2000/svg" class="wf-svg">
+<rect x="0" y="0" width="900" height="600" fill="#fbfbfc"/>
+<rect x="0" y="0" width="180" height="600" rx="0" fill="#eceef0" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="20" y="34" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#2a2c2e" font-weight="700" text-anchor="start">Together Admin</text>
+<text x="24" y="70" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#75797d" font-weight="normal" text-anchor="start">Dashboard</text>
+<rect x="10" y="86" width="160" height="26" rx="6" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="24" y="102" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#2a2c2e" font-weight="700" text-anchor="start">Reports</text>
+<text x="24" y="134" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#75797d" font-weight="normal" text-anchor="start">Users</text>
+<text x="24" y="166" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#75797d" font-weight="normal" text-anchor="start">Requests</text>
+<text x="24" y="198" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#75797d" font-weight="normal" text-anchor="start">Categories</text>
+<text x="24" y="230" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#75797d" font-weight="normal" text-anchor="start">Badges</text>
+<text x="24" y="262" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#75797d" font-weight="normal" text-anchor="start">Moderation</text>
+<text x="24" y="294" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#75797d" font-weight="normal" text-anchor="start">Audit log</text>
+<rect x="180" y="0" width="720" height="52" rx="0" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.5"/>
+<rect x="200" y="13" width="300" height="26" rx="13" fill="#eceef0" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="214" y="30" font-family="Helvetica, Arial, sans-serif" font-size="9" fill="#9aa0a6" font-weight="normal" text-anchor="start">Search users, requests, reports...</text>
+<circle cx="860" cy="26" r="13" fill="#d6d9dc" stroke="#4a4a4a" stroke-width="1.5"/>
+<line x1="180" y1="52" x2="900" y2="52" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<text x="200" y="84" font-family="Helvetica, Arial, sans-serif" font-size="16" fill="#2a2c2e" font-weight="700" text-anchor="start">Reports</text>
+<rect x="200.0" y="100" width="159.5" height="64" rx="2" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="214.0" y="130" font-family="Helvetica, Arial, sans-serif" font-size="17" fill="#2a2c2e" font-weight="700" text-anchor="start">12</text>
+<text x="214.0" y="148" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#9aa0a6" font-weight="normal" text-anchor="start">Open reports</text>
+<rect x="373.5" y="100" width="159.5" height="64" rx="2" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="387.5" y="130" font-family="Helvetica, Arial, sans-serif" font-size="17" fill="#2a2c2e" font-weight="700" text-anchor="start">1,204</text>
+<text x="387.5" y="148" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#9aa0a6" font-weight="normal" text-anchor="start">Active users (7d)</text>
+<rect x="547.0" y="100" width="159.5" height="64" rx="2" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="561.0" y="130" font-family="Helvetica, Arial, sans-serif" font-size="17" fill="#2a2c2e" font-weight="700" text-anchor="start">46</text>
+<text x="561.0" y="148" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#9aa0a6" font-weight="normal" text-anchor="start">Requests today</text>
+<rect x="720.5" y="100" width="159.5" height="64" rx="2" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="734.5" y="130" font-family="Helvetica, Arial, sans-serif" font-size="17" fill="#2a2c2e" font-weight="700" text-anchor="start">8</text>
+<text x="734.5" y="148" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#9aa0a6" font-weight="normal" text-anchor="start">Pending verifications</text>
+<rect x="200" y="186" width="680" height="232" rx="2" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="216" y="210" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#2a2c2e" font-weight="700" text-anchor="start">Recent reports</text>
+<text x="216" y="230" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#9aa0a6" font-weight="700" text-anchor="start">Type</text>
+<text x="380" y="230" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#9aa0a6" font-weight="700" text-anchor="start">Reported</text>
+<text x="580" y="230" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#9aa0a6" font-weight="700" text-anchor="start">Status</text>
+<text x="720" y="230" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#9aa0a6" font-weight="700" text-anchor="start">Action</text>
+<line x1="210" y1="238" x2="870" y2="238" stroke="#4a4a4a" stroke-width="1" opacity="0.55"/>
+<text x="216" y="256" font-family="Helvetica, Arial, sans-serif" font-size="9.5" fill="#6b7075" font-weight="normal" text-anchor="start">Spam</text>
+<text x="380" y="256" font-family="Helvetica, Arial, sans-serif" font-size="9.5" fill="#6b7075" font-weight="normal" text-anchor="start">Request #4021</text>
+<rect x="580" y="243" width="88" height="18" rx="9" fill="#eceef0" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="624.0" y="255.5" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#2a2c2e" font-weight="normal" text-anchor="middle">Open</text>
+<rect x="720" y="243" width="70" height="20" rx="10.0" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.3"/>
+<text x="755.0" y="257.0" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#2a2c2e" font-weight="600" text-anchor="middle">Review</text>
+<line x1="210" y1="270" x2="870" y2="270" stroke="#4a4a4a" stroke-width="1" opacity="0.55" stroke-dasharray="3,3"/>
+<text x="216" y="294" font-family="Helvetica, Arial, sans-serif" font-size="9.5" fill="#6b7075" font-weight="normal" text-anchor="start">Harassment</text>
+<text x="380" y="294" font-family="Helvetica, Arial, sans-serif" font-size="9.5" fill="#6b7075" font-weight="normal" text-anchor="start">User: c.eze</text>
+<rect x="580" y="281" width="88" height="18" rx="9" fill="#eceef0" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="624.0" y="293.5" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#2a2c2e" font-weight="normal" text-anchor="middle">Investigating</text>
+<rect x="720" y="281" width="70" height="20" rx="10.0" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.3"/>
+<text x="755.0" y="295.0" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#2a2c2e" font-weight="600" text-anchor="middle">Review</text>
+<line x1="210" y1="308" x2="870" y2="308" stroke="#4a4a4a" stroke-width="1" opacity="0.55" stroke-dasharray="3,3"/>
+<text x="216" y="332" font-family="Helvetica, Arial, sans-serif" font-size="9.5" fill="#6b7075" font-weight="normal" text-anchor="start">Duplicate</text>
+<text x="380" y="332" font-family="Helvetica, Arial, sans-serif" font-size="9.5" fill="#6b7075" font-weight="normal" text-anchor="start">Request #3998</text>
+<rect x="580" y="319" width="88" height="18" rx="9" fill="#eceef0" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="624.0" y="331.5" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#2a2c2e" font-weight="normal" text-anchor="middle">Open</text>
+<rect x="720" y="319" width="70" height="20" rx="10.0" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.3"/>
+<text x="755.0" y="333.0" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#2a2c2e" font-weight="600" text-anchor="middle">Review</text>
+<line x1="210" y1="346" x2="870" y2="346" stroke="#4a4a4a" stroke-width="1" opacity="0.55" stroke-dasharray="3,3"/>
+<text x="216" y="370" font-family="Helvetica, Arial, sans-serif" font-size="9.5" fill="#6b7075" font-weight="normal" text-anchor="start">Fraud (lending)</text>
+<text x="380" y="370" font-family="Helvetica, Arial, sans-serif" font-size="9.5" fill="#6b7075" font-weight="normal" text-anchor="start">User: t.balogun</text>
+<rect x="580" y="357" width="88" height="18" rx="9" fill="#eceef0" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="624.0" y="369.5" font-family="Helvetica, Arial, sans-serif" font-size="8.5" fill="#2a2c2e" font-weight="normal" text-anchor="middle">Escalated</text>
+<rect x="720" y="357" width="70" height="20" rx="10.0" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.3"/>
+<text x="755.0" y="371.0" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#2a2c2e" font-weight="600" text-anchor="middle">Review</text>
+<rect x="200" y="436" width="680" height="96" rx="2" fill="#ffffff" stroke="#4a4a4a" stroke-width="1.5"/>
+<text x="216" y="456" font-family="Helvetica, Arial, sans-serif" font-size="9.5" fill="#2a2c2e" font-weight="700" text-anchor="start">Successful contributions (30d)</text>
+<rect x="220.0" y="495.053627153773" width="28.0" height="20.946372846227003" rx="1" fill="#d6d9dc" stroke="#4a4a4a" stroke-width="1.5"/>
+<rect x="252.0" y="480.9654556363862" width="28.0" height="35.03454436361379" rx="1" fill="#d6d9dc" stroke="#4a4a4a" stroke-width="1.5"/>
+<rect x="284.0" y="488.98206233878835" width="28.0" height="27.017937661211647" rx="1" fill="#d6d9dc" stroke="#4a4a4a" stroke-width="1.5"/>
+<rect x="316.0" y="478.21967822457503" width="28.0" height="37.780321775424945" rx="1" fill="#d6d9dc" stroke="#4a4a4a" stroke-width="1.5"/>
+<rect x="348.0" y="477.21686601102954" width="28.0" height="38.783133988970484" rx="1" fill="#d6d9dc" stroke="#4a4a4a" stroke-width="1.5"/>
+<rect x="380.0" y="502.9856724749686" width="28.0" height="13.014327525031403" rx="1" fill="#d6d9dc" stroke="#4a4a4a" stroke-width="1.5"/>
+<rect x="412.0" y="505.39427238847577" width="28.0" height="10.60572761152421" rx="1" fill="#d6d9dc" stroke="#4a4a4a" stroke-width="1.5"/>
+<rect x="444.0" y="467.47642222356285" width="28.0" height="48.52357777643716" rx="1" fill="#d6d9dc" stroke="#4a4a4a" stroke-width="1.5"/>
+<rect x="476.0" y="494.06971534091167" width="28.0" height="21.93028465908835" rx="1" fill="#d6d9dc" stroke="#4a4a4a" stroke-width="1.5"/>
+<rect x="508.0" y="495.22077579185196" width="28.0" height="20.779224208148033" rx="1" fill="#d6d9dc" stroke="#4a4a4a" stroke-width="1.5"/>
+<rect x="540.0" y="460.2003375665187" width="28.0" height="55.79966243348129" rx="1" fill="#d6d9dc" stroke="#4a4a4a" stroke-width="1.5"/>
+<rect x="572.0" y="484.3678786539674" width="28.0" height="31.632121346032605" rx="1" fill="#d6d9dc" stroke="#4a4a4a" stroke-width="1.5"/>
+<rect x="604.0" y="467.5227732413781" width="28.0" height="48.47722675862188" rx="1" fill="#d6d9dc" stroke="#4a4a4a" stroke-width="1.5"/>
+<rect x="636.0" y="484.0877523998306" width="28.0" height="31.912247600169408" rx="1" fill="#d6d9dc" stroke="#4a4a4a" stroke-width="1.5"/>
+<rect x="668.0" y="476.60286553496854" width="28.0" height="39.39713446503145" rx="1" fill="#d6d9dc" stroke="#4a4a4a" stroke-width="1.5"/>
+<rect x="700.0" y="499.0716444949179" width="28.0" height="16.928355505082102" rx="1" fill="#d6d9dc" stroke="#4a4a4a" stroke-width="1.5"/>
+<rect x="732.0" y="476.79640971888136" width="28.0" height="39.203590281118665" rx="1" fill="#d6d9dc" stroke="#4a4a4a" stroke-width="1.5"/>
+<rect x="764.0" y="466.06991587140834" width="28.0" height="49.93008412859165" rx="1" fill="#d6d9dc" stroke="#4a4a4a" stroke-width="1.5"/>
+<rect x="796.0" y="481.93366432236814" width="28.0" height="34.06633567763186" rx="1" fill="#d6d9dc" stroke="#4a4a4a" stroke-width="1.5"/>
+<rect x="828.0" y="471.90241461473147" width="28.0" height="44.09758538526855" rx="1" fill="#d6d9dc" stroke="#4a4a4a" stroke-width="1.5"/>
+</svg>
+<figcaption class="note">The admin dashboard is the first screen of the React + Vite admin app: a persistent sidebar for the functions listed in Section 50, a reports queue as the default landing view (since moderation response time matters most), and a lightweight trend chart tied to the Section 54 success metrics.</figcaption>
+</figure>
+</div></body></html>

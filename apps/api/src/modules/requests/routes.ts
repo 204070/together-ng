@@ -1,7 +1,6 @@
-import { jwt } from '@elysiajs/jwt';
 import { RequestDraftCreate, RequestPatch, Value } from '@together/schemas';
 import { Elysia, t } from 'elysia';
-import { requireActiveActor } from '../../lib/authentication';
+import { createAuthGuard } from '../../lib/authentication';
 import { HttpError } from '../../lib/errors';
 import { missingFields, qualityHints } from './quality';
 import type { RequestServices } from './services';
@@ -56,22 +55,10 @@ function collectIssues(schema: unknown, value: unknown): Record<string, string> 
 export function createRequestRouter(services: RequestServices) {
 	const store = services.store;
 	const limiter = services.limiter;
-	async function requireUser(
-		headers: Record<string, string | undefined>,
-		jwtVerify: { verify: (tok: string) => Promise<unknown> },
-	): Promise<string> {
-		const actor = await requireActiveActor(headers, jwtVerify, {
-			findUserById: services.findUserById,
-		});
-		return actor.userId;
-	}
 	return new Elysia()
-		.use(jwt({ name: 'jwt', secret: services.jwtSecret, exp: '15m' }))
-		.post('/requests', async ({ body, headers, jwt: j, set }) => {
-			const userId = await requireUser(
-				headers as Record<string, string | undefined>,
-				j as unknown as { verify: (tok: string) => Promise<unknown> },
-			);
+		.use(createAuthGuard({ findUserById: services.findUserById }, services.jwtSecret))
+		.post('/requests', async ({ body, actor, set }) => {
+			const userId = actor.userId;
 			const lim = limiter.check(`req:${userId}`);
 			if (!lim.allowed)
 				throw new HttpError(
@@ -99,11 +86,8 @@ export function createRequestRouter(services: RequestServices) {
 		})
 		.get(
 			'/requests/:id',
-			async ({ params, headers, jwt: j }) => {
-				const userId = await requireUser(
-					headers as Record<string, string | undefined>,
-					j as unknown as { verify: (tok: string) => Promise<unknown> },
-				);
+			async ({ params, actor }) => {
+				const userId = actor.userId;
 				const row = await store.findRequestById(params.id);
 				if (!row || row.author_id !== userId) throw notFound();
 				const base = toResponse(row);
@@ -119,11 +103,8 @@ export function createRequestRouter(services: RequestServices) {
 		)
 		.patch(
 			'/requests/:id',
-			async ({ params, body, headers, jwt: j }) => {
-				const userId = await requireUser(
-					headers as Record<string, string | undefined>,
-					j as unknown as { verify: (tok: string) => Promise<unknown> },
-				);
+			async ({ params, body, actor }) => {
+				const userId = actor.userId;
 				const lim = limiter.check(`req:${userId}`);
 				if (!lim.allowed)
 					throw new HttpError(
@@ -161,11 +142,8 @@ export function createRequestRouter(services: RequestServices) {
 		)
 		.get(
 			'/requests/:id/preview',
-			async ({ params, headers, jwt: j }) => {
-				const userId = await requireUser(
-					headers as Record<string, string | undefined>,
-					j as unknown as { verify: (tok: string) => Promise<unknown> },
-				);
+			async ({ params, actor }) => {
+				const userId = actor.userId;
 				const row = await store.findRequestById(params.id);
 				if (!row || row.author_id !== userId) throw notFound();
 				const base = toResponse(row);
@@ -188,11 +166,8 @@ export function createRequestRouter(services: RequestServices) {
 		)
 		.post(
 			'/requests/:id/publish',
-			async ({ params, headers, jwt: j }) => {
-				const userId = await requireUser(
-					headers as Record<string, string | undefined>,
-					j as unknown as { verify: (tok: string) => Promise<unknown> },
-				);
+			async ({ params, actor }) => {
+				const userId = actor.userId;
 				const row = await store.findRequestById(params.id);
 				if (!row || row.author_id !== userId) throw notFound();
 				if (!canTransition(row.state, 'published')) throw invalidState();

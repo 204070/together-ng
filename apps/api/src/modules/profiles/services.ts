@@ -22,26 +22,19 @@ export interface ProfileServices {
 
 export function createProfileServices(
 	env: ProfileEnv = {},
-	deps: { sql?: Sql; storage?: PhotoStorage; users?: ActiveUserLookup } = {},
+	deps: { users: ActiveUserLookup; sql?: Sql; storage?: PhotoStorage },
 ): ProfileServices {
 	const databaseUrl = env.databaseUrl ?? configEnv.DATABASE_URL;
 	const jwtSecret = env.jwtSecret ?? configEnv.JWT_SECRET;
 	const sql = (deps.sql ?? env.sql ?? createClient(databaseUrl)) as Sql;
 	const store = new ProfileStore(sql);
 	const storage = deps.storage ?? env.storage ?? photoStorage;
-	const users: ActiveUserLookup = deps.users ?? {
-		findUserById: async (id) => {
-			const rows = await sql<{ status: string; deleted_at: Date | null }[]>`
-					SELECT status, deleted_at FROM users WHERE id = ${id}`;
-			return rows[0];
-		},
-	};
 
 	return {
 		sql,
 		store,
 		storage,
-		users,
+		users: deps.users,
 		jwtSecret,
 		close: () => (env.sql === undefined && deps.sql === undefined ? sql.end() : Promise.resolve()),
 	};

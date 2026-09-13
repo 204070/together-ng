@@ -1,3 +1,5 @@
+import { jwt } from '@elysiajs/jwt';
+import { Elysia } from 'elysia';
 import { unauthorizedError } from './errors';
 
 export interface AuthenticatedActor {
@@ -9,8 +11,13 @@ export interface JwtVerifier {
 	verify(token: string): Promise<unknown>;
 }
 
-export interface ActiveUserLookup {
-	findUserById(id: string): Promise<{ status: string; deleted_at: Date | null } | undefined>;
+export interface ActiveUser {
+	status: string;
+	deleted_at: Date | null;
+}
+
+export interface ActiveUserLookup<TUser extends ActiveUser = ActiveUser> {
+	findUserById(id: string): Promise<TUser | undefined>;
 }
 
 export function extractBearer(authorization: string | undefined): string | undefined {
@@ -28,6 +35,20 @@ export async function requireActiveActor(
 	jwt: JwtVerifier,
 	users: ActiveUserLookup,
 ): Promise<AuthenticatedActor> {
+	const { actor } = await requireActiveUser(headers, jwt, users);
+	return actor;
+}
+
+/**
+ * Authenticates an actor and returns the already-loaded account for handlers
+ * that need it. This avoids a second account lookup in endpoints such as
+ * /auth/me without expanding the minimal actor passed to ordinary routes.
+ */
+export async function requireActiveUser<TUser extends ActiveUser>(
+	headers: { authorization?: string },
+	jwt: JwtVerifier,
+	users: ActiveUserLookup<TUser>,
+): Promise<{ actor: AuthenticatedActor; user: TUser }> {
 	const token = extractBearer(headers.authorization);
 	if (token === undefined) throw unauthorizedError();
 
@@ -38,5 +59,23 @@ export async function requireActiveActor(
 
 	const user = await users.findUserById(sub);
 	if (user?.status !== 'active' || user.deleted_at !== null) throw unauthorizedError();
-	return { userId: sub, sessionId: sid };
+	return { actor: { userId: sub, sessionId: sid }, user };
+}
+
+/**
+ * Scoped Elysia guard for route groups that require an active account. It
+ * exposes a minimal actor; domain policies remain responsible for ownership
+ * and role decisions.
+ */
+export function createAuthGuard(users: ActiveUserLookup, jwtSecret: string) {
+	return new Elysia({ name: 'auth.guard' })
+		.use(jwt({ name: 'jwt', secret: jwtSecret, exp: '15m' }))
+		.derive(async ({ headers, jwt: verifier }) => ({
+			actor: await requireActiveActor(
+				headers as { authorization?: string },
+				verifier as unknown as JwtVerifier,
+				users,
+			),
+		}))
+		.as('scoped');
 }

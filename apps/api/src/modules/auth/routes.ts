@@ -2,7 +2,7 @@ import { jwt } from '@elysiajs/jwt';
 import { AuthResponse, SendOtpRequest, UserPrivate, VerifyOtpRequest } from '@together/schemas';
 import { type CookieOptions, Elysia, t } from 'elysia';
 
-import { requireActiveActor } from '../../lib/authentication';
+import { requireActiveUser } from '../../lib/authentication';
 import { unauthorizedError, validationError } from '../../lib/errors';
 import {
 	type AccessTokenSigner,
@@ -104,15 +104,11 @@ export function createAuthRouter(services: AuthServices) {
 		.get(
 			'/auth/me',
 			async ({ headers, jwt: signAccess }) => {
-				const actor = await requireActiveActor(
+				const { user } = await requireActiveUser(
 					headers as { authorization?: string },
 					signAccess as never,
 					services.store,
 				);
-				const user = await services.store.findUserById(actor.userId);
-				if (user === undefined || user.status !== 'active' || user.deleted_at !== null) {
-					throw unauthorizedError();
-				}
 				return toUserPrivate(user);
 			},
 			{

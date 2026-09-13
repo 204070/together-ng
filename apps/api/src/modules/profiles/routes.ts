@@ -1,7 +1,6 @@
-import { jwt } from '@elysiajs/jwt';
 import { ProfileCreate, ProfilePatch, ProfileReplace } from '@together/schemas';
 import { Elysia, t } from 'elysia';
-import { requireActiveActor } from '../../lib/authentication';
+import { createAuthGuard } from '../../lib/authentication';
 import { HttpError } from '../../lib/errors';
 import { buildPhotoKey, type PhotoStorage } from '../../lib/storage';
 import type { ProfileServices } from './services';
@@ -111,14 +110,10 @@ export function createProfileRouter(services: ProfileServices) {
 	const store = services.store;
 	const storage = services.storage;
 
-	return new Elysia()
-		.use(jwt({ name: 'jwt', secret: services.jwtSecret, exp: '15m' }))
-		.get('/profiles/me', async ({ headers, jwt: jwtVerify }) => {
-			const { userId } = await requireActiveActor(
-				headers as { authorization?: string },
-				jwtVerify as never,
-				services.users,
-			);
+	const authenticatedProfiles = new Elysia()
+		.use(createAuthGuard(services.users, services.jwtSecret))
+		.get('/profiles/me', async ({ actor }) => {
+			const { userId } = actor;
 			const row = await store.findByUserId(userId);
 			if (row === undefined) throw notFoundError();
 			const since = await store.contributorSince(userId);
@@ -126,12 +121,8 @@ export function createProfileRouter(services: ProfileServices) {
 		})
 		.post(
 			'/profiles',
-			async ({ body, headers, set, jwt: jwtVerify }) => {
-				const { userId } = await requireActiveActor(
-					headers as { authorization?: string },
-					jwtVerify as never,
-					services.users,
-				);
+			async ({ body, actor, set }) => {
+				const { userId } = actor;
 				const existing = await store.findByUserId(userId);
 				if (existing !== undefined) throw profileExistsError();
 				const input = mapCreateBody(body as Record<string, unknown>);
@@ -148,24 +139,10 @@ export function createProfileRouter(services: ProfileServices) {
 			},
 			{ body: ProfileCreate as never },
 		)
-		.get(
-			'/profiles/:id',
-			async ({ params }) => {
-				const row = await store.findById(params.id);
-				if (row === undefined) throw notFoundError();
-				const since = await store.contributorSince(row.user_id);
-				return toPublic(row, since, storage);
-			},
-			{ params: t.Object({ id: t.String({ format: 'uuid' }) }) },
-		)
 		.put(
 			'/profiles/:id',
-			async ({ params, body, headers, jwt: jwtVerify }) => {
-				const { userId } = await requireActiveActor(
-					headers as { authorization?: string },
-					jwtVerify as never,
-					services.users,
-				);
+			async ({ params, body, actor }) => {
+				const { userId } = actor;
 				const row = await store.findById(params.id);
 				if (row === undefined) throw notFoundError();
 				if (row.user_id !== userId) throw forbiddenError();
@@ -181,13 +158,9 @@ export function createProfileRouter(services: ProfileServices) {
 		)
 		.patch(
 			'/profiles/:id',
-			async ({ params, body, headers, jwt: jwtVerify }) => {
+			async ({ params, body, actor }) => {
 				// Concurrency: last-write-wins (LWW) — no If-Match/versioning this wave; each PATCH overwrites the row and bumps updatedAt.
-				const { userId } = await requireActiveActor(
-					headers as { authorization?: string },
-					jwtVerify as never,
-					services.users,
-				);
+				const { userId } = actor;
 				const row = await store.findById(params.id);
 				if (row === undefined) throw notFoundError();
 				if (row.user_id !== userId) throw forbiddenError();
@@ -203,12 +176,8 @@ export function createProfileRouter(services: ProfileServices) {
 		)
 		.post(
 			'/profiles/:id/photo',
-			async ({ params, body, headers, jwt: jwtVerify }) => {
-				const { userId } = await requireActiveActor(
-					headers as { authorization?: string },
-					jwtVerify as never,
-					services.users,
-				);
+			async ({ params, body, actor }) => {
+				const { userId } = actor;
 				const row = await store.findById(params.id);
 				if (row === undefined) throw notFoundError();
 				if (row.user_id !== userId) throw forbiddenError();
@@ -255,4 +224,15 @@ export function createProfileRouter(services: ProfileServices) {
 				body: t.Object({ photo: t.File() }),
 			},
 		);
+
+	return new Elysia().use(authenticatedProfiles).get(
+		'/profiles/:id',
+		async ({ params }) => {
+			const row = await store.findById(params.id);
+			if (row === undefined) throw notFoundError();
+			const since = await store.contributorSince(row.user_id);
+			return toPublic(row, since, storage);
+		},
+		{ params: t.Object({ id: t.String({ format: 'uuid' }) }) },
+	);
 }

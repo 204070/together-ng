@@ -68,4 +68,6 @@ jobs:
           echo "No migration drift."
 
       - name: Test
-        run: bun run test
+        run: |
+          bun run --filter @together/db db:migrate
+          bun run test

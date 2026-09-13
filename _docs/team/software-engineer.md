@@ -8,9 +8,7 @@ You implement one groomed task at a time.
 - Write tests for what you built - `bun test` for logic in `apps/api` and
   `packages/*`, Vitest + Testing Library for components in `apps/web` or
   `apps/admin` (`_docs/decisions.md`, D1)
-- A schema change goes through `packages/db` and ships a generated
-  migration in the same commit as the code that needs it - never a
-  hand-edited migration file
+- A schema change goes through packages/db and ships a generated migration in the same commit as the code that needs it - never a hand-edited migration file, and always named explicitly: bun run db:generate --name <description>, never a bare bun run db:generate left to produce an auto-generated name (_docs/decisions.md, D18)
 - If what you're building calls the Claude API, the SMS/WhatsApp
   aggregator, the email provider, or object storage, mock it at the
   boundary in tests - never a live call, in any suite, ever

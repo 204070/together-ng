@@ -180,7 +180,7 @@ Fixed-window in-memory rate limiting behind `apps/api/src/lib/rate-limit.ts` (lo
 
 Emails are stored lowercased and trimmed (normalization happens at registration and again at login lookup; email FORMAT is validated on the wire by #3, normalization is the API's job). Postgres unique indexes are the race-safe backstop (`23505` maps to `EMAIL_TAKEN`). Binds the email-OTP follow-up and notifications.
 
-## D10. External providers are always mocked in tests
+## D17. External providers are always mocked in tests
 
 No test - `bun test` or `vitest`, local or in CI - makes a live call to the
 Claude API, the SMS/WhatsApp aggregator, the email provider, or object
@@ -195,3 +195,9 @@ run including CI, and can leak a production-tier API key into a worktree's
 `.env` (see the note on scoped keys in `_docs/PROCESS.md`). A test that
 makes a real network call to any of these is a FAIL in QA, the same
 severity as a hardcoded secret.
+
+## D18. Migrations are named explicitly, never left auto-generated
+
+Every migration is generated with an explicit name - bun run db:generate --name add_request_matches_table, not a bare bun run db:generate left to produce something like 0007_absurd_black_widow.sql.
+
+Reason: D2 already means every migration in the project lands in one shared, sequential history, written by whichever issue happens to touch schema next. In that history, a filename is the only thing that tells someone what a given step did without opening it - 0007_absurd_black_widow means nothing on a rebase, in a conflict, or six months later when something needs a down migration written by hand; 0007_add_request_matches_table means something at a glance. Pick a name that describes the schema change itself (add_lending_value_threshold_column, drop_unused_badge_icon_column), not the issue title verbatim - issue titles describe a feature, not necessarily what the migration does.

@@ -2,7 +2,8 @@ import { jwt } from '@elysiajs/jwt';
 import { AuthResponse, SendOtpRequest, UserPrivate, VerifyOtpRequest } from '@together/schemas';
 import { type CookieOptions, Elysia, t } from 'elysia';
 
-import { unauthorizedError, validationError } from './errors';
+import { requireActiveUser } from '../../lib/authentication';
+import { unauthorizedError, validationError } from '../../lib/errors';
 import {
 	type AccessTokenSigner,
 	checkOtpSendLimit,
@@ -103,32 +104,17 @@ export function createAuthRouter(services: AuthServices) {
 		.get(
 			'/auth/me',
 			async ({ headers, jwt: signAccess }) => {
-				const token = extractBearer(headers.authorization);
-				if (token === undefined) throw unauthorizedError();
-				const payload = await signAccess.verify(token);
-				if (
-					payload === false ||
-					typeof payload.sub !== 'string' ||
-					typeof payload.sid !== 'string'
-				) {
-					throw unauthorizedError();
-				}
-				const user = await services.store.findUserById(payload.sub);
-				if (user === undefined || user.status !== 'active' || user.deleted_at !== null) {
-					throw unauthorizedError();
-				}
+				const { user } = await requireActiveUser(
+					headers as { authorization?: string },
+					signAccess as never,
+					services.store,
+				);
 				return toUserPrivate(user);
 			},
 			{
 				response: { 200: UserPrivate },
 			},
 		);
-}
-
-function extractBearer(authorization: string | undefined): string | undefined {
-	if (authorization === undefined) return undefined;
-	const match = /^Bearer\s+(.+)$/i.exec(authorization.trim());
-	return match?.[1];
 }
 
 async function loginRoute(

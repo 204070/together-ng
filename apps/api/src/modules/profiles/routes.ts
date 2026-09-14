@@ -1,14 +1,11 @@
-import { jwt } from '@elysiajs/jwt';
 import { ProfileCreate, ProfilePatch, ProfileReplace } from '@together/schemas';
 import { Elysia, t } from 'elysia';
-import { HttpError } from '../../auth/errors';
-import type { AuthServices } from '../../auth/services';
-import { buildPhotoKey, type PhotoStorage, photoStorage } from '../../lib/storage';
-import { type ProfileRow, ProfileStore } from './store';
+import { createAuthGuard } from '../../lib/authentication';
+import { HttpError } from '../../lib/errors';
+import { buildPhotoKey, type PhotoStorage } from '../../lib/storage';
+import type { ProfileServices } from './services';
+import type { ProfileRow } from './store';
 
-function unauthorizedError(): HttpError {
-	return new HttpError(401, 'UNAUTHORIZED', undefined, undefined, 'Authentication required');
-}
 function forbiddenError(): HttpError {
 	return new HttpError(403, 'FORBIDDEN', undefined, undefined, 'Forbidden');
 }
@@ -17,33 +14,6 @@ function notFoundError(): HttpError {
 }
 function profileExistsError(): HttpError {
 	return new HttpError(409, 'PROFILE_EXISTS', undefined, undefined, 'Profile already exists');
-}
-
-function extractBearer(authorization: string | undefined): string | undefined {
-	if (authorization === undefined) return undefined;
-	const match = /^Bearer\s+(.+)$/i.exec(authorization.trim());
-	return match?.[1];
-}
-
-async function requireAuth(
-	headers: { authorization?: string },
-	jwtVerify: { verify: (token: string) => Promise<false | { sub: string; sid: string }> },
-	_store: ProfileStore,
-	sql: AuthServices['sql'],
-): Promise<{ userId: string }> {
-	const token = extractBearer(headers.authorization);
-	if (token === undefined) throw unauthorizedError();
-	const payload = await jwtVerify.verify(token);
-	if (payload === false || typeof payload.sub !== 'string' || typeof payload.sid !== 'string') {
-		throw unauthorizedError();
-	}
-	// Reuse AuthStore logic: check user active
-	const rows = await sql<{ id: string; status: string; deleted_at: Date | null }[]>`
-		SELECT id, status, deleted_at FROM users WHERE id = ${payload.sub}`;
-	const user = rows[0];
-	if (user === undefined || user.status !== 'active' || user.deleted_at !== null)
-		throw unauthorizedError();
-	return { userId: payload.sub };
 }
 
 function toPublic(row: ProfileRow, contributorSince: Date | null, storage: PhotoStorage) {
@@ -136,18 +106,14 @@ function mapPatchBody(body: Record<string, unknown>): Partial<{
 	return patch;
 }
 
-export function createProfileRouter(services: AuthServices, storage: PhotoStorage = photoStorage) {
-	const store = new ProfileStore(services.sql);
+export function createProfileRouter(services: ProfileServices) {
+	const store = services.store;
+	const storage = services.storage;
 
-	return new Elysia()
-		.use(jwt({ name: 'jwt', secret: services.jwtSecret, exp: '15m' }))
-		.get('/profiles/me', async ({ headers, jwt: jwtVerify }) => {
-			const { userId } = await requireAuth(
-				headers as { authorization?: string },
-				jwtVerify as never,
-				store,
-				services.sql,
-			);
+	const authenticatedProfiles = new Elysia()
+		.use(createAuthGuard(services.users, services.jwtSecret))
+		.get('/profiles/me', async ({ actor }) => {
+			const { userId } = actor;
 			const row = await store.findByUserId(userId);
 			if (row === undefined) throw notFoundError();
 			const since = await store.contributorSince(userId);
@@ -155,13 +121,8 @@ export function createProfileRouter(services: AuthServices, storage: PhotoStorag
 		})
 		.post(
 			'/profiles',
-			async ({ body, headers, set, jwt: jwtVerify }) => {
-				const { userId } = await requireAuth(
-					headers as { authorization?: string },
-					jwtVerify as never,
-					store,
-					services.sql,
-				);
+			async ({ body, actor, set }) => {
+				const { userId } = actor;
 				const existing = await store.findByUserId(userId);
 				if (existing !== undefined) throw profileExistsError();
 				const input = mapCreateBody(body as Record<string, unknown>);
@@ -178,25 +139,10 @@ export function createProfileRouter(services: AuthServices, storage: PhotoStorag
 			},
 			{ body: ProfileCreate as never },
 		)
-		.get(
-			'/profiles/:id',
-			async ({ params }) => {
-				const row = await store.findById(params.id);
-				if (row === undefined) throw notFoundError();
-				const since = await store.contributorSince(row.user_id);
-				return toPublic(row, since, storage);
-			},
-			{ params: t.Object({ id: t.String({ format: 'uuid' }) }) },
-		)
 		.put(
 			'/profiles/:id',
-			async ({ params, body, headers, jwt: jwtVerify }) => {
-				const { userId } = await requireAuth(
-					headers as { authorization?: string },
-					jwtVerify as never,
-					store,
-					services.sql,
-				);
+			async ({ params, body, actor }) => {
+				const { userId } = actor;
 				const row = await store.findById(params.id);
 				if (row === undefined) throw notFoundError();
 				if (row.user_id !== userId) throw forbiddenError();
@@ -212,14 +158,9 @@ export function createProfileRouter(services: AuthServices, storage: PhotoStorag
 		)
 		.patch(
 			'/profiles/:id',
-			async ({ params, body, headers, jwt: jwtVerify }) => {
+			async ({ params, body, actor }) => {
 				// Concurrency: last-write-wins (LWW) — no If-Match/versioning this wave; each PATCH overwrites the row and bumps updatedAt.
-				const { userId } = await requireAuth(
-					headers as { authorization?: string },
-					jwtVerify as never,
-					store,
-					services.sql,
-				);
+				const { userId } = actor;
 				const row = await store.findById(params.id);
 				if (row === undefined) throw notFoundError();
 				if (row.user_id !== userId) throw forbiddenError();
@@ -235,13 +176,8 @@ export function createProfileRouter(services: AuthServices, storage: PhotoStorag
 		)
 		.post(
 			'/profiles/:id/photo',
-			async ({ params, body, headers, jwt: jwtVerify }) => {
-				const { userId } = await requireAuth(
-					headers as { authorization?: string },
-					jwtVerify as never,
-					store,
-					services.sql,
-				);
+			async ({ params, body, actor }) => {
+				const { userId } = actor;
 				const row = await store.findById(params.id);
 				if (row === undefined) throw notFoundError();
 				if (row.user_id !== userId) throw forbiddenError();
@@ -288,4 +224,15 @@ export function createProfileRouter(services: AuthServices, storage: PhotoStorag
 				body: t.Object({ photo: t.File() }),
 			},
 		);
+
+	return new Elysia().use(authenticatedProfiles).get(
+		'/profiles/:id',
+		async ({ params }) => {
+			const row = await store.findById(params.id);
+			if (row === undefined) throw notFoundError();
+			const since = await store.contributorSince(row.user_id);
+			return toPublic(row, since, storage);
+		},
+		{ params: t.Object({ id: t.String({ format: 'uuid' }) }) },
+	);
 }

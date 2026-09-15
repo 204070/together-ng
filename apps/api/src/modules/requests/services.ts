@@ -1,6 +1,7 @@
 import { env as configEnv } from '@together/config';
 import { createClient, type Sql } from '@together/db';
 import { FixedWindowRateLimiter } from '../../lib/rate-limit';
+import type { MatchingService } from '../../worker/matching';
 import type { AuthStore } from '../auth/store';
 import { RequestStore } from './store';
 
@@ -20,6 +21,7 @@ export interface RequestServices {
 	limiter: FixedWindowRateLimiter;
 	jwtSecret: string;
 	now: () => Date;
+	matching: MatchingService | undefined;
 	findUserById: (id: string) => Promise<{ status: string; deleted_at: Date | null } | undefined>;
 	close: () => Promise<void>;
 }
@@ -31,6 +33,7 @@ export function createRequestServices(
 		authStore?: AuthStore;
 		now?: () => Date;
 		limiter?: FixedWindowRateLimiter;
+		matching?: MatchingService;
 	} = {},
 ): RequestServices {
 	const databaseUrl = env.databaseUrl ?? configEnv.DATABASE_URL;
@@ -60,6 +63,7 @@ export function createRequestServices(
 		limiter,
 		jwtSecret,
 		now,
+		matching: deps.matching,
 		findUserById,
 		close: () => (env.sql === undefined && deps.sql === undefined ? sql.end() : Promise.resolve()),
 	};

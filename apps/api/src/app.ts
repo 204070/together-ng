@@ -8,7 +8,8 @@ import { createFeedRouter } from './modules/feed';
 import { createProfileRouter } from './modules/profiles/routes';
 import { createProfileServices } from './modules/profiles/services';
 import { createRequestRouter } from './modules/requests/routes';
-import { createRequestServices } from './modules/requests/services';
+import { createRequestServices, type RequestServices } from './modules/requests/services';
+import { createInternalMatchingRouter } from './worker/matching';
 
 loadEnv();
 
@@ -22,6 +23,7 @@ export function makeApp(env: AppEnv = {}) {
 		sql: authServices.sql,
 		authStore: authServices.store,
 		now: authServices.now,
+		matching: env.matching,
 	});
 
 	const app = new Elysia()
@@ -52,9 +54,11 @@ export function makeApp(env: AppEnv = {}) {
 		.use(createAuthRouter(authServices))
 		.use(createFeedRouter(authServices))
 		.use(createProfileRouter(profileServices))
-		.use(createRequestRouter(requestServices));
+		.use(createRequestRouter(requestServices))
+		.use(createInternalMatchingRouter(authServices.sql));
 
 	app.decorate('services', authServices);
+	app.decorate('requestServices', requestServices as RequestServices);
 
 	return app;
 }

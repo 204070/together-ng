@@ -1,6 +1,7 @@
 import { env as configEnv } from '@together/config';
 import { createClient, type Sql } from '@together/db';
 import { FixedWindowRateLimiter } from '../../lib/rate-limit';
+import type { MatchingService } from '../../worker/matching';
 import { createOtpSender, type OtpSender } from './otp-sender';
 import { AuthStore } from './store';
 
@@ -18,6 +19,7 @@ export interface AppEnv {
 	isProduction?: boolean;
 	now?: () => Date;
 	sql?: Sql;
+	matching?: MatchingService;
 }
 
 export interface AuthServices {

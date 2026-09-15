@@ -55,6 +55,17 @@ function collectIssues(schema: unknown, value: unknown): Record<string, string> 
 export function createRequestRouter(services: RequestServices) {
 	const store = services.store;
 	const limiter = services.limiter;
+	// Matching recompute runs through the Postgres-backed queue but is awaited
+	// here so `request_matches` is populated by the time publish returns. A
+	// matching failure never fails the publish itself; it is logged instead.
+	const triggerMatching = async (requestId: string): Promise<void> => {
+		if (!services.matching) return;
+		try {
+			await services.matching.recompute(requestId);
+		} catch (error) {
+			console.error(`matching recompute failed for request ${requestId}`, error);
+		}
+	};
 	return new Elysia()
 		.use(createAuthGuard({ findUserById: services.findUserById }, services.jwtSecret))
 		.post('/requests', async ({ body, actor, set }) => {
@@ -129,6 +140,10 @@ export function createRequestRouter(services: RequestServices) {
 				}
 				const updated = await store.updateRequest(params.id, b);
 				if (!updated) throw notFound();
+				// Recompute only for edits of published requests; draft edits skip
+				// matching entirely (unreachable today: PATCH rejects non-drafts,
+				// but the hook stays correct if a published-edit route appears).
+				if (updated.state === 'published') await triggerMatching(params.id);
 				const base = toResponse(updated);
 				const hints = qualityHints({
 					title: updated.title,
@@ -194,6 +209,7 @@ export function createRequestRouter(services: RequestServices) {
 					throw new HttpError(422, 'VALIDATION', fields, undefined, 'Missing required fields');
 				const published = await store.publishRequest(params.id);
 				if (!published) throw notFound();
+				await triggerMatching(params.id);
 				const base = toResponse(published);
 				const hints = qualityHints({
 					title: published.title,

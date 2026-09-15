@@ -89,6 +89,20 @@ async function createClosedRequest(authorId: string, catId: number): Promise<str
 	return row.id;
 }
 
+async function createRequestInState(
+	authorId: string,
+	catId: number,
+	state: string,
+): Promise<string> {
+	const [row] = await sql<{ id: string }[]>`
+		INSERT INTO requests (author_id, category_id, title, goal, barrier, help_needed, state)
+		VALUES (${authorId}, ${catId}, ${`${state} Request`}, 'Goal', 'Barrier', 'Help', ${state})
+		RETURNING id
+	`;
+	if (!row) throw new Error('Failed to create request');
+	return row.id;
+}
+
 function authHeaders(token: string): Record<string, string> {
 	return { authorization: `Bearer ${token}` };
 }
@@ -241,6 +255,60 @@ describe('POST /requests/:id/vote', () => {
 			}),
 		);
 		expect(res.status).toBe(422);
+	});
+
+	test('POST on archived request returns 422', async () => {
+		const voter = await createUser();
+		const author = await createUser();
+		const token = await loginToken(voter.email);
+		const catId = await createCategory();
+		const requestId = await createRequestInState(author.id, catId, 'archived');
+
+		const res = await app.handle(
+			new Request(`http://localhost/requests/${requestId}/vote`, {
+				method: 'POST',
+				headers: { 'content-type': 'application/json', ...authHeaders(token) },
+			}),
+		);
+		expect(res.status).toBe(422);
+		const body = (await res.json()) as { error: string };
+		expect(body.error).toBe('VOTING_NOT_ALLOWED');
+	});
+
+	test('POST on cancelled request returns 422', async () => {
+		const voter = await createUser();
+		const author = await createUser();
+		const token = await loginToken(voter.email);
+		const catId = await createCategory();
+		const requestId = await createRequestInState(author.id, catId, 'cancelled');
+
+		const res = await app.handle(
+			new Request(`http://localhost/requests/${requestId}/vote`, {
+				method: 'POST',
+				headers: { 'content-type': 'application/json', ...authHeaders(token) },
+			}),
+		);
+		expect(res.status).toBe(422);
+		const body = (await res.json()) as { error: string };
+		expect(body.error).toBe('VOTING_NOT_ALLOWED');
+	});
+
+	test('POST on under_review request returns 422', async () => {
+		const voter = await createUser();
+		const author = await createUser();
+		const token = await loginToken(voter.email);
+		const catId = await createCategory();
+		const requestId = await createRequestInState(author.id, catId, 'under_review');
+
+		const res = await app.handle(
+			new Request(`http://localhost/requests/${requestId}/vote`, {
+				method: 'POST',
+				headers: { 'content-type': 'application/json', ...authHeaders(token) },
+			}),
+		);
+		expect(res.status).toBe(422);
+		const body = (await res.json()) as { error: string };
+		expect(body.error).toBe('VOTING_NOT_ALLOWED');
 	});
 
 	test('deleted/suspended user voting returns 401', async () => {

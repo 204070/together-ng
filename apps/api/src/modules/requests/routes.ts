@@ -118,7 +118,7 @@ export function createRequestRouter(services: RequestServices) {
 				.use(createAuthGuard({ findUserById: services.findUserById }, services.jwtSecret))
 				.post('/requests', async ({ body, actor, set }) => {
 					const userId = actor.userId;
-					const lim = limiter.check(`req:${userId}`);
+					const lim = await limiter.check(`req:${userId}`);
 					if (!lim.allowed)
 						throw new HttpError(
 							429,
@@ -147,7 +147,7 @@ export function createRequestRouter(services: RequestServices) {
 					'/requests/:id',
 					async ({ params, body, actor }) => {
 						const userId = actor.userId;
-						const lim = limiter.check(`req:${userId}`);
+						const lim = await limiter.check(`req:${userId}`);
 						if (!lim.allowed)
 							throw new HttpError(
 								429,

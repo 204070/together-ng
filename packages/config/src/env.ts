@@ -16,6 +16,7 @@ const EnvSchema = Type.Object({
 	JWT_SECRET: Type.String({ minLength: 1 }),
 	TERMII_API_KEY: Type.String({ default: '' }),
 	TERMII_SENDER_ID: Type.String({ default: '' }),
+	REDIS_URL: Type.String({ default: '' }),
 });
 
 export type ConfigEnv = Static<typeof EnvSchema>;

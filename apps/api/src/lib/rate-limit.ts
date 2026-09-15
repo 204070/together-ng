@@ -1,3 +1,5 @@
+import type { RedisConnection } from './redis';
+
 export interface RateLimitDecision {
 	allowed: boolean;
 	retryAfterSeconds: number;
@@ -41,5 +43,42 @@ export class FixedWindowRateLimiter {
 			retryAfterSeconds: Math.max(1, Math.ceil((resetAt - now) / 1000)),
 			resetAt,
 		};
+	}
+}
+
+export class RedisRateLimiter {
+	constructor(
+		private readonly redis: RedisConnection,
+		private readonly windowMs: number,
+		private readonly maxHits: number,
+	) {}
+
+	async check(key: string): Promise<RateLimitDecision> {
+		const now = Date.now();
+		const windowKey = `ratelimit:${key}:${Math.floor(now / this.windowMs)}`;
+		const ttlSeconds = Math.ceil(this.windowMs / 1000);
+
+		try {
+			const count = await this.redis.send('INCR', windowKey);
+			if (Number(count) === 1) {
+				await this.redis.send('EXPIRE', windowKey, String(ttlSeconds));
+			}
+			const currentCount = Number(count);
+			const resetAt = (Math.floor(now / this.windowMs) + 1) * this.windowMs;
+			if (currentCount > this.maxHits) {
+				return {
+					allowed: false,
+					retryAfterSeconds: Math.max(1, Math.ceil((resetAt - now) / 1000)),
+					resetAt,
+				};
+			}
+			return { allowed: true, retryAfterSeconds: 0, resetAt };
+		} catch {
+			return {
+				allowed: true,
+				retryAfterSeconds: 0,
+				resetAt: now + this.windowMs,
+			};
+		}
 	}
 }

@@ -57,7 +57,7 @@ export function createVoteRouter(services: RequestServices) {
 					const userId = actor.userId;
 					const requestId = params.id;
 
-					const lim = limiter.check(`vote:${userId}`);
+					const lim = await limiter.check(`vote:${userId}`);
 					if (!lim.allowed)
 						throw new HttpError(
 							429,
@@ -84,7 +84,10 @@ export function createVoteRouter(services: RequestServices) {
 
 					const voteCount = await store.countVotes(requestId);
 					set.status = 201;
-					return { voteCount, hasVoted: true };
+
+					const result = { voteCount, hasVoted: true };
+					broadcastVoteUpdate(requestId, result);
+					return result;
 				},
 				{ params: t.Object({ id: t.String({ format: 'uuid' }) }) },
 			)
@@ -94,7 +97,7 @@ export function createVoteRouter(services: RequestServices) {
 					const userId = actor.userId;
 					const requestId = params.id;
 
-					const lim = limiter.check(`vote:${userId}`);
+					const lim = await limiter.check(`vote:${userId}`);
 					if (!lim.allowed)
 						throw new HttpError(
 							429,
@@ -113,9 +116,41 @@ export function createVoteRouter(services: RequestServices) {
 					await store.removeVote(userId, requestId);
 					const voteCount = await store.countVotes(requestId);
 					set.status = 200;
-					return { voteCount, hasVoted: false };
+
+					const result = { voteCount, hasVoted: false };
+					broadcastVoteUpdate(requestId, result);
+					return result;
 				},
 				{ params: t.Object({ id: t.String({ format: 'uuid' }) }) },
 			),
 	);
+}
+
+const voteSubscribers = new Map<
+	string,
+	Set<(data: { voteCount: number; hasVoted: boolean }) => void>
+>();
+
+export function subscribeToVoteUpdates(
+	requestId: string,
+	callback: (data: { voteCount: number; hasVoted: boolean }) => void,
+): () => void {
+	let subs = voteSubscribers.get(requestId);
+	if (!subs) {
+		subs = new Set();
+		voteSubscribers.set(requestId, subs);
+	}
+	subs.add(callback);
+	return () => {
+		subs?.delete(callback);
+		if (subs?.size === 0) voteSubscribers.delete(requestId);
+	};
+}
+
+function broadcastVoteUpdate(requestId: string, data: { voteCount: number; hasVoted: boolean }) {
+	const subs = voteSubscribers.get(requestId);
+	if (!subs) return;
+	for (const callback of subs) {
+		callback(data);
+	}
 }

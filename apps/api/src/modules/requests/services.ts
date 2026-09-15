@@ -1,6 +1,11 @@
 import { env as configEnv } from '@together/config';
 import { createClient, type Sql } from '@together/db';
-import { FixedWindowRateLimiter } from '../../lib/rate-limit';
+import {
+	FixedWindowRateLimiter,
+	type RateLimitDecision,
+	RedisRateLimiter,
+} from '../../lib/rate-limit';
+import { createRedisConnection, type RedisConnection } from '../../lib/redis';
 import type { MatchingService } from '../../worker/matching';
 import type { AuthStore } from '../auth/store';
 import { RequestStore } from './store';
@@ -13,12 +18,17 @@ export interface RequestEnv {
 	jwtSecret?: string;
 	sql?: Sql;
 	now?: () => Date;
+	redisUrl?: string;
+}
+
+export interface AsyncRateLimiter {
+	check(key: string): Promise<RateLimitDecision>;
 }
 
 export interface RequestServices {
 	sql: Sql;
 	store: RequestStore;
-	limiter: FixedWindowRateLimiter;
+	limiter: AsyncRateLimiter;
 	jwtSecret: string;
 	now: () => Date;
 	matching: MatchingService | undefined;
@@ -32,8 +42,9 @@ export function createRequestServices(
 		sql?: Sql;
 		authStore?: AuthStore;
 		now?: () => Date;
-		limiter?: FixedWindowRateLimiter;
+		limiter?: AsyncRateLimiter;
 		matching?: MatchingService;
+		redis?: RedisConnection | null;
 	} = {},
 ): RequestServices {
 	const databaseUrl = env.databaseUrl ?? configEnv.DATABASE_URL;
@@ -41,11 +52,29 @@ export function createRequestServices(
 	const now = deps.now ?? env.now ?? (() => new Date());
 	const sql = (deps.sql ?? env.sql ?? createClient(databaseUrl)) as Sql;
 	const store = new RequestStore(sql);
-	const limiter =
-		deps.limiter ??
-		new FixedWindowRateLimiter(REQUEST_WINDOW_MS, REQUEST_MAX_HITS, {
+
+	let limiter: AsyncRateLimiter;
+	if (deps.limiter) {
+		limiter = deps.limiter;
+	} else {
+		const memoryLimiter = new FixedWindowRateLimiter(REQUEST_WINDOW_MS, REQUEST_MAX_HITS, {
 			now: () => now().getTime(),
 		});
+		limiter = {
+			check: (key: string) => Promise.resolve(memoryLimiter.check(key)),
+		};
+
+		const redisUrl = env.redisUrl ?? configEnv.REDIS_URL;
+		if (redisUrl) {
+			createRedisConnection(redisUrl)
+				.then((redis) => {
+					limiter = new RedisRateLimiter(redis, REQUEST_WINDOW_MS, REQUEST_MAX_HITS);
+				})
+				.catch(() => {
+					// Redis unavailable, keep using in-memory limiter
+				});
+		}
+	}
 
 	const findUserById = async (id: string) => {
 		if (deps.authStore) {

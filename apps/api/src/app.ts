@@ -2,6 +2,7 @@ import { loadEnv } from '@together/config';
 import { Elysia } from 'elysia';
 import { ValidationError } from 'elysia/error';
 import { HttpError } from './lib/errors';
+import { createVoteWsRouter } from './lib/vote-ws';
 import { createAdminRouter } from './modules/admin/routes';
 import { createAuthRouter } from './modules/auth/routes';
 import { type AppEnv, createAuthServices } from './modules/auth/services';
@@ -61,6 +62,7 @@ export function makeApp(env: AppEnv = {}) {
 		.use(createTaxonomyRouter(authServices))
 		.use(createRequestRouter(requestServices))
 		.use(createVoteRouter(requestServices))
+		.use(createVoteWsRouter())
 		.use(
 			createInternalMatchingRouter(authServices.sql, {
 				findUserById: (id: string) => authServices.store.findUserById(id),

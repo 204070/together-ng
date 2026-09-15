@@ -1,4 +1,6 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useVoteWebSocket } from '../../lib/use-vote-ws';
+import { useToast } from '../toast';
 
 interface VoteButtonProps {
 	requestId: string;
@@ -18,6 +20,17 @@ export function VoteButton({
 	const [voteCount, setVoteCount] = useState(initialVoteCount);
 	const [hasVoted, setHasVoted] = useState(initialHasVoted);
 	const [isSubmitting, setIsSubmitting] = useState(false);
+	const { addToast } = useToast();
+
+	const wsVoteData = useVoteWebSocket(requestId);
+
+	useEffect(() => {
+		if (wsVoteData) {
+			setVoteCount(wsVoteData.voteCount);
+			setHasVoted(wsVoteData.hasVoted);
+			onVoteChange?.(wsVoteData.voteCount, wsVoteData.hasVoted);
+		}
+	}, [wsVoteData, onVoteChange]);
 
 	const handleVote = useCallback(async () => {
 		if (!isAuthenticated || isSubmitting) return;
@@ -25,7 +38,6 @@ export function VoteButton({
 		const prevVoteCount = voteCount;
 		const prevHasVoted = hasVoted;
 
-		// Optimistic update
 		if (hasVoted) {
 			setVoteCount((c) => c - 1);
 			setHasVoted(false);
@@ -48,20 +60,20 @@ export function VoteButton({
 				setHasVoted(data.hasVoted);
 				onVoteChange?.(data.voteCount, data.hasVoted);
 			} else {
-				// Rollback on error
 				setVoteCount(prevVoteCount);
 				setHasVoted(prevHasVoted);
 				onVoteChange?.(prevVoteCount, prevHasVoted);
+				addToast('Vote failed. Please try again.', 'error');
 			}
 		} catch {
-			// Rollback on network error
 			setVoteCount(prevVoteCount);
 			setHasVoted(prevHasVoted);
 			onVoteChange?.(prevVoteCount, prevHasVoted);
+			addToast('Network error. Please try again.', 'error');
 		} finally {
 			setIsSubmitting(false);
 		}
-	}, [requestId, voteCount, hasVoted, isAuthenticated, isSubmitting, onVoteChange]);
+	}, [requestId, voteCount, hasVoted, isAuthenticated, isSubmitting, onVoteChange, addToast]);
 
 	return (
 		<button

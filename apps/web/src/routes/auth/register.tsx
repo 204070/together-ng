@@ -6,7 +6,7 @@ import { registerFn, sendOtpFn, verifyOtpFn } from '../../lib/server';
 export const Route = createFileRoute('/auth/register')({
 	component: RegisterPage,
 	validateSearch: (search: Record<string, unknown>) => ({
-		returnUrl: typeof search.returnUrl === 'string' ? search.returnUrl : '/',
+		returnUrl: typeof search.returnUrl === 'string' ? search.returnUrl : '/onboarding',
 	}),
 });
 

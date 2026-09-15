@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
+import { createFileRoute, Link, redirect, useNavigate } from '@tanstack/react-router';
 import { useServerFn } from '@tanstack/react-start';
 import { useEffect, useState } from 'react';
 import type { AuthState } from '../lib/server';
@@ -13,6 +13,9 @@ import {
 export const Route = createFileRoute('/onboarding')({
 	loader: async () => {
 		const auth = await getAuthUserFn();
+		if (!auth.user) {
+			throw redirect({ to: '/auth/register', search: { returnUrl: '/onboarding' } });
+		}
 		return { auth };
 	},
 	component: () => {
@@ -53,12 +56,16 @@ function EditProfileFlow({ auth }: { auth: AuthState }) {
 		name: profile.name ?? '',
 		location: profile.location ?? '',
 		description: profile.description ?? '',
+		photoUrl: (profile as { photoUrl?: string | null }).photoUrl ?? '',
 		areasOfInterest: profile.areasOfInterest ?? [],
 		skills: profile.skills ?? [],
 		contributionAvailability: profile.contributionAvailability ?? {
 			modality: 'both' as const,
 			preferredArea: '',
 			willingToMentor: false,
+			willingToLend: false,
+			willingToAnswerQuestions: false,
+			willingToCollaborate: false,
 		},
 	});
 
@@ -75,6 +82,7 @@ function EditProfileFlow({ auth }: { auth: AuthState }) {
 				name: formData.name,
 				location: formData.location || undefined,
 				description: formData.description || undefined,
+				photoUrl: formData.photoUrl || undefined,
 				areasOfInterest: formData.areasOfInterest,
 				skills: formData.skills,
 				contributionAvailability: skipContributions ? null : formData.contributionAvailability,
@@ -111,6 +119,7 @@ function EditProfileFlow({ auth }: { auth: AuthState }) {
 					updateField={updateField}
 					onBack={() => setStep(2)}
 					onComplete={() => onComplete(false)}
+					onSkip={() => onComplete(true)}
 					submitting={submitting}
 				/>
 			)}
@@ -129,12 +138,16 @@ function NewProfileFlow({ auth }: { auth: AuthState }) {
 		name: auth.user?.email?.split('@')[0] ?? '',
 		location: '',
 		description: '',
+		photoUrl: '',
 		areasOfInterest: [] as number[],
 		skills: [] as number[],
 		contributionAvailability: {
 			modality: 'both' as const,
 			preferredArea: '',
 			willingToMentor: false,
+			willingToLend: false,
+			willingToAnswerQuestions: false,
+			willingToCollaborate: false,
 		},
 	});
 
@@ -151,6 +164,7 @@ function NewProfileFlow({ auth }: { auth: AuthState }) {
 					name: formData.name,
 					location: formData.location || undefined,
 					description: formData.description || undefined,
+					photoUrl: formData.photoUrl || undefined,
 					areasOfInterest: formData.areasOfInterest,
 					skills: formData.skills,
 					contributionAvailability: skipContributions ? null : formData.contributionAvailability,
@@ -187,6 +201,7 @@ function NewProfileFlow({ auth }: { auth: AuthState }) {
 					updateField={updateField}
 					onBack={() => setStep(2)}
 					onComplete={() => onComplete(false)}
+					onSkip={() => onComplete(true)}
 					submitting={submitting}
 				/>
 			)}
@@ -198,12 +213,16 @@ interface OnboardingFormData {
 	name: string;
 	location: string;
 	description: string;
+	photoUrl: string;
 	areasOfInterest: number[];
 	skills: number[];
 	contributionAvailability: {
 		modality: 'online' | 'in_person' | 'both';
 		preferredArea: string;
 		willingToMentor: boolean;
+		willingToLend: boolean;
+		willingToAnswerQuestions: boolean;
+		willingToCollaborate: boolean;
 	};
 }
 
@@ -240,6 +259,16 @@ function ProfileStep1({
 				{errors.name ? <p role="alert">{errors.name}</p> : null}
 			</div>
 			<div>
+				<label htmlFor="ob-photo">Photo URL (optional)</label>
+				<input
+					id="ob-photo"
+					type="url"
+					value={formData.photoUrl}
+					onChange={(e) => updateField('photoUrl', e.target.value)}
+					placeholder="https://example.com/photo.jpg"
+				/>
+			</div>
+			<div>
 				<label htmlFor="ob-location">Location (optional)</label>
 				<input
 					id="ob-location"
@@ -257,6 +286,7 @@ function ProfileStep1({
 					maxLength={1000}
 				/>
 			</div>
+			<InterestSelector formData={formData} updateField={updateField} />
 			<button type="button" onClick={handleNext}>
 				Next
 			</button>
@@ -264,18 +294,12 @@ function ProfileStep1({
 	);
 }
 
-function ProfileStep2({
+function InterestSelector({
 	formData,
 	updateField,
-	onBack,
-	onNext,
-	onSkip,
 }: {
 	formData: OnboardingFormData;
 	updateField: <K extends keyof OnboardingFormData>(key: K, value: OnboardingFormData[K]) => void;
-	onBack: () => void;
-	onNext: () => void;
-	onSkip: () => void;
 }) {
 	const getCategories = useServerFn(getCategoriesFn);
 	const getSkills = useServerFn(getSkillsForCategoryFn);
@@ -294,7 +318,7 @@ function ProfileStep2({
 			try {
 				const cats = await getCategories();
 				if (!cancelled) {
-					setCategories(cats);
+					setCategories(Array.isArray(cats) ? cats : []);
 					setLoading(false);
 				}
 			} catch {
@@ -322,7 +346,10 @@ function ProfileStep2({
 		if (!skillsByCategory[categoryId]) {
 			try {
 				const skills = await getSkills(categoryId);
-				setSkillsByCategory((prev) => ({ ...prev, [categoryId]: skills }));
+				setSkillsByCategory((prev) => ({
+					...prev,
+					[categoryId]: Array.isArray(skills) ? skills : [],
+				}));
 			} catch {
 				// Skills failed to load; category selection still works
 			}
@@ -343,8 +370,8 @@ function ProfileStep2({
 
 	return (
 		<div>
-			<h2>What can you help with?</h2>
-			<p>Select categories you can contribute to, or skip to continue without selecting.</p>
+			<h3>What can you help with?</h3>
+			<p>Select categories you can contribute to.</p>
 			{showSearch ? (
 				<div>
 					<label htmlFor="cat-search">Search categories</label>
@@ -387,6 +414,52 @@ function ProfileStep2({
 					</div>
 				))}
 			</fieldset>
+		</div>
+	);
+}
+
+function ProfileStep2({
+	formData,
+	updateField,
+	onBack,
+	onNext,
+	onSkip,
+}: {
+	formData: OnboardingFormData;
+	updateField: <K extends keyof OnboardingFormData>(key: K, value: OnboardingFormData[K]) => void;
+	onBack: () => void;
+	onNext: () => void;
+	onSkip: () => void;
+}) {
+	const [skillFilter, setSkillFilter] = useState('');
+
+	function _toggleSkill(skillId: number) {
+		const current = formData.skills;
+		const next = current.includes(skillId)
+			? current.filter((id) => id !== skillId)
+			: [...current, skillId];
+		updateField('skills', next);
+	}
+
+	return (
+		<div>
+			<h2>Refine your skills</h2>
+			<p>Select specific skills you can contribute, or skip to continue without selecting.</p>
+			<div>
+				<label htmlFor="skill-search">Search skills</label>
+				<input
+					id="skill-search"
+					type="text"
+					value={skillFilter}
+					onChange={(e) => setSkillFilter(e.target.value)}
+					placeholder="Filter skills..."
+				/>
+			</div>
+			{formData.skills.length > 0 ? (
+				<p>{formData.skills.length} skill(s) selected</p>
+			) : (
+				<p>No skills selected yet</p>
+			)}
 			<button type="button" onClick={onBack}>
 				Back
 			</button>
@@ -405,34 +478,73 @@ function ProfileStep3({
 	updateField,
 	onBack,
 	onComplete,
+	onSkip,
 	submitting,
 }: {
 	formData: OnboardingFormData;
 	updateField: <K extends keyof OnboardingFormData>(key: K, value: OnboardingFormData[K]) => void;
 	onBack: () => void;
 	onComplete: () => void;
+	onSkip: () => void;
 	submitting: boolean;
 }) {
+	function toggleModality(value: 'online' | 'in_person' | 'both') {
+		updateField('contributionAvailability', {
+			...formData.contributionAvailability,
+			modality: value,
+		});
+	}
+
+	function toggleWillingness(
+		field:
+			| 'willingToMentor'
+			| 'willingToLend'
+			| 'willingToAnswerQuestions'
+			| 'willingToCollaborate',
+		checked: boolean,
+	) {
+		updateField('contributionAvailability', {
+			...formData.contributionAvailability,
+			[field]: checked,
+		});
+	}
+
 	return (
 		<div>
 			<h2>Contribution availability</h2>
 			<p>How would you like to help? This is optional — you can always change it later.</p>
 			<div>
-				<label htmlFor="ob-modality">How can you contribute?</label>
-				<select
-					id="ob-modality"
-					value={formData.contributionAvailability.modality}
-					onChange={(e) =>
-						updateField('contributionAvailability', {
-							...formData.contributionAvailability,
-							modality: e.target.value as 'online' | 'in_person' | 'both',
-						})
-					}
-				>
-					<option value="online">Online</option>
-					<option value="in_person">In person</option>
-					<option value="both">Both</option>
-				</select>
+				<p>How can you contribute?</p>
+				<label>
+					<input
+						type="checkbox"
+						checked={
+							formData.contributionAvailability.modality === 'online' ||
+							formData.contributionAvailability.modality === 'both'
+						}
+						onChange={() =>
+							toggleModality(
+								formData.contributionAvailability.modality === 'online' ? 'both' : 'online',
+							)
+						}
+					/>
+					Online
+				</label>
+				<label>
+					<input
+						type="checkbox"
+						checked={
+							formData.contributionAvailability.modality === 'in_person' ||
+							formData.contributionAvailability.modality === 'both'
+						}
+						onChange={() =>
+							toggleModality(
+								formData.contributionAvailability.modality === 'in_person' ? 'both' : 'in_person',
+							)
+						}
+					/>
+					In person
+				</label>
 			</div>
 			<div>
 				<label htmlFor="ob-area">Preferred geographic area (optional)</label>
@@ -449,18 +561,38 @@ function ProfileStep3({
 				/>
 			</div>
 			<div>
+				<p>What are you willing to do?</p>
+				<label>
+					<input
+						type="checkbox"
+						checked={formData.contributionAvailability.willingToLend}
+						onChange={(e) => toggleWillingness('willingToLend', e.target.checked)}
+					/>
+					Lend resources
+				</label>
 				<label>
 					<input
 						type="checkbox"
 						checked={formData.contributionAvailability.willingToMentor}
-						onChange={(e) =>
-							updateField('contributionAvailability', {
-								...formData.contributionAvailability,
-								willingToMentor: e.target.checked,
-							})
-						}
+						onChange={(e) => toggleWillingness('willingToMentor', e.target.checked)}
 					/>
-					Willing to mentor
+					Mentor
+				</label>
+				<label>
+					<input
+						type="checkbox"
+						checked={formData.contributionAvailability.willingToAnswerQuestions}
+						onChange={(e) => toggleWillingness('willingToAnswerQuestions', e.target.checked)}
+					/>
+					Answer questions
+				</label>
+				<label>
+					<input
+						type="checkbox"
+						checked={formData.contributionAvailability.willingToCollaborate}
+						onChange={(e) => toggleWillingness('willingToCollaborate', e.target.checked)}
+					/>
+					Collaborate
 				</label>
 			</div>
 			<button type="button" onClick={onBack}>
@@ -468,6 +600,9 @@ function ProfileStep3({
 			</button>
 			<button type="button" onClick={onComplete} disabled={submitting}>
 				{submitting ? 'Saving...' : 'Complete setup'}
+			</button>
+			<button type="button" onClick={onSkip}>
+				Skip — I just need help for now
 			</button>
 		</div>
 	);

@@ -90,6 +90,7 @@ export async function registerUser(
 	input: Record<string, unknown>,
 ): Promise<UserPrivateType> {
 	const email = typeof input.email === 'string' ? input.email.trim().toLowerCase() : input.email;
+	const phone = typeof input.phone === 'string' && input.phone !== '' ? input.phone : undefined;
 	const value: Record<string, unknown> = { ...input };
 	if (email !== undefined) value.email = email;
 	else delete value.email;
@@ -97,11 +98,14 @@ export async function registerUser(
 	if (Object.keys(issues).length > 0) throw validationError(issues);
 
 	const passwordHash = await Bun.password.hash(String(input.password), { algorithm: 'argon2id' });
-	const phone = typeof input.phone === 'string' && input.phone !== '' ? input.phone : undefined;
+	const effectiveEmail =
+		typeof email === 'string' && email !== ''
+			? email
+			: `phone-${crypto.randomUUID()}@placeholder.together.local`;
 	let user: UserRow;
 	try {
 		user = await services.store.insertUser({
-			email: email as string,
+			email: effectiveEmail,
 			passwordHash,
 			phone: phone ?? null,
 		});

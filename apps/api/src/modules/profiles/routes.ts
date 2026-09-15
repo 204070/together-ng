@@ -17,11 +17,18 @@ function profileExistsError(): HttpError {
 }
 
 function toPublic(row: ProfileRow, contributorSince: Date | null, storage: PhotoStorage) {
+	const photoKey = row.profile_photo_key;
+	const photoUrl =
+		photoKey === null
+			? null
+			: photoKey.startsWith('http://') || photoKey.startsWith('https://')
+				? photoKey
+				: storage.publicUrl(photoKey);
 	return {
 		id: row.id,
 		userId: row.user_id,
 		name: row.display_name,
-		photoUrl: row.profile_photo_key ? storage.publicUrl(row.profile_photo_key) : null,
+		photoUrl,
 		location: row.location ?? null,
 		description: row.bio ?? null,
 		areasOfInterest: (row.areas_of_interest as number[] | null) ?? [],
@@ -46,12 +53,20 @@ function mapCreateBody(body: Record<string, unknown>) {
 		displayName: body.name as string,
 		bio: (body.description as string | null | undefined) ?? null,
 		location: (body.location as string | null | undefined) ?? null,
+		photoUrl: (body.photoUrl as string | null | undefined) ?? null,
 		areasOfInterest: (body.areasOfInterest as number[] | undefined) ?? [],
 		skills: (body.skills as number[] | undefined) ?? [],
 		resources: (body.resources as string[] | undefined) ?? [],
 		contributionAvailability:
 			(body.contributionAvailability as
-				| { modality: string; preferredArea?: string; willingToMentor?: boolean }
+				| {
+						modality: string;
+						preferredArea?: string;
+						willingToMentor?: boolean;
+						willingToLend?: boolean;
+						willingToAnswerQuestions?: boolean;
+						willingToCollaborate?: boolean;
+				  }
 				| null
 				| undefined) ?? null,
 		exactAddress: (body.exactAddress as string | null | undefined) ?? null,
@@ -66,6 +81,7 @@ function mapPatchBody(body: Record<string, unknown>): Partial<{
 	displayName: string;
 	bio: string | null;
 	location: string | null;
+	photoUrl: string | null;
 	areasOfInterest: number[];
 	skills: number[];
 	resources: string[];
@@ -73,6 +89,9 @@ function mapPatchBody(body: Record<string, unknown>): Partial<{
 		modality: string;
 		preferredArea?: string;
 		willingToMentor?: boolean;
+		willingToLend?: boolean;
+		willingToAnswerQuestions?: boolean;
+		willingToCollaborate?: boolean;
 	} | null;
 	exactAddress: string | null;
 }> {
@@ -80,6 +99,7 @@ function mapPatchBody(body: Record<string, unknown>): Partial<{
 		displayName: string;
 		bio: string | null;
 		location: string | null;
+		photoUrl: string | null;
 		areasOfInterest: number[];
 		skills: number[];
 		resources: string[];
@@ -87,12 +107,16 @@ function mapPatchBody(body: Record<string, unknown>): Partial<{
 			modality: string;
 			preferredArea?: string;
 			willingToMentor?: boolean;
+			willingToLend?: boolean;
+			willingToAnswerQuestions?: boolean;
+			willingToCollaborate?: boolean;
 		} | null;
 		exactAddress: string | null;
 	}> = {};
 	if ('name' in body) patch.displayName = body.name as string;
 	if ('description' in body) patch.bio = (body.description as string | null) ?? null;
 	if ('location' in body) patch.location = (body.location as string | null) ?? null;
+	if ('photoUrl' in body) patch.photoUrl = (body.photoUrl as string | null) ?? null;
 	if ('areasOfInterest' in body) patch.areasOfInterest = body.areasOfInterest as number[];
 	if ('skills' in body) patch.skills = body.skills as number[];
 	if ('resources' in body) patch.resources = body.resources as string[];
@@ -101,6 +125,9 @@ function mapPatchBody(body: Record<string, unknown>): Partial<{
 			modality: string;
 			preferredArea?: string;
 			willingToMentor?: boolean;
+			willingToLend?: boolean;
+			willingToAnswerQuestions?: boolean;
+			willingToCollaborate?: boolean;
 		} | null;
 	if ('exactAddress' in body) patch.exactAddress = (body.exactAddress as string | null) ?? null;
 	return patch;

@@ -194,19 +194,25 @@ export const loginFn = createServerFn({ method: 'POST' })
 export const registerFn = createServerFn({ method: 'POST' })
 	.validator((input: unknown) => {
 		const value = input as { email?: unknown; password?: unknown; name?: unknown; phone?: unknown };
-		if (typeof value?.email !== 'string' || typeof value?.password !== 'string') {
-			throw new Error('Email and password are required');
+		const hasEmail = typeof value?.email === 'string' && value.email !== '';
+		const hasPhone = typeof value?.phone === 'string' && value.phone !== '';
+		if (!hasEmail && !hasPhone) {
+			throw new Error('Email or phone is required');
+		}
+		if (typeof value?.password !== 'string' || value.password.length < 8) {
+			throw new Error('Password must be at least 8 characters');
 		}
 		return {
-			email: value.email,
-			password: value.password,
+			email: hasEmail ? (value.email as string) : undefined,
+			password: value.password as string,
 			name: typeof value.name === 'string' ? value.name : undefined,
-			phone: typeof value.phone === 'string' ? value.phone : undefined,
+			phone: hasPhone ? (value.phone as string) : undefined,
 		};
 	})
 	.handler(async ({ data }) => {
 		const api = createApiClient(await apiBaseUrl());
-		const body: Record<string, string> = { email: data.email, password: data.password };
+		const body: Record<string, string> = { password: data.password };
+		if (data.email) body.email = data.email;
 		if (data.name) body.name = data.name;
 		if (data.phone) body.phone = data.phone;
 		const res = await api.auth.register.post(body);
@@ -252,6 +258,7 @@ export const createProfileFn = createServerFn({ method: 'POST' })
 			name: value.name,
 			location: typeof value.location === 'string' ? value.location : null,
 			description: typeof value.description === 'string' ? value.description : null,
+			photoUrl: typeof value.photoUrl === 'string' ? value.photoUrl : null,
 			areasOfInterest: Array.isArray(value.areasOfInterest) ? value.areasOfInterest : [],
 			skills: Array.isArray(value.skills) ? value.skills : [],
 			resources: Array.isArray(value.resources) ? value.resources : [],
@@ -268,6 +275,7 @@ export const createProfileFn = createServerFn({ method: 'POST' })
 				name: data.name,
 				location: data.location,
 				description: data.description,
+				photoUrl: data.photoUrl,
 				areasOfInterest: data.areasOfInterest,
 				skills: data.skills,
 				resources: data.resources,
@@ -289,6 +297,7 @@ export const updateProfileFn = createServerFn({ method: 'PATCH' })
 			name: typeof value.name === 'string' ? value.name : undefined,
 			location: typeof value.location === 'string' ? value.location : undefined,
 			description: typeof value.description === 'string' ? value.description : undefined,
+			photoUrl: typeof value.photoUrl === 'string' ? value.photoUrl : undefined,
 			areasOfInterest: Array.isArray(value.areasOfInterest) ? value.areasOfInterest : undefined,
 			skills: Array.isArray(value.skills) ? value.skills : undefined,
 			resources: Array.isArray(value.resources) ? value.resources : undefined,

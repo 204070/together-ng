@@ -14,6 +14,9 @@ export interface ProfileRow {
 		modality: string;
 		preferredArea?: string;
 		willingToMentor?: boolean;
+		willingToLend?: boolean;
+		willingToAnswerQuestions?: boolean;
+		willingToCollaborate?: boolean;
 	} | null;
 	exact_address: string | null;
 	created_at: Date;
@@ -78,6 +81,7 @@ export class ProfileStore {
 		displayName: string;
 		bio: string | null;
 		location: string | null;
+		photoUrl: string | null;
 		areasOfInterest: number[];
 		skills: number[];
 		resources: string[];
@@ -85,12 +89,15 @@ export class ProfileStore {
 			modality: string;
 			preferredArea?: string;
 			willingToMentor?: boolean;
+			willingToLend?: boolean;
+			willingToAnswerQuestions?: boolean;
+			willingToCollaborate?: boolean;
 		} | null;
 		exactAddress: string | null;
 	}): Promise<ProfileRow> {
 		const rows = await this.sql<ProfileRow[]>`
-			INSERT INTO profiles (user_id, display_name, bio, location, areas_of_interest, skills, resources, contribution_availability, exact_address)
-			VALUES (${input.userId}, ${input.displayName}, ${input.bio}, ${input.location}, ${JSON.stringify(input.areasOfInterest)}::jsonb, ${JSON.stringify(input.skills)}::jsonb, ${JSON.stringify(input.resources)}::jsonb, ${input.contributionAvailability === null ? null : JSON.stringify(input.contributionAvailability)}::jsonb, ${input.exactAddress})
+			INSERT INTO profiles (user_id, display_name, bio, location, profile_photo_key, areas_of_interest, skills, resources, contribution_availability, exact_address)
+			VALUES (${input.userId}, ${input.displayName}, ${input.bio}, ${input.location}, ${input.photoUrl}, ${JSON.stringify(input.areasOfInterest)}::jsonb, ${JSON.stringify(input.skills)}::jsonb, ${JSON.stringify(input.resources)}::jsonb, ${input.contributionAvailability === null ? null : JSON.stringify(input.contributionAvailability)}::jsonb, ${input.exactAddress})
 			RETURNING id, user_id, display_name, bio, location, profile_photo_key,
 				areas_of_interest, skills, resources, contribution_availability, exact_address,
 				created_at, updated_at`;
@@ -103,6 +110,7 @@ export class ProfileStore {
 			displayName: string;
 			bio: string | null;
 			location: string | null;
+			photoUrl: string | null;
 			areasOfInterest: number[];
 			skills: number[];
 			resources: string[];
@@ -110,12 +118,16 @@ export class ProfileStore {
 				modality: string;
 				preferredArea?: string;
 				willingToMentor?: boolean;
+				willingToLend?: boolean;
+				willingToAnswerQuestions?: boolean;
+				willingToCollaborate?: boolean;
 			} | null;
 			exactAddress: string | null;
 		},
 	): Promise<ProfileRow> {
 		const rows = await this.sql<ProfileRow[]>`
 			UPDATE profiles SET display_name = ${input.displayName}, bio = ${input.bio}, location = ${input.location},
+				profile_photo_key = ${input.photoUrl},
 				areas_of_interest = ${JSON.stringify(input.areasOfInterest)}::jsonb,
 				skills = ${JSON.stringify(input.skills)}::jsonb,
 				resources = ${JSON.stringify(input.resources)}::jsonb,
@@ -135,6 +147,7 @@ export class ProfileStore {
 			displayName: string;
 			bio: string | null;
 			location: string | null;
+			photoUrl: string | null;
 			areasOfInterest: number[];
 			skills: number[];
 			resources: string[];
@@ -142,6 +155,9 @@ export class ProfileStore {
 				modality: string;
 				preferredArea?: string;
 				willingToMentor?: boolean;
+				willingToLend?: boolean;
+				willingToAnswerQuestions?: boolean;
+				willingToCollaborate?: boolean;
 			} | null;
 			exactAddress: string | null;
 		}>,
@@ -153,6 +169,7 @@ export class ProfileStore {
 			displayName: patch.displayName ?? existing.display_name,
 			bio: patch.bio !== undefined ? patch.bio : existing.bio,
 			location: patch.location !== undefined ? patch.location : existing.location,
+			photoUrl: patch.photoUrl !== undefined ? patch.photoUrl : existing.profile_photo_key,
 			areasOfInterest:
 				patch.areasOfInterest ?? (existing.areas_of_interest as number[] | null) ?? [],
 			skills: patch.skills ?? (existing.skills as number[] | null) ?? [],
@@ -164,6 +181,9 @@ export class ProfileStore {
 							modality: string;
 							preferredArea?: string;
 							willingToMentor?: boolean;
+							willingToLend?: boolean;
+							willingToAnswerQuestions?: boolean;
+							willingToCollaborate?: boolean;
 						} | null),
 			exactAddress: patch.exactAddress !== undefined ? patch.exactAddress : existing.exact_address,
 		};
@@ -171,6 +191,7 @@ export class ProfileStore {
 			displayName: merged.displayName,
 			bio: merged.bio,
 			location: merged.location,
+			photoUrl: merged.photoUrl,
 			areasOfInterest: merged.areasOfInterest,
 			skills: merged.skills,
 			resources: merged.resources,

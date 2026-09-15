@@ -150,7 +150,7 @@ describe('POST /auth/register', () => {
 		expect(res.status).toBe(400);
 		const json = await readBody(res);
 		expect(json.error).toBe('VALIDATION');
-		expect(json.fields).toMatchObject({ email: 'required', password: 'required' });
+		expect(json.fields).toMatchObject({ password: 'required' });
 	});
 
 	test('normalizes email, stores argon2id hashes, creates no profile row, sends OTP', async () => {

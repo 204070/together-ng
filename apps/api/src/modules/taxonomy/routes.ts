@@ -1,4 +1,4 @@
-import { Type, Category, Skill } from '@together/schemas';
+import { Category, Skill, Type } from '@together/schemas';
 import { Elysia } from 'elysia';
 import type { AuthServices } from '../auth/services';
 

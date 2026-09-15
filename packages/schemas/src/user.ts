@@ -10,6 +10,15 @@ const userStatus = {
 
 export const RegisterRequest = Type.Object(
 	{
+		email: Type.Optional(Type.String({ format: 'email' })),
+		password: Type.String({ minLength: 8 }),
+		phone: Type.Optional(Type.String({ format: 'e164' })),
+	},
+	{ additionalProperties: false },
+);
+
+export const RegisterRequestWithEmail = Type.Object(
+	{
 		email: Type.String({ format: 'email' }),
 		password: Type.String({ minLength: 8 }),
 		phone: Type.Optional(Type.String({ format: 'e164' })),

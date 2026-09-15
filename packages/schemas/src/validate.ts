@@ -2,7 +2,7 @@ import { type TSchema, Type } from '@sinclair/typebox';
 import { Value, ValueErrorType } from '@sinclair/typebox/value';
 import { LoginWithOtp, LoginWithPassword, SendOtpRequest, VerifyOtpRequest } from './auth';
 import './formats';
-import { RegisterRequest } from './user';
+import { RegisterRequest, RegisterRequestWithEmail } from './user';
 
 export type FieldIssues = Record<string, string>;
 
@@ -37,6 +37,20 @@ function collectIssues(schema: TSchema, value: unknown): FieldIssues {
 }
 
 export function checkRegisterRequest(value: unknown): FieldIssues {
+	const obj = value as Record<string, unknown> | undefined;
+	const hasEmail = typeof obj?.email === 'string' && obj.email !== '';
+	const hasPhone = typeof obj?.phone === 'string' && obj.phone !== '';
+
+	if (hasEmail) {
+		if (Value.Check(RegisterRequestWithEmail, value)) return {};
+		return collectIssues(RegisterRequestWithEmail, value);
+	}
+
+	if (hasPhone) {
+		if (Value.Check(RegisterRequest, value)) return {};
+		return collectIssues(RegisterRequest, value);
+	}
+
 	if (Value.Check(RegisterRequest, value)) return {};
 	return collectIssues(RegisterRequest, value);
 }

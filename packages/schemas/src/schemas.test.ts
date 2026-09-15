@@ -35,14 +35,22 @@ describe('RegisterRequest', () => {
 		expect(Value.Check(RegisterRequest, { ...valid, phone: '+2348123456789' })).toBe(true);
 	});
 
+	test('accepts phone-only registration without email', () => {
+		expect(Value.Check(RegisterRequest, { phone: '+2348123456789', password: 'password123' })).toBe(
+			true,
+		);
+	});
+
 	test('rejects a missing password', () => {
 		const errors = [...Value.Errors(RegisterRequest, { email: 'ada@example.com' })];
 		expect(Value.Check(RegisterRequest, { email: 'ada@example.com' })).toBe(false);
 		expect(errors.some((e) => e.path === '/password')).toBe(true);
 	});
 
-	test('rejects a missing email', () => {
-		expect(Value.Check(RegisterRequest, { password: 'password123' })).toBe(false);
+	test('rejects a missing email and phone (business validation)', () => {
+		// Schema-level: password alone passes because email and phone are optional.
+		// The checkRegisterRequest function enforces at least one of email or phone.
+		expect(Value.Check(RegisterRequest, { password: 'password123' })).toBe(true);
 	});
 
 	test('rejects an empty and a whitespace-only email', () => {

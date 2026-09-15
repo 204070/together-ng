@@ -11,8 +11,8 @@ import { createProfileRouter } from './modules/profiles/routes';
 import { createProfileServices } from './modules/profiles/services';
 import { createRequestRouter } from './modules/requests/routes';
 import { createRequestServices, type RequestServices } from './modules/requests/services';
-import { createTaxonomyRouter } from './modules/taxonomy/routes';
 import { createVoteRouter } from './modules/requests/vote';
+import { createTaxonomyRouter } from './modules/taxonomy/routes';
 import { createInternalMatchingRouter } from './worker/matching';
 
 loadEnv();

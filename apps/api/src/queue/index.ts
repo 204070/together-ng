@@ -1,6 +1,12 @@
 import type { Sql } from '@together/db';
 import { PgBoss } from 'pg-boss';
 import { type MatchingService, recomputeMatches } from '../worker/matching';
+import {
+	dispatchNotifications,
+	NOTIFICATION_QUEUE,
+	type NotificationDispatchJobData,
+	type NotificationService,
+} from '../worker/notifications';
 
 // ---------------------------------------------------------------------------
 // Queue infrastructure choice: pg-boss (Postgres-backed, PRD 65.2).
@@ -127,6 +133,7 @@ export function createMatchingQueue(options: MatchingQueueOptions) {
 		handler: async (data) => {
 			if (!isMatchingJobData(data)) return;
 			await recomputeMatches(options.sql, data.requestId, { now });
+			await dispatchNotifications(options.sql, data.requestId);
 		},
 	});
 
@@ -140,3 +147,42 @@ export function createMatchingQueue(options: MatchingQueueOptions) {
 }
 
 export type MatchingQueue = ReturnType<typeof createMatchingQueue>;
+
+export interface NotificationQueueOptions {
+	connectionString: string;
+	sql: Sql;
+	pollingIntervalSeconds?: number;
+	awaitTimeoutMs?: number;
+}
+
+function isNotificationDispatchJobData(data: unknown): data is NotificationDispatchJobData {
+	return (
+		typeof data === 'object' &&
+		data !== null &&
+		typeof (data as { requestId?: unknown }).requestId === 'string'
+	);
+}
+
+export function createNotificationQueue(options: NotificationQueueOptions) {
+	const queue = createJobQueue<NotificationDispatchJobData>({
+		connectionString: options.connectionString,
+		queue: NOTIFICATION_QUEUE,
+		pollingIntervalSeconds: options.pollingIntervalSeconds,
+		awaitTimeoutMs: options.awaitTimeoutMs,
+		handler: async (data) => {
+			if (!isNotificationDispatchJobData(data)) return;
+			await dispatchNotifications(options.sql, data.requestId);
+		},
+	});
+
+	const service: NotificationService = {
+		dispatch: async (requestId: string) => {
+			await queue.send({ requestId });
+			return { sent: 0, suppressed: 0 };
+		},
+	};
+
+	return { ...queue, asService: (): NotificationService => service };
+}
+
+export type NotificationQueue = ReturnType<typeof createNotificationQueue>;

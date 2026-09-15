@@ -156,19 +156,19 @@ export function createRequestRouter(services: RequestServices) {
 								lim.retryAfterSeconds,
 								'Too many requests',
 							);
-					const row = await store.findRequestById(params.id);
-					if (!row || row.authorId !== userId) throw notFound();
-					if (row.state !== 'draft') throw invalidState();
-					const b = (body ?? {}) as Record<string, unknown>;
-					if (!Value.Check(RequestPatch, b)) {
-						const issues = collectIssues(RequestPatch, b);
-						throw new HttpError(422, 'VALIDATION', issues, undefined, 'Invalid request');
-					}
-					if (b.categoryId !== undefined) {
-						const cat = await store.findCategoryById(b.categoryId as number);
-						if (!cat) throw categoryNotFound();
-						if (cat.retiredAt !== null) throw categoryRetired();
-					}
+						const row = await store.findRequestById(params.id);
+						if (!row || row.authorId !== userId) throw notFound();
+						if (row.state !== 'draft') throw invalidState();
+						const b = (body ?? {}) as Record<string, unknown>;
+						if (!Value.Check(RequestPatch, b)) {
+							const issues = collectIssues(RequestPatch, b);
+							throw new HttpError(422, 'VALIDATION', issues, undefined, 'Invalid request');
+						}
+						if (b.categoryId !== undefined) {
+							const cat = await store.findCategoryById(b.categoryId as number);
+							if (!cat) throw categoryNotFound();
+							if (cat.retiredAt !== null) throw categoryRetired();
+						}
 						const updated = await store.updateRequest(params.id, b);
 						if (!updated) throw notFound();
 						// Recompute only for edits of published requests; draft edits skip
@@ -190,22 +190,22 @@ export function createRequestRouter(services: RequestServices) {
 					'/requests/:id/preview',
 					async ({ params, actor }) => {
 						const userId = actor.userId;
-					const row = await store.findRequestById(params.id);
-					if (!row || row.authorId !== userId) throw notFound();
-					const base = toResponse(row);
-					const missing = missingFields({
-						title: row.title,
-						goal: row.goal,
-						barrier: row.barrier,
-						helpNeeded: row.helpNeeded,
-						categoryId: row.categoryId,
-					});
-					const hints = qualityHints({
-						title: row.title,
-						goal: row.goal,
-						barrier: row.barrier,
-						helpNeeded: row.helpNeeded,
-					} as never);
+						const row = await store.findRequestById(params.id);
+						if (!row || row.authorId !== userId) throw notFound();
+						const base = toResponse(row);
+						const missing = missingFields({
+							title: row.title,
+							goal: row.goal,
+							barrier: row.barrier,
+							helpNeeded: row.helpNeeded,
+							categoryId: row.categoryId,
+						});
+						const hints = qualityHints({
+							title: row.title,
+							goal: row.goal,
+							barrier: row.barrier,
+							helpNeeded: row.helpNeeded,
+						} as never);
 						return { request: base, missingFields: missing, qualityHints: hints };
 					},
 					{ params: t.Object({ id: t.String({ format: 'uuid' }) }) },
@@ -214,29 +214,29 @@ export function createRequestRouter(services: RequestServices) {
 					'/requests/:id/publish',
 					async ({ params, actor }) => {
 						const userId = actor.userId;
-					const row = await store.findRequestById(params.id);
-					if (!row || row.authorId !== userId) throw notFound();
-					if (!canTransition(row.state, 'published')) throw invalidState();
-					if (row.categoryId === null)
-						throw new HttpError(
-							422,
-							'VALIDATION',
-							{ categoryId: 'required' },
-							undefined,
-							'Missing required fields',
-						);
-					const cat = await store.findCategoryById(row.categoryId);
-					if (!cat) throw categoryNotFound();
-					if (cat.retiredAt !== null) throw categoryRetired();
-					const fields: Record<string, string> = {};
-					if (!row.title || row.title.trim() === '' || row.title.length > 200)
-						fields.title = 'required';
-					if (!row.goal || row.goal.trim() === '' || row.goal.length > 2000)
-						fields.goal = 'required';
-					if (!row.barrier || row.barrier.trim() === '' || row.barrier.length > 2000)
-						fields.barrier = 'required';
-					if (!row.helpNeeded || row.helpNeeded.trim() === '' || row.helpNeeded.length > 2000)
-						fields.helpNeeded = 'required';
+						const row = await store.findRequestById(params.id);
+						if (!row || row.authorId !== userId) throw notFound();
+						if (!canTransition(row.state, 'published')) throw invalidState();
+						if (row.categoryId === null)
+							throw new HttpError(
+								422,
+								'VALIDATION',
+								{ categoryId: 'required' },
+								undefined,
+								'Missing required fields',
+							);
+						const cat = await store.findCategoryById(row.categoryId);
+						if (!cat) throw categoryNotFound();
+						if (cat.retiredAt !== null) throw categoryRetired();
+						const fields: Record<string, string> = {};
+						if (!row.title || row.title.trim() === '' || row.title.length > 200)
+							fields.title = 'required';
+						if (!row.goal || row.goal.trim() === '' || row.goal.length > 2000)
+							fields.goal = 'required';
+						if (!row.barrier || row.barrier.trim() === '' || row.barrier.length > 2000)
+							fields.barrier = 'required';
+						if (!row.helpNeeded || row.helpNeeded.trim() === '' || row.helpNeeded.length > 2000)
+							fields.helpNeeded = 'required';
 						if (Object.keys(fields).length > 0)
 							throw new HttpError(422, 'VALIDATION', fields, undefined, 'Missing required fields');
 						const published = await store.publishRequest(params.id);

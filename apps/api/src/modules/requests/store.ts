@@ -1,14 +1,21 @@
-import { eq, and, sql, inArray, type Db, requests, categories, votes, type Request, type Category } from '@together/db';
+import {
+	and,
+	type Category,
+	categories,
+	type Db,
+	eq,
+	inArray,
+	type Request,
+	requests,
+	sql,
+	votes,
+} from '@together/db';
 
 export class RequestStore {
 	constructor(private readonly db: Db) {}
 
 	async findCategoryById(id: number): Promise<Category | undefined> {
-		const rows = await this.db
-			.select()
-			.from(categories)
-			.where(eq(categories.id, id))
-			.limit(1);
+		const rows = await this.db.select().from(categories).where(eq(categories.id, id)).limit(1);
 		return rows[0];
 	}
 
@@ -54,11 +61,7 @@ export class RequestStore {
 	}
 
 	async findRequestById(id: string): Promise<Request | undefined> {
-		const rows = await this.db
-			.select()
-			.from(requests)
-			.where(eq(requests.id, id))
-			.limit(1);
+		const rows = await this.db.select().from(requests).where(eq(requests.id, id)).limit(1);
 		return rows[0];
 	}
 
@@ -70,15 +73,11 @@ export class RequestStore {
 			goal: (patch.goal as string | undefined) ?? existing.goal,
 			barrier: (patch.barrier as string | undefined) ?? existing.barrier,
 			helpNeeded:
-				patch.helpNeeded !== undefined
-					? (patch.helpNeeded as string)
-					: existing.helpNeeded,
+				patch.helpNeeded !== undefined ? (patch.helpNeeded as string) : existing.helpNeeded,
 			categoryId:
 				patch.categoryId !== undefined ? (patch.categoryId as number | null) : existing.categoryId,
-			modality:
-				patch.modality !== undefined ? (patch.modality as any) : existing.modality,
-			helpType:
-				patch.helpType !== undefined ? (patch.helpType as any) : existing.helpType,
+			modality: patch.modality !== undefined ? (patch.modality as any) : existing.modality,
+			helpType: patch.helpType !== undefined ? (patch.helpType as any) : existing.helpType,
 			location:
 				patch.location !== undefined ? (patch.location as string | null) : existing.location,
 			timeCommitment:
@@ -93,8 +92,7 @@ export class RequestStore {
 						? new Date(patch.deadline as string)
 						: null
 					: existing.deadline,
-			skillLevel:
-				patch.skillLevel !== undefined ? (patch.skillLevel as any) : existing.skillLevel,
+			skillLevel: patch.skillLevel !== undefined ? (patch.skillLevel as any) : existing.skillLevel,
 			intendedOutcome:
 				patch.intendedOutcome !== undefined
 					? (patch.intendedOutcome as string | null)
@@ -103,11 +101,7 @@ export class RequestStore {
 				patch.quantity !== undefined ? (patch.quantity as string | null) : existing.quantity,
 			updatedAt: new Date(),
 		};
-		const rows = await this.db
-			.update(requests)
-			.set(next)
-			.where(eq(requests.id, id))
-			.returning();
+		const rows = await this.db.update(requests).set(next).where(eq(requests.id, id)).returning();
 		return rows[0]!;
 	}
 

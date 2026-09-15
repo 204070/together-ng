@@ -40,7 +40,11 @@ export function uniqueViolationCode(error: unknown): string | undefined {
 	if (typeof error !== 'object' || error === null) return undefined;
 	const candidate = error as { code?: unknown; constraint_name?: unknown; cause?: unknown };
 	let target = candidate;
-	if (candidate.code === undefined && typeof candidate.cause === 'object' && candidate.cause !== null) {
+	if (
+		candidate.code === undefined &&
+		typeof candidate.cause === 'object' &&
+		candidate.cause !== null
+	) {
 		target = candidate.cause as { code?: unknown; constraint_name?: unknown };
 	}
 	if (target.code !== '23505') return undefined;

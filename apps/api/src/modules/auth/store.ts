@@ -1,32 +1,31 @@
-import { eq, desc, sql, type Db, users, otpTokens, sessions, type User, type OtpToken, type Session } from '@together/db';
+import {
+	type Db,
+	desc,
+	eq,
+	type OtpToken,
+	otpTokens,
+	type Session,
+	sessions,
+	sql,
+	type User,
+	users,
+} from '@together/db';
 
 export class AuthStore {
 	constructor(private readonly db: Db) {}
 
 	async findUserByEmail(email: string): Promise<User | undefined> {
-		const rows = await this.db
-			.select()
-			.from(users)
-			.where(eq(users.email, email))
-			.limit(1);
+		const rows = await this.db.select().from(users).where(eq(users.email, email)).limit(1);
 		return rows[0];
 	}
 
 	async findUserByPhone(phone: string): Promise<User | undefined> {
-		const rows = await this.db
-			.select()
-			.from(users)
-			.where(eq(users.phone, phone))
-			.limit(1);
+		const rows = await this.db.select().from(users).where(eq(users.phone, phone)).limit(1);
 		return rows[0];
 	}
 
 	async findUserById(id: string): Promise<User | undefined> {
-		const rows = await this.db
-			.select()
-			.from(users)
-			.where(eq(users.id, id))
-			.limit(1);
+		const rows = await this.db.select().from(users).where(eq(users.id, id)).limit(1);
 		return rows[0];
 	}
 
@@ -61,9 +60,7 @@ export class AuthStore {
 	}
 
 	async deleteOtpsForPhone(phone: string): Promise<void> {
-		await this.db
-			.delete(otpTokens)
-			.where(eq(otpTokens.phone, phone));
+		await this.db.delete(otpTokens).where(eq(otpTokens.phone, phone));
 	}
 
 	async insertOtp(input: {
@@ -104,10 +101,7 @@ export class AuthStore {
 	}
 
 	async markOtpUsed(id: string): Promise<void> {
-		await this.db
-			.update(otpTokens)
-			.set({ usedAt: new Date() })
-			.where(eq(otpTokens.id, id));
+		await this.db.update(otpTokens).set({ usedAt: new Date() }).where(eq(otpTokens.id, id));
 	}
 
 	async insertSession(input: {
@@ -136,15 +130,11 @@ export class AuthStore {
 	}
 
 	async deleteSessionById(id: string): Promise<void> {
-		await this.db
-			.delete(sessions)
-			.where(eq(sessions.id, id));
+		await this.db.delete(sessions).where(eq(sessions.id, id));
 	}
 
 	async deleteSessionByRefreshHash(refreshHash: string): Promise<void> {
-		await this.db
-			.delete(sessions)
-			.where(eq(sessions.refreshHash, refreshHash));
+		await this.db.delete(sessions).where(eq(sessions.refreshHash, refreshHash));
 	}
 }
 

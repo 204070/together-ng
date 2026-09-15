@@ -1,23 +1,15 @@
-import { eq, sql, type Db, profiles, contributions, type Profile } from '@together/db';
+import { contributions, type Db, eq, type Profile, profiles, sql } from '@together/db';
 
 export class ProfileStore {
 	constructor(private readonly db: Db) {}
 
 	async findById(id: string): Promise<Profile | undefined> {
-		const rows = await this.db
-			.select()
-			.from(profiles)
-			.where(eq(profiles.id, id))
-			.limit(1);
+		const rows = await this.db.select().from(profiles).where(eq(profiles.id, id)).limit(1);
 		return rows[0];
 	}
 
 	async findByUserId(userId: string): Promise<Profile | undefined> {
-		const rows = await this.db
-			.select()
-			.from(profiles)
-			.where(eq(profiles.userId, userId))
-			.limit(1);
+		const rows = await this.db.select().from(profiles).where(eq(profiles.userId, userId)).limit(1);
 		return rows[0];
 	}
 
@@ -134,8 +126,7 @@ export class ProfileStore {
 			bio: patch.bio !== undefined ? patch.bio : existing.bio,
 			location: patch.location !== undefined ? patch.location : existing.location,
 			photoUrl: patch.photoUrl !== undefined ? patch.photoUrl : existing.profilePhotoKey,
-			areasOfInterest:
-				patch.areasOfInterest ?? (existing.areasOfInterest as number[] | null) ?? [],
+			areasOfInterest: patch.areasOfInterest ?? (existing.areasOfInterest as number[] | null) ?? [],
 			skills: patch.skills ?? (existing.skills as number[] | null) ?? [],
 			resources: patch.resources ?? (existing.resources as string[] | null) ?? [],
 			contributionAvailability:

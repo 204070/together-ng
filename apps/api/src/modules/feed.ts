@@ -1,4 +1,4 @@
-import { eq, desc, sql, inArray, requests, categories, votes } from '@together/db';
+import { categories, desc, eq, inArray, requests, sql, votes } from '@together/db';
 import { Elysia } from 'elysia';
 import type { AuthServices } from './auth/services';
 import { toResponse } from './requests/store';
@@ -42,10 +42,7 @@ export function createFeedRouter(services: AuthServices) {
 			};
 		})
 		.get('/categories', async () => {
-			const rows = await services.db
-				.select()
-				.from(categories)
-				.orderBy(categories.name);
+			const rows = await services.db.select().from(categories).orderBy(categories.name);
 
 			return {
 				items: rows.map((r) => ({

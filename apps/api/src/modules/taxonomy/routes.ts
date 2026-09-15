@@ -1,4 +1,4 @@
-import { eq, isNull, categories, skills } from '@together/db';
+import { and, categories, eq, isNull, skills } from '@together/db';
 import { Category, Skill, Type } from '@together/schemas';
 import { Elysia } from 'elysia';
 import type { AuthServices } from '../auth/services';
@@ -37,7 +37,7 @@ export function createTaxonomyRouter(services: AuthServices) {
 				const rows = await services.db
 					.select()
 					.from(skills)
-					.where(eq(skills.categoryId, Number(params.id)) && isNull(skills.retiredAt))
+					.where(and(eq(skills.categoryId, Number(params.id)), isNull(skills.retiredAt)))
 					.orderBy(skills.name);
 				return rows.map((r) => ({
 					id: r.id,

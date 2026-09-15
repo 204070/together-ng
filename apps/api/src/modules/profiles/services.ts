@@ -1,5 +1,5 @@
 import { env as configEnv } from '@together/config';
-import { createClient, createDb, type Sql, type Db } from '@together/db';
+import { createClient, createDb, type Db, type Sql } from '@together/db';
 import type { ActiveUserLookup } from '../../lib/authentication';
 import { type PhotoStorage, photoStorage } from '../../lib/storage';
 import { ProfileStore } from './store';

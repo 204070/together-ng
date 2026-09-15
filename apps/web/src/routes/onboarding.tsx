@@ -51,6 +51,7 @@ function EditProfileFlow({ auth }: { auth: AuthState }) {
 	const [step, setStep] = useState<1 | 2 | 3>(1);
 	const [error, setError] = useState<string | null>(null);
 	const [submitting, setSubmitting] = useState(false);
+	const [skipped, setSkipped] = useState(false);
 
 	const [formData, setFormData] = useState({
 		name: profile.name ?? '',
@@ -88,12 +89,28 @@ function EditProfileFlow({ auth }: { auth: AuthState }) {
 				contributionAvailability: skipContributions ? null : formData.contributionAvailability,
 			};
 			await updateProfile({ data: payload });
-			await navigate({ to: '/' });
+			if (skipContributions) {
+				setSkipped(true);
+			} else {
+				await navigate({ to: '/' });
+			}
 		} catch (err) {
 			setError(err instanceof Error ? err.message : 'Something went wrong');
 		} finally {
 			setSubmitting(false);
 		}
+	}
+
+	if (skipped) {
+		return (
+			<section>
+				<h1>Profile saved</h1>
+				<p>That's okay. You can simply use Together when you need help.</p>
+				<button type="button" onClick={() => navigate({ to: '/' })}>
+					Go to home
+				</button>
+			</section>
+		);
 	}
 
 	return (
@@ -133,6 +150,7 @@ function NewProfileFlow({ auth }: { auth: AuthState }) {
 	const [step, setStep] = useState<1 | 2 | 3>(1);
 	const [error, setError] = useState<string | null>(null);
 	const [submitting, setSubmitting] = useState(false);
+	const [skipped, setSkipped] = useState(false);
 
 	const [formData, setFormData] = useState({
 		name: auth.user?.email?.split('@')[0] ?? '',
@@ -170,12 +188,28 @@ function NewProfileFlow({ auth }: { auth: AuthState }) {
 					contributionAvailability: skipContributions ? null : formData.contributionAvailability,
 				},
 			});
-			await navigate({ to: '/' });
+			if (skipContributions) {
+				setSkipped(true);
+			} else {
+				await navigate({ to: '/' });
+			}
 		} catch (err) {
 			setError(err instanceof Error ? err.message : 'Something went wrong');
 		} finally {
 			setSubmitting(false);
 		}
+	}
+
+	if (skipped) {
+		return (
+			<section>
+				<h1>Profile saved</h1>
+				<p>That's okay. You can simply use Together when you need help.</p>
+				<button type="button" onClick={() => navigate({ to: '/' })}>
+					Go to home
+				</button>
+			</section>
+		);
 	}
 
 	return (
@@ -311,6 +345,21 @@ function InterestSelector({
 	>({});
 	const [search, setSearch] = useState('');
 	const [loading, setLoading] = useState(true);
+	const [categoriesError, setCategoriesError] = useState<string | null>(null);
+	const [skillsError, setSkillsError] = useState<Record<number, string>>({});
+
+	async function loadCategories() {
+		setLoading(true);
+		setCategoriesError(null);
+		try {
+			const cats = await getCategories();
+			setCategories(Array.isArray(cats) ? cats : []);
+		} catch {
+			setCategoriesError('Failed to load categories. Please try again.');
+		} finally {
+			setLoading(false);
+		}
+	}
 
 	useEffect(() => {
 		let cancelled = false;
@@ -322,7 +371,10 @@ function InterestSelector({
 					setLoading(false);
 				}
 			} catch {
-				if (!cancelled) setLoading(false);
+				if (!cancelled) {
+					setCategoriesError('Failed to load categories. Please try again.');
+					setLoading(false);
+				}
 			}
 		})();
 		return () => {
@@ -350,9 +402,37 @@ function InterestSelector({
 					...prev,
 					[categoryId]: Array.isArray(skills) ? skills : [],
 				}));
+				setSkillsError((prev) => {
+					const next2 = { ...prev };
+					delete next2[categoryId];
+					return next2;
+				});
 			} catch {
-				// Skills failed to load; category selection still works
+				setSkillsError((prev) => ({
+					...prev,
+					[categoryId]: 'Failed to load skills for this category.',
+				}));
 			}
+		}
+	}
+
+	async function retrySkills(categoryId: number) {
+		try {
+			setSkillsError((prev) => {
+				const next = { ...prev };
+				delete next[categoryId];
+				return next;
+			});
+			const skills = await getSkills(categoryId);
+			setSkillsByCategory((prev) => ({
+				...prev,
+				[categoryId]: Array.isArray(skills) ? skills : [],
+			}));
+		} catch {
+			setSkillsError((prev) => ({
+				...prev,
+				[categoryId]: 'Failed to load skills for this category.',
+			}));
 		}
 	}
 
@@ -366,6 +446,18 @@ function InterestSelector({
 
 	if (loading) {
 		return <p>Loading categories...</p>;
+	}
+
+	if (categoriesError) {
+		return (
+			<div>
+				<h3>What can you help with?</h3>
+				<p role="alert">{categoriesError}</p>
+				<button type="button" onClick={loadCategories}>
+					Retry
+				</button>
+			</div>
+		);
 	}
 
 	return (
@@ -410,6 +502,14 @@ function InterestSelector({
 									</label>
 								))}
 							</fieldset>
+						) : null}
+						{formData.areasOfInterest.includes(cat.id) && skillsError[cat.id] ? (
+							<div>
+								<p role="alert">{skillsError[cat.id]}</p>
+								<button type="button" onClick={() => retrySkills(cat.id)}>
+									Retry
+								</button>
+							</div>
 						) : null}
 					</div>
 				))}

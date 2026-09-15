@@ -9,7 +9,8 @@
 		"@together/config": "workspace:*",
 		"@together/db": "workspace:*",
 		"@together/schemas": "workspace:*",
-		"elysia": "^1.4.30"
+		"elysia": "^1.4.30",
+		"pg-boss": "^12.32.0"
 	},
 	"devDependencies": {},
 	"scripts": {

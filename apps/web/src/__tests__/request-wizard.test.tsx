@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { CategoryStep } from '../components/request-wizard/category-step';
+import { OptionalDetailsStep } from '../components/request-wizard/optional-details-step';
 import { ProgressIndicator } from '../components/request-wizard/progress-indicator';
 import { TextStep } from '../components/request-wizard/text-step';
 import type { Category, WizardStep } from '../components/request-wizard/types';
@@ -257,6 +258,56 @@ describe('TextStep', () => {
 		const textarea = screen.getByRole('textbox');
 		fireEvent.change(textarea, { target: { value: 'New goal' } });
 		expect(onChange).toHaveBeenCalledWith('New goal');
+	});
+});
+
+describe('OptionalDetailsStep', () => {
+	test('shows technology-specific fields when categoryId is 1', () => {
+		render(<OptionalDetailsStep data={INITIAL_WIZARD_DATA} onUpdate={vi.fn()} categoryId={1} />);
+		expect(screen.getByText('Skill level')).toBeTruthy();
+		expect(screen.getByText('Duration')).toBeTruthy();
+		expect(screen.getByText('Deadline')).toBeTruthy();
+		expect(screen.queryByText('Quantity needed')).toBeNull();
+		expect(screen.queryByText('Time commitment')).toBeNull();
+	});
+
+	test('shows education-specific fields when categoryId is 2', () => {
+		render(<OptionalDetailsStep data={INITIAL_WIZARD_DATA} onUpdate={vi.fn()} categoryId={2} />);
+		expect(screen.getByText('Skill level')).toBeTruthy();
+		expect(screen.getByText('Time commitment')).toBeTruthy();
+		expect(screen.getByText('Duration')).toBeTruthy();
+		expect(screen.queryByText('Deadline')).toBeNull();
+		expect(screen.queryByText('Quantity needed')).toBeNull();
+	});
+
+	test('shows health-specific fields when categoryId is 3', () => {
+		render(<OptionalDetailsStep data={INITIAL_WIZARD_DATA} onUpdate={vi.fn()} categoryId={3} />);
+		expect(screen.getByText('Deadline')).toBeTruthy();
+		expect(screen.queryByText('Skill level')).toBeNull();
+		expect(screen.queryByText('Quantity needed')).toBeNull();
+	});
+
+	test('shows default fields when categoryId is null', () => {
+		render(<OptionalDetailsStep data={INITIAL_WIZARD_DATA} onUpdate={vi.fn()} categoryId={null} />);
+		expect(screen.getByText('How would help be delivered?')).toBeTruthy();
+		expect(screen.getByText('Location')).toBeTruthy();
+		expect(screen.getByText('What kind of help?')).toBeTruthy();
+		expect(screen.getByText('Time commitment')).toBeTruthy();
+		expect(screen.getByText('Duration')).toBeTruthy();
+		expect(screen.getByText('Deadline')).toBeTruthy();
+		expect(screen.getByText('Skill level')).toBeTruthy();
+		expect(screen.getByText('Quantity needed')).toBeTruthy();
+		expect(screen.getByText('Intended outcome')).toBeTruthy();
+	});
+
+	test('calls onUpdate when field value changes', () => {
+		const onUpdate = vi.fn();
+		render(
+			<OptionalDetailsStep data={INITIAL_WIZARD_DATA} onUpdate={onUpdate} categoryId={null} />,
+		);
+		const locationInput = screen.getByLabelText('Location');
+		fireEvent.change(locationInput, { target: { value: 'New York' } });
+		expect(onUpdate).toHaveBeenCalledWith({ location: 'New York' });
 	});
 });
 

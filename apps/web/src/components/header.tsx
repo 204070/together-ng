@@ -9,7 +9,7 @@ export function Header({ auth }: { auth: AuthState }) {
 			<nav aria-label="Primary">
 				<Link to="/">Together</Link>
 				<Link to="/">Feed</Link>
-				<Link to="/requests/new">New request</Link>
+				<Link to="/requests/new">Ask for help</Link>
 				{displayName ? (
 					<span>
 						{profile?.photoUrl ? (

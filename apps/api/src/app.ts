@@ -10,6 +10,7 @@ import { createProfileRouter } from './modules/profiles/routes';
 import { createProfileServices } from './modules/profiles/services';
 import { createRequestRouter } from './modules/requests/routes';
 import { createRequestServices, type RequestServices } from './modules/requests/services';
+import { createTaxonomyRouter } from './modules/taxonomy/routes';
 import { createInternalMatchingRouter } from './worker/matching';
 
 loadEnv();
@@ -56,6 +57,7 @@ export function makeApp(env: AppEnv = {}) {
 		.use(createFeedRouter(authServices))
 		.use(createAdminRouter(authServices))
 		.use(createProfileRouter(profileServices))
+		.use(createTaxonomyRouter(authServices))
 		.use(createRequestRouter(requestServices))
 		.use(
 			createInternalMatchingRouter(authServices.sql, {

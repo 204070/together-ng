@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthLoginRouteImport } from './routes/auth/login'
 import { Route as AuthRegisterRouteImport } from './routes/auth/register'
+import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as CategoriesCategorySlugRouteImport } from './routes/categories/$categorySlug'
 import { Route as ProfileUserIdRouteImport } from './routes/profile/$userId'
 import { Route as RequestsRequestIdRouteImport } from './routes/requests/$requestId'
@@ -30,6 +31,11 @@ const AuthLoginRoute = AuthLoginRouteImport.update({
 const AuthRegisterRoute = AuthRegisterRouteImport.update({
   id: '/auth/register',
   path: '/auth/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OnboardingRoute = OnboardingRouteImport.update({
+  id: '/onboarding',
+  path: '/onboarding',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CategoriesCategorySlugRoute = CategoriesCategorySlugRouteImport.update({
@@ -57,6 +63,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/register': typeof AuthRegisterRoute
+  '/onboarding': typeof OnboardingRoute
   '/categories/$categorySlug': typeof CategoriesCategorySlugRoute
   '/profile/$userId': typeof ProfileUserIdRoute
   '/requests/$requestId': typeof RequestsRequestIdRoute
@@ -66,6 +73,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/register': typeof AuthRegisterRoute
+  '/onboarding': typeof OnboardingRoute
   '/categories/$categorySlug': typeof CategoriesCategorySlugRoute
   '/profile/$userId': typeof ProfileUserIdRoute
   '/requests/$requestId': typeof RequestsRequestIdRoute
@@ -76,6 +84,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/register': typeof AuthRegisterRoute
+  '/onboarding': typeof OnboardingRoute
   '/categories/$categorySlug': typeof CategoriesCategorySlugRoute
   '/profile/$userId': typeof ProfileUserIdRoute
   '/requests/$requestId': typeof RequestsRequestIdRoute
@@ -87,6 +96,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth/login'
     | '/auth/register'
+    | '/onboarding'
     | '/categories/$categorySlug'
     | '/profile/$userId'
     | '/requests/$requestId'
@@ -96,6 +106,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth/login'
     | '/auth/register'
+    | '/onboarding'
     | '/categories/$categorySlug'
     | '/profile/$userId'
     | '/requests/$requestId'
@@ -105,6 +116,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth/login'
     | '/auth/register'
+    | '/onboarding'
     | '/categories/$categorySlug'
     | '/profile/$userId'
     | '/requests/$requestId'
@@ -115,6 +127,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthLoginRoute: typeof AuthLoginRoute
   AuthRegisterRoute: typeof AuthRegisterRoute
+  OnboardingRoute: typeof OnboardingRoute
   CategoriesCategorySlugRoute: typeof CategoriesCategorySlugRoute
   ProfileUserIdRoute: typeof ProfileUserIdRoute
   RequestsRequestIdRoute: typeof RequestsRequestIdRoute
@@ -142,6 +155,13 @@ declare module '@tanstack/react-router' {
       path: '/auth/register'
       fullPath: '/auth/register'
       preLoaderRoute: typeof AuthRegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/onboarding': {
+      id: '/onboarding'
+      path: '/onboarding'
+      fullPath: '/onboarding'
+      preLoaderRoute: typeof OnboardingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/categories/$categorySlug': {
@@ -179,6 +199,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthLoginRoute: AuthLoginRoute,
   AuthRegisterRoute: AuthRegisterRoute,
+  OnboardingRoute: OnboardingRoute,
   CategoriesCategorySlugRoute: CategoriesCategorySlugRoute,
   ProfileUserIdRoute: ProfileUserIdRoute,
   RequestsRequestIdRoute: RequestsRequestIdRoute,

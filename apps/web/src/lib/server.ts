@@ -193,15 +193,134 @@ export const loginFn = createServerFn({ method: 'POST' })
 
 export const registerFn = createServerFn({ method: 'POST' })
 	.validator((input: unknown) => {
-		const value = input as { email?: unknown; password?: unknown };
+		const value = input as { email?: unknown; password?: unknown; name?: unknown; phone?: unknown };
 		if (typeof value?.email !== 'string' || typeof value?.password !== 'string') {
 			throw new Error('Email and password are required');
 		}
-		return { email: value.email, password: value.password };
+		return {
+			email: value.email,
+			password: value.password,
+			name: typeof value.name === 'string' ? value.name : undefined,
+			phone: typeof value.phone === 'string' ? value.phone : undefined,
+		};
 	})
 	.handler(async ({ data }) => {
 		const api = createApiClient(await apiBaseUrl());
-		const res = await api.auth.register.post({ email: data.email, password: data.password });
+		const body: Record<string, string> = { email: data.email, password: data.password };
+		if (data.name) body.name = data.name;
+		if (data.phone) body.phone = data.phone;
+		const res = await api.auth.register.post(body);
 		if (res.error !== null || res.data === null) throw new Error('Could not register');
 		return res.data;
+	});
+
+export const sendOtpFn = createServerFn({ method: 'POST' })
+	.validator((input: unknown) => {
+		const value = input as { phone?: unknown };
+		if (typeof value?.phone !== 'string') throw new Error('Phone is required');
+		return { phone: value.phone };
+	})
+	.handler(async ({ data }) => {
+		const api = createApiClient(await apiBaseUrl());
+		const res = await api.auth['otp-send'].post({ phone: data.phone });
+		if (res.error !== null || res.data === null) throw new Error('Could not send OTP');
+		return res.data;
+	});
+
+export const verifyOtpFn = createServerFn({ method: 'POST' })
+	.validator((input: unknown) => {
+		const value = input as { phone?: unknown; code?: unknown };
+		if (typeof value?.phone !== 'string' || typeof value?.code !== 'string') {
+			throw new Error('Phone and code are required');
+		}
+		return { phone: value.phone, code: value.code };
+	})
+	.handler(async ({ data }) => {
+		const api = createApiClient(await apiBaseUrl());
+		const res = await api.auth['verify-otp'].post({ phone: data.phone, code: data.code });
+		if (res.error !== null || res.data === null) throw new Error('Invalid code');
+		return res.data;
+	});
+
+export const createProfileFn = createServerFn({ method: 'POST' })
+	.validator((input: unknown) => {
+		const value = input as Record<string, unknown>;
+		if (typeof value?.name !== 'string' || value.name.trim() === '') {
+			throw new Error('Name is required');
+		}
+		return {
+			name: value.name,
+			location: typeof value.location === 'string' ? value.location : null,
+			description: typeof value.description === 'string' ? value.description : null,
+			areasOfInterest: Array.isArray(value.areasOfInterest) ? value.areasOfInterest : [],
+			skills: Array.isArray(value.skills) ? value.skills : [],
+			resources: Array.isArray(value.resources) ? value.resources : [],
+			contributionAvailability: value.contributionAvailability ?? null,
+			exactAddress: typeof value.exactAddress === 'string' ? value.exactAddress : null,
+		};
+	})
+	.handler(async ({ data }) => {
+		const authorization = await incomingAuth();
+		if (authorization === undefined) throw new Error('Sign in to create a profile');
+		const api = createApiClient(await apiBaseUrl());
+		const res = await api.profiles.post(
+			{
+				name: data.name,
+				location: data.location,
+				description: data.description,
+				areasOfInterest: data.areasOfInterest,
+				skills: data.skills,
+				resources: data.resources,
+				contributionAvailability: data.contributionAvailability,
+				exactAddress: data.exactAddress,
+			},
+			{ headers: { authorization } },
+		);
+		if (res.error !== null || res.data === null) throw new Error('Could not create profile');
+		return res.data;
+	});
+
+export const updateProfileFn = createServerFn({ method: 'PATCH' })
+	.validator((input: unknown) => {
+		const value = input as { id?: unknown; [key: string]: unknown };
+		if (typeof value?.id !== 'string') throw new Error('Profile id is required');
+		return {
+			id: value.id,
+			name: typeof value.name === 'string' ? value.name : undefined,
+			location: typeof value.location === 'string' ? value.location : undefined,
+			description: typeof value.description === 'string' ? value.description : undefined,
+			areasOfInterest: Array.isArray(value.areasOfInterest) ? value.areasOfInterest : undefined,
+			skills: Array.isArray(value.skills) ? value.skills : undefined,
+			resources: Array.isArray(value.resources) ? value.resources : undefined,
+			contributionAvailability: value.contributionAvailability,
+			exactAddress: typeof value.exactAddress === 'string' ? value.exactAddress : undefined,
+		};
+	})
+	.handler(async ({ data }) => {
+		const authorization = await incomingAuth();
+		if (authorization === undefined) throw new Error('Sign in to update a profile');
+		const api = createApiClient(await apiBaseUrl());
+		const { id, ...patch } = data;
+		const res = await api.profiles({ id }).patch(patch, { headers: { authorization } });
+		if (res.error !== null || res.data === null) throw new Error('Could not update profile');
+		return res.data;
+	});
+
+export const getCategoriesFn = createServerFn({ method: 'GET' }).handler(async () => {
+	const api = createApiClient(await apiBaseUrl());
+	const { data, error } = await api.categories.get();
+	if (error !== null || data === null) throw new Error('Categories unavailable');
+	return data;
+});
+
+export const getSkillsForCategoryFn = createServerFn({ method: 'GET' })
+	.validator((input: unknown) => {
+		if (typeof input !== 'number') throw new Error('Category id is required');
+		return input;
+	})
+	.handler(async ({ data: categoryId }) => {
+		const api = createApiClient(await apiBaseUrl());
+		const { data, error } = await api.categories({ id: categoryId }).skills.get();
+		if (error !== null || data === null) throw new Error('Skills unavailable');
+		return data;
 	});

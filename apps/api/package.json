@@ -19,7 +19,7 @@
 		"start": "bun run ./dist/index.js",
 		"lint": "biome check .",
 		"typecheck": "tsc --noEmit",
-		"test": "bun test"
+		"test": "bun run ../../scripts/pin-env.ts bun test"
 	},
 	"main": "./src/app.ts",
 	"types": "./src/app.ts"

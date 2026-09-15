@@ -35,5 +35,10 @@ export const validationError = (fields: Record<string, string>): HttpError =>
 export const unauthorizedError = (): HttpError =>
 	new HttpError(401, 'UNAUTHORIZED', undefined, undefined, 'Authentication required');
 
+export const forbiddenError = (
+	code = 'ADMIN_ACCESS_REQUIRED',
+	message = 'Admin access required',
+): HttpError => new HttpError(403, code, undefined, undefined, message);
+
 export const rateLimitedError = (code: string, retryAfterSeconds: number): HttpError =>
 	new HttpError(429, code, undefined, retryAfterSeconds, 'Too many requests, try again later');

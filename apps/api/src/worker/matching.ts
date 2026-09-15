@@ -1,5 +1,9 @@
+import { jwt } from '@elysiajs/jwt';
 import type { Sql } from '@together/db';
 import { Elysia, t } from 'elysia';
+import type { JwtVerifier } from '../lib/authentication';
+import { requireAdmin } from '../modules/admin/routes';
+import type { UserRow } from '../modules/auth/store';
 
 // ---------------------------------------------------------------------------
 // Basic Matching Engine — Phase 1 deterministic scoring (PRD 65.5).
@@ -233,10 +237,12 @@ export interface RecomputeOptions {
  * byte-identical rows. Contributors are ordered by total score descending
  * with contributor id ascending as the deterministic tiebreak.
  */
+export const MAX_CANDIDATES = 200;
+
 export async function recomputeMatches(
 	sql: Sql,
 	requestId: string,
-	options: RecomputeOptions = {},
+	options: { now?: () => Date } = {},
 ): Promise<MatchResult[]> {
 	const now = options.now?.() ?? new Date();
 
@@ -249,7 +255,7 @@ export async function recomputeMatches(
 	const request = requestRows[0];
 	if (!request) return [];
 	if (request.category_id === null) {
-		await sql`DELETE FROM request_matches WHERE request_id = ${requestId}`;
+		await sql`DELETE FROM request_matches WHERE request_id = ${requestId} AND notified_at IS NULL`;
 		return [];
 	}
 	const categoryId = request.category_id;
@@ -268,6 +274,7 @@ export async function recomputeMatches(
 			WHERE (cc.category_id = ${categoryId} OR cc.skill_id = ANY(${skillIds}::int[]))
 				AND cc.user_id <> ${request.author_id}
 				AND u.status = 'active' AND u.deleted_at IS NULL
+			LIMIT 1000
 		`;
 	} else {
 		capabilities = await sql<CapabilityRow[]>`
@@ -277,11 +284,12 @@ export async function recomputeMatches(
 			WHERE cc.category_id = ${categoryId}
 				AND cc.user_id <> ${request.author_id}
 				AND u.status = 'active' AND u.deleted_at IS NULL
+			LIMIT 1000
 		`;
 	}
 
 	if (capabilities.length === 0) {
-		await sql`DELETE FROM request_matches WHERE request_id = ${requestId}`;
+		await sql`DELETE FROM request_matches WHERE request_id = ${requestId} AND notified_at IS NULL`;
 		return [];
 	}
 
@@ -291,7 +299,7 @@ export async function recomputeMatches(
 		list.push(cap);
 		byUser.set(cap.user_id, list);
 	}
-	const userIds = [...byUser.keys()];
+	const userIds = [...byUser.keys()].slice(0, MAX_CANDIDATES);
 	const skillIdSet = new Set(skillIds);
 
 	const prefsRows =
@@ -397,20 +405,38 @@ export async function recomputeMatches(
 	});
 	const ranked: MatchResult[] = scored.map((row, index) => ({ ...row, rank: index + 1 }));
 
+	if (ranked.length === 0) {
+		await sql`DELETE FROM request_matches WHERE request_id = ${requestId} AND notified_at IS NULL`;
+		return [];
+	}
+
+	const keepContributorIds = ranked.map((r) => r.contributorId);
+	const rowsToUpsert = ranked.map((row) => ({
+		request_id: requestId,
+		contributor_id: row.contributorId,
+		score: row.totalScore,
+		reasons: sql.json({
+			total_score: row.totalScore,
+			rank: row.rank,
+			weights: { ...MATCH_WEIGHTS },
+			factor_breakdown: { ...row.factorBreakdown },
+		}),
+	}));
+
 	await sql.begin(async (tx) => {
-		await tx`DELETE FROM request_matches WHERE request_id = ${requestId}`;
-		for (const row of ranked) {
-			const reasons = {
-				total_score: row.totalScore,
-				rank: row.rank,
-				weights: { ...MATCH_WEIGHTS },
-				factor_breakdown: { ...row.factorBreakdown },
-			};
-			await tx`
-				INSERT INTO request_matches (request_id, contributor_id, score, reasons)
-				VALUES (${requestId}, ${row.contributorId}, ${row.totalScore}, ${tx.json(reasons)})
-			`;
-		}
+		await tx`
+			INSERT INTO request_matches ${tx(rowsToUpsert, 'request_id', 'contributor_id', 'score', 'reasons')}
+			ON CONFLICT (request_id, contributor_id)
+			DO UPDATE SET
+				score = EXCLUDED.score,
+				reasons = EXCLUDED.reasons
+		`;
+		await tx`
+			DELETE FROM request_matches
+			WHERE request_id = ${requestId}
+				AND NOT (contributor_id = ANY(${keepContributorIds}::uuid[]))
+				AND notified_at IS NULL
+		`;
 	});
 
 	return ranked;
@@ -448,27 +474,62 @@ export async function readMatches(sql: Sql, requestId: string): Promise<MatchRes
 	});
 }
 
+export interface InternalMatchingRouterOptions {
+	findUserById?: (id: string) => Promise<UserRow | undefined>;
+	jwtSecret?: string;
+}
+
 /** Internal read model for the notification dispatcher (#13) and debugging. */
-export function createInternalMatchingRouter(sql: Sql) {
-	return new Elysia().get(
-		'/internal/requests/:id/matches',
-		async ({ params, set }) => {
-			const exists = await sql<{ id: string }[]>`SELECT id FROM requests WHERE id = ${params.id}`;
-			if (!exists[0]) {
-				set.status = 404;
-				return { error: 'NOT_FOUND', message: 'Request not found' };
-			}
-			const matches = await readMatches(sql, params.id);
-			return {
-				requestId: params.id,
-				matches: matches.map((match) => ({
-					contributorId: match.contributorId,
-					totalScore: match.totalScore,
-					rank: match.rank,
-					factorBreakdown: match.factorBreakdown,
-				})),
-			};
-		},
-		{ params: t.Object({ id: t.String({ format: 'uuid' }) }) },
-	);
+export function createInternalMatchingRouter(sql: Sql, options?: InternalMatchingRouterOptions) {
+	return new Elysia()
+		.use(jwt({ name: 'jwt', secret: options?.jwtSecret ?? 'secret', exp: '15m' }))
+		.get(
+			'/internal/requests/:id/matches',
+			async ({ params, headers, jwt: verifier, set }) => {
+				if (options?.findUserById) {
+					const authHeader = (headers as { authorization?: string }).authorization;
+					if (!authHeader) {
+						set.status = 401;
+						return { error: 'UNAUTHORIZED', message: 'Authentication required' };
+					}
+					try {
+						await requireAdmin(
+							headers as { authorization?: string },
+							verifier as unknown as JwtVerifier,
+							{ findUserById: options.findUserById },
+						);
+					} catch (err: unknown) {
+						if (
+							err &&
+							typeof err === 'object' &&
+							'status' in err &&
+							typeof err.status === 'number' &&
+							'body' in err &&
+							typeof (err as { body: unknown }).body === 'function'
+						) {
+							set.status = err.status;
+							return (err as unknown as { body: () => unknown }).body();
+						}
+						set.status = 403;
+						return { error: 'ADMIN_ACCESS_REQUIRED', message: 'Admin access required' };
+					}
+				}
+				const exists = await sql<{ id: string }[]>`SELECT id FROM requests WHERE id = ${params.id}`;
+				if (!exists[0]) {
+					set.status = 404;
+					return { error: 'NOT_FOUND', message: 'Request not found' };
+				}
+				const matches = await readMatches(sql, params.id);
+				return {
+					requestId: params.id,
+					matches: matches.map((match) => ({
+						contributorId: match.contributorId,
+						totalScore: match.totalScore,
+						rank: match.rank,
+						factorBreakdown: match.factorBreakdown,
+					})),
+				};
+			},
+			{ params: t.Object({ id: t.String({ format: 'uuid' }) }) },
+		);
 }

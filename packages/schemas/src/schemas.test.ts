@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { Value, ValueErrorType } from '@sinclair/typebox/value';
 import {
+	AdminMe,
+	AdminReports,
 	Category,
 	ContributionCreate,
 	ContributionStatus,
@@ -336,6 +338,16 @@ describe('remaining input schemas', () => {
 		};
 		expect(Value.Check(OutcomeConfirmation, value)).toBe(true);
 		expect(Value.Check(OutcomeConfirmation, { ...value, response: 'maybe' })).toBe(false);
+	});
+
+	test('AdminMe and AdminReports schemas', () => {
+		const admin = { id: validRequestId, email: 'admin@example.com', isAdmin: true };
+		expect(Value.Check(AdminMe, admin)).toBe(true);
+		expect(Value.Check(AdminMe, { ...admin, isAdmin: 'yes' })).toBe(false);
+
+		const reports = { reports: [], total: 0 };
+		expect(Value.Check(AdminReports, reports)).toBe(true);
+		expect(Value.Check(AdminReports, { reports: 'none', total: 0 })).toBe(false);
 	});
 });
 

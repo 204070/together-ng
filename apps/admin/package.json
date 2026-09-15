@@ -5,6 +5,7 @@
 	"type": "module",
 	"dependencies": {
 		"@elysiajs/eden": "^1.4.9",
+		"@together/api": "workspace:*",
 		"@together/schemas": "workspace:*",
 		"react": "^19.3.0",
 		"react-dom": "^19.3.0",

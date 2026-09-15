@@ -10,6 +10,7 @@ import { createApiClient } from './api';
 const TOKEN_COOKIE = 'together_token';
 
 async function apiBaseUrl(): Promise<string> {
+	if (process.env.API_URL) return process.env.API_URL;
 	const { loadEnv } = await import('@together/config');
 	return `http://localhost:${loadEnv().PORT}`;
 }
@@ -29,6 +30,16 @@ async function incomingAuth(): Promise<string | undefined> {
 	return `Bearer ${decodeURIComponent(token)}`;
 }
 
+async function incomingRefreshToken(): Promise<string | undefined> {
+	const { getRequestHeader } = await import('@tanstack/react-start/server');
+	const cookie = getRequestHeader('cookie');
+	if (cookie === undefined) return undefined;
+	const match = /(?:^|;\s*)together_refresh=([^;]+)/.exec(cookie);
+	const token = match?.[1];
+	if (token === undefined || token === '') return undefined;
+	return decodeURIComponent(token);
+}
+
 export const getFeaturedFn = createServerFn({ method: 'GET' }).handler(async () => {
 	const api = createApiClient(await apiBaseUrl());
 	const { data, error } = await api.requests.featured.get();
@@ -38,15 +49,66 @@ export const getFeaturedFn = createServerFn({ method: 'GET' }).handler(async () 
 
 export const getAuthUserFn = createServerFn({ method: 'GET' }).handler(async () => {
 	const authorization = await incomingAuth();
-	if (authorization === undefined) return { user: null, profile: null };
+	const api = createApiClient(await apiBaseUrl());
+
+	if (authorization !== undefined) {
+		try {
+			const headers = { authorization };
+			const me = await api.auth.me.get({ headers });
+			if (me.error === null && me.data !== null) {
+				const profile = await api.profiles.me.get({ headers });
+				return {
+					user: me.data,
+					profile: profile.error !== null || profile.data === null ? null : profile.data,
+				};
+			}
+		} catch {
+			// Access token might be expired or invalid, fall through to refresh rotation
+		}
+	}
+
+	// Access token missing or rejected; attempt rotating refresh token if present
+	const refreshToken = await incomingRefreshToken();
+	if (refreshToken === undefined) {
+		return { user: null, profile: null };
+	}
+
 	try {
-		const api = createApiClient(await apiBaseUrl());
-		const headers = { authorization };
-		const me = await api.auth.me.get({ headers });
-		if (me.error !== null || me.data === null) return { user: null, profile: null };
-		const profile = await api.profiles.me.get({ headers });
+		const refreshRes = await api.auth.refresh.post(
+			{},
+			{ headers: { cookie: `together_refresh=${encodeURIComponent(refreshToken)}` } },
+		);
+		if (refreshRes.error !== null || refreshRes.data === null) {
+			return { user: null, profile: null };
+		}
+
+		const newAccessToken = refreshRes.data.token;
+		const user = refreshRes.data.user;
+
+		const { setCookie, setResponseHeader } = await import('@tanstack/react-start/server');
+		setCookie('together_token', newAccessToken, { path: '/', maxAge: 900 });
+
+		const rawSetCookie = refreshRes.response.headers.get('set-cookie');
+		const match = /(?:^|;\s*)together_refresh=([^;]+)/.exec(rawSetCookie || '');
+		const tokenInCookie = match?.[1];
+		const newRefreshToken = tokenInCookie ? decodeURIComponent(tokenInCookie) : refreshToken;
+		setCookie('together_refresh', newRefreshToken, {
+			path: '/',
+			httpOnly: true,
+			sameSite: 'lax',
+			maxAge: 30 * 24 * 60 * 60,
+		});
+		if (rawSetCookie) {
+			try {
+				setResponseHeader('Set-Cookie', rawSetCookie.replace(/Path=\/auth/i, 'Path=/'));
+			} catch {}
+		}
+
+		const profile = await api.profiles.me.get({
+			headers: { authorization: `Bearer ${newAccessToken}` },
+		});
 		return {
-			user: me.data,
+			user,
 			profile: profile.error !== null || profile.data === null ? null : profile.data,
 		};
 	} catch {
@@ -107,6 +169,25 @@ export const loginFn = createServerFn({ method: 'POST' })
 		const api = createApiClient(await apiBaseUrl());
 		const res = await api.auth.login.post({ email: data.email, password: data.password });
 		if (res.error !== null || res.data === null) throw new Error('Invalid email or password');
+
+		const rawSetCookie = res.response.headers.get('set-cookie');
+		const match = /(?:^|;\s*)together_refresh=([^;]+)/.exec(rawSetCookie || '');
+		const refreshToken = match?.[1] ? decodeURIComponent(match[1]) : undefined;
+		if (refreshToken) {
+			const { setCookie, setResponseHeader } = await import('@tanstack/react-start/server');
+			setCookie('together_refresh', refreshToken, {
+				path: '/',
+				httpOnly: true,
+				sameSite: 'lax',
+				maxAge: 30 * 24 * 60 * 60,
+			});
+			if (rawSetCookie) {
+				try {
+					setResponseHeader('Set-Cookie', rawSetCookie.replace(/Path=\/auth/i, 'Path=/'));
+				} catch {}
+			}
+		}
+
 		return res.data;
 	});
 

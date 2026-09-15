@@ -7,6 +7,7 @@ export const schemasVersion = '0.0.0';
 export * from '@sinclair/typebox';
 export { Value, ValueErrorType } from '@sinclair/typebox/value';
 
+export * from './admin';
 export * from './auth';
 export * from './category';
 export * from './contribution';

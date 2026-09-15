@@ -1,20 +1,10 @@
 import { jwt } from '@elysiajs/jwt';
-import { Elysia, t } from 'elysia';
+import { AdminMe, AdminReports } from '@together/schemas';
+import { Elysia } from 'elysia';
 import { type JwtVerifier, requireActiveUser } from '../../lib/authentication';
 import { forbiddenError } from '../../lib/errors';
 import type { AuthServices } from '../auth/services';
 import type { UserRow } from '../auth/store';
-
-const AdminMe = t.Object({
-	id: t.String(),
-	email: t.String(),
-	isAdmin: t.Boolean(),
-});
-
-const AdminReports = t.Object({
-	reports: t.Array(t.Unknown()),
-	total: t.Integer(),
-});
 
 /**
  * Admin authorization boundary (D9 sensitive path). Every admin endpoint

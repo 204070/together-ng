@@ -11,6 +11,7 @@ import { createProfileServices } from './modules/profiles/services';
 import { createRequestRouter } from './modules/requests/routes';
 import { createRequestServices, type RequestServices } from './modules/requests/services';
 import { createTaxonomyRouter } from './modules/taxonomy/routes';
+import { createVoteRouter } from './modules/requests/vote';
 import { createInternalMatchingRouter } from './worker/matching';
 
 loadEnv();
@@ -59,6 +60,7 @@ export function makeApp(env: AppEnv = {}) {
 		.use(createProfileRouter(profileServices))
 		.use(createTaxonomyRouter(authServices))
 		.use(createRequestRouter(requestServices))
+		.use(createVoteRouter(requestServices))
 		.use(
 			createInternalMatchingRouter(authServices.sql, {
 				findUserById: (id: string) => authServices.store.findUserById(id),

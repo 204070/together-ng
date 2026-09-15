@@ -97,10 +97,19 @@ export function createRequestRouter(services: RequestServices) {
 							title: row.title,
 							goal: row.goal,
 							barrier: row.barrier,
-							helpNeeded: row.help_needed,
+							helpNeeded: row.helpNeeded,
 						} as never)
 					: undefined;
-				return { ...base, ...(hints ? { qualityHints: hints } : {}) };
+
+				const voteCount = await store.countVotes(params.id);
+				const existingVote = actorUserId ? await store.findVote(actorUserId, params.id) : undefined;
+
+				return {
+					...base,
+					voteCount,
+					hasVoted: !!existingVote,
+					...(hints ? { qualityHints: hints } : {}),
+				};
 			},
 			{ params: t.Object({ id: t.String({ format: 'uuid' }) }) },
 		)

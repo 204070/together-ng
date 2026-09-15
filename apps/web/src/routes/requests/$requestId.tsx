@@ -1,8 +1,15 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { getRequestDetailFn } from '../../lib/server';
+import { VoteButton } from '../../components/vote/vote-button';
+import { getAuthUserFn, getRequestDetailFn } from '../../lib/server';
 
 export const Route = createFileRoute('/requests/$requestId')({
-	loader: ({ params }) => getRequestDetailFn({ data: params.requestId }),
+	loader: async ({ params }) => {
+		const [detail, auth] = await Promise.all([
+			getRequestDetailFn({ data: params.requestId }),
+			getAuthUserFn(),
+		]);
+		return { ...detail, auth };
+	},
 	head: ({ loaderData, params }) => {
 		const request = loaderData?.request;
 		if (!request) {
@@ -37,7 +44,7 @@ export const Route = createFileRoute('/requests/$requestId')({
 });
 
 function RequestDetailPage() {
-	const { request } = Route.useLoaderData();
+	const { request, auth } = Route.useLoaderData();
 	if (request === null) {
 		return (
 			<section>
@@ -47,10 +54,17 @@ function RequestDetailPage() {
 			</section>
 		);
 	}
+	const isAuthenticated = auth?.user !== null && auth?.user !== undefined;
 	return (
 		<section>
 			<h1>{request.title}</h1>
 			<p>{request.goal}</p>
+			<VoteButton
+				requestId={request.id}
+				initialVoteCount={request.voteCount ?? 0}
+				initialHasVoted={request.hasVoted ?? false}
+				isAuthenticated={isAuthenticated}
+			/>
 		</section>
 	);
 }

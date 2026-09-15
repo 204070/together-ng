@@ -1,10 +1,14 @@
 import { treaty } from '@elysiajs/eden';
-import type { AuthResponseType } from '@together/schemas';
-import type { App } from '../../../api/src/app';
+import type { App } from '@together/api';
+import type {
+	AdminMeType as AdminMe,
+	AdminReportsType as AdminReports,
+	AuthResponseType,
+} from '@together/schemas';
 
 /**
  * Eden Treaty client for the same Elysia API the web app calls (Section
- * 65.2). Typed by `App` from `apps/api`, which itself binds
+ * 65.2). Typed by `App` from `@together/api`, which itself binds
  * `packages/schemas` wire shapes — a schema change that alters the login
  * or admin responses breaks `typecheck` here.
  *
@@ -16,7 +20,11 @@ import type { App } from '../../../api/src/app';
 export const API_BASE_URL =
 	(import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:4000';
 
-export const api = treaty<App>(API_BASE_URL);
+export const api = treaty<App>(API_BASE_URL, {
+	fetch: {
+		credentials: 'include',
+	},
+});
 
 export class ApiError extends Error {
 	constructor(
@@ -50,11 +58,16 @@ export async function loginWithPassword(
 	return data;
 }
 
-export interface AdminMe {
-	id: string;
-	email: string;
-	isAdmin: boolean;
+/** POST /auth/refresh with rotating httpOnly refresh cookie. */
+export async function refreshAdminToken(): Promise<string> {
+	const { data, error, status } = await api.auth.refresh.post();
+	if (error !== null || data === null) {
+		throw toApiError(status, error?.value, 'Failed to refresh token');
+	}
+	return data.token;
 }
+
+export type { AdminMe, AdminReports };
 
 /**
  * GET /admin/me. Resolves for admins; throws ApiError 403
@@ -63,7 +76,7 @@ export interface AdminMe {
  * admin shell after login.
  */
 export async function fetchAdminMe(token: string): Promise<AdminMe> {
-	const { data, error, status } = await api.admin.me.get(undefined, {
+	const { data, error, status } = await api.admin.me.get({
 		headers: { authorization: `Bearer ${token}` },
 	});
 	if (error !== null || data === null) {
@@ -72,18 +85,13 @@ export async function fetchAdminMe(token: string): Promise<AdminMe> {
 	return data;
 }
 
-export interface AdminReports {
-	reports: unknown[];
-	total: number;
-}
-
 /** GET /admin/reports placeholder (real queue lands in #19). */
 export async function fetchAdminReports(token: string): Promise<AdminReports> {
-	const { data, error, status } = await api.admin.reports.get(undefined, {
+	const { data, error, status } = await api.admin.reports.get({
 		headers: { authorization: `Bearer ${token}` },
 	});
 	if (error !== null || data === null) {
 		throw toApiError(status, error?.value, 'Admin access required');
 	}
-	return { reports: data.reports ?? [], total: data.total ?? 0 };
+	return { reports: (data.reports as unknown[]) ?? [], total: data.total ?? 0 };
 }

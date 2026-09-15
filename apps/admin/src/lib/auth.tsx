@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { ApiError, fetchAdminMe, loginWithPassword } from './api';
+import { ApiError, fetchAdminMe, loginWithPassword, refreshAdminToken } from './api';
 
 export interface AdminSession {
 	token: string;
@@ -41,7 +41,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 	const [ready, setReady] = useState(false);
 
 	// Reload keeps the session: restore the stored token, then re-verify
-	// admin access. A revoked/expired token clears back to /login.
+	// admin access. If the token is expired (401), attempt refresh rotation
+	// per D14. A revoked/invalid session clears back to /login.
 	useEffect(() => {
 		const stored = loadStoredSession();
 		if (stored === null) {
@@ -55,8 +56,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 				setSession({ token: stored.token, id: me.id, email: me.email });
 				setReady(true);
 			})
-			.catch(() => {
+			.catch(async (error) => {
 				if (cancelled) return;
+				if (error instanceof ApiError && error.status === 401) {
+					try {
+						const refreshedToken = await refreshAdminToken();
+						const me = await fetchAdminMe(refreshedToken);
+						if (cancelled) return;
+						const refreshedSession: AdminSession = {
+							token: refreshedToken,
+							id: me.id,
+							email: me.email,
+						};
+						localStorage.setItem(STORAGE_KEY, JSON.stringify(refreshedSession));
+						setSession(refreshedSession);
+						setReady(true);
+						return;
+					} catch {
+						// Refresh token failed or expired
+					}
+				}
 				localStorage.removeItem(STORAGE_KEY);
 				setSession(null);
 				setReady(true);
@@ -65,6 +84,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			cancelled = true;
 		};
 	}, []);
+
+	// Proactive refresh rotation (D14): rotate the 15-minute access token
+	// every 12 minutes while the admin tab is open.
+	useEffect(() => {
+		if (!session) return;
+		const interval = setInterval(
+			async () => {
+				try {
+					const newToken = await refreshAdminToken();
+					setSession((prev) => {
+						if (!prev) return null;
+						const next = { ...prev, token: newToken };
+						localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+						return next;
+					});
+				} catch {
+					// Non-fatal background refresh failure
+				}
+			},
+			12 * 60 * 1000,
+		);
+		return () => clearInterval(interval);
+	}, [session]);
 
 	const login = useCallback(async (email: string, password: string) => {
 		const { token } = await loginWithPassword(email, password);

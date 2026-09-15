@@ -1,5 +1,5 @@
 import { Elysia } from 'elysia';
-import type { AuthServices } from '../auth/services';
+import type { AuthServices } from './auth/services';
 import { type RequestRow, toResponse } from './requests/store';
 
 // Placeholder feed for issue #7 (SSR wiring only). Issue #10 replaces this

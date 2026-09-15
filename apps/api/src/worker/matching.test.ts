@@ -37,13 +37,23 @@ function unique(prefix: string): string {
 	return `${prefix}-${Date.now()}-${seq}`;
 }
 
-async function createUser(email?: string): Promise<{ id: string; email: string }> {
+async function createUser(email?: string, isAdmin = false): Promise<{ id: string; email: string }> {
 	const address = email ?? `${unique('m')}@example.com`;
 	const hash = await Bun.password.hash('password123', { algorithm: 'argon2id' });
 	const rows = await sql<{ id: string }[]>`
-		INSERT INTO users (email, password_hash, phone_verified) VALUES (${address}, ${hash}, true) RETURNING id
+		INSERT INTO users (email, password_hash, phone_verified, is_admin) VALUES (${address}, ${hash}, true, ${isAdmin}) RETURNING id
 	`;
 	return { id: rows[0]?.id as string, email: address };
+}
+
+async function waitForMatchRows(requestId: string, timeoutMs = 5000) {
+	const deadline = Date.now() + timeoutMs;
+	while (Date.now() < deadline) {
+		const rows = await matchRows(requestId);
+		if (rows.length > 0) return rows;
+		await new Promise((r) => setTimeout(r, 50));
+	}
+	return matchRows(requestId);
 }
 
 async function loginToken(app: App, email: string): Promise<string> {
@@ -205,7 +215,7 @@ describe('matching queue (Postgres-backed)', () => {
 		const token = await loginToken(app, author.email);
 
 		const requestId = await publishViaHttp(app, token, categoryId);
-		const rows = await matchRows(requestId);
+		const rows = await waitForMatchRows(requestId);
 		expect(rows.length).toBe(1);
 		expect(rows[0]?.contributor_id).toBe(contributor.id);
 
@@ -216,16 +226,33 @@ describe('matching queue (Postgres-backed)', () => {
 		expect(jobs[0]?.count ?? 0).toBeGreaterThan(0);
 	});
 
-	test('internal matches endpoint exposes total_score, rank and factor_breakdown', async () => {
+	test('internal matches endpoint requires admin authentication and exposes breakdown', async () => {
 		const app = mkApp();
 		const author = await createUser();
 		const contributor = await createUser();
+		const admin = await createUser(undefined, true);
 		const categoryId = await createCategory();
 		await addCapability({ userId: contributor.id, categoryId });
 		const token = await loginToken(app, author.email);
+		const adminToken = await loginToken(app, admin.email);
 
 		const requestId = await publishViaHttp(app, token, categoryId);
-		const res = await req(app, `/internal/requests/${requestId}/matches`);
+		await waitForMatchRows(requestId);
+
+		// Unauthenticated returns 401
+		const unauth = await req(app, `/internal/requests/${requestId}/matches`);
+		expect(unauth.status).toBe(401);
+
+		// Non-admin returns 403
+		const nonAdmin = await req(app, `/internal/requests/${requestId}/matches`, {
+			headers: { authorization: `Bearer ${token}` },
+		});
+		expect(nonAdmin.status).toBe(403);
+
+		// Admin returns 200 with breakdown
+		const res = await req(app, `/internal/requests/${requestId}/matches`, {
+			headers: { authorization: `Bearer ${adminToken}` },
+		});
 		expect(res.status).toBe(200);
 		const body = (await res.json()) as {
 			requestId: string;
@@ -253,9 +280,13 @@ describe('matching queue (Postgres-backed)', () => {
 		);
 	});
 
-	test('internal matches endpoint returns 404 for unknown requests', async () => {
+	test('internal matches endpoint returns 404 for unknown requests with admin token', async () => {
 		const app = mkApp();
-		const res = await req(app, '/internal/requests/550e8400-e29b-41d4-a716-446655440000/matches');
+		const admin = await createUser(undefined, true);
+		const adminToken = await loginToken(app, admin.email);
+		const res = await req(app, '/internal/requests/550e8400-e29b-41d4-a716-446655440000/matches', {
+			headers: { authorization: `Bearer ${adminToken}` },
+		});
 		expect(res.status).toBe(404);
 	});
 });
@@ -571,10 +602,41 @@ describe('determinism and edge cases', () => {
 
 		const requestId = await publishViaHttp(app, token, categoryId);
 
+		const admin = await createUser(undefined, true);
+		const adminToken = await loginToken(app, admin.email);
 		expect([...(await matchRows(requestId))]).toEqual([]);
-		const res = await req(app, `/internal/requests/${requestId}/matches`);
+		const res = await req(app, `/internal/requests/${requestId}/matches`, {
+			headers: { authorization: `Bearer ${adminToken}` },
+		});
 		expect(res.status).toBe(200);
 		expect(((await res.json()) as { matches: unknown[] }).matches).toEqual([]);
+	});
+
+	test('recomputing matching preserves existing notified_at timestamps', async () => {
+		const author = await createUser();
+		const contributor = await createUser();
+		const categoryId = await createCategory();
+		await addCapability({ userId: contributor.id, categoryId });
+		const requestId = await createRequestRow(author.id, { categoryId });
+
+		await recomputeMatches(sql, requestId);
+		// Simulate contributor being notified
+		const notifiedDate = new Date('2026-09-15T12:00:00Z');
+		await sql`
+			UPDATE request_matches
+			SET notified_at = ${notifiedDate}
+			WHERE request_id = ${requestId} AND contributor_id = ${contributor.id}
+		`;
+
+		// Recompute matches again
+		await recomputeMatches(sql, requestId);
+
+		const rows = await matchRows(requestId);
+		expect(rows.length).toBe(1);
+		const notified = await sql<{ notified_at: Date | null }[]>`
+			SELECT notified_at FROM request_matches WHERE request_id = ${requestId} AND contributor_id = ${contributor.id}
+		`;
+		expect(notified[0]?.notified_at).toEqual(notifiedDate);
 	});
 
 	test('draft edits do not recompute matching', async () => {

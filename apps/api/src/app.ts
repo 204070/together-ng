@@ -57,7 +57,12 @@ export function makeApp(env: AppEnv = {}) {
 		.use(createAdminRouter(authServices))
 		.use(createProfileRouter(profileServices))
 		.use(createRequestRouter(requestServices))
-		.use(createInternalMatchingRouter(authServices.sql));
+		.use(
+			createInternalMatchingRouter(authServices.sql, {
+				findUserById: (id: string) => authServices.store.findUserById(id),
+				jwtSecret: authServices.jwtSecret,
+			}),
+		);
 
 	app.decorate('services', authServices);
 	app.decorate('requestServices', requestServices as RequestServices);

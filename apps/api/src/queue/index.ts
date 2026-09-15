@@ -131,7 +131,9 @@ export function createMatchingQueue(options: MatchingQueueOptions) {
 	});
 
 	const service: MatchingService = {
-		recompute: (requestId: string) => queue.sendAndWait({ requestId }),
+		recompute: async (requestId: string) => {
+			await queue.send({ requestId });
+		},
 	};
 
 	return { ...queue, asService: (): MatchingService => service };

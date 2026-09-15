@@ -7,6 +7,7 @@ import {
 	Scripts,
 } from '@tanstack/react-router';
 import { Header } from '../components/header';
+import { ToastProvider } from '../components/toast';
 import { getAuthUserFn } from '../lib/server';
 
 export const Route = createRootRoute({
@@ -31,10 +32,12 @@ function RootComponent() {
 				<HeadContent />
 			</head>
 			<body>
-				<Header auth={auth} />
-				<main>
-					<Outlet />
-				</main>
+				<ToastProvider>
+					<Header auth={auth} />
+					<main>
+						<Outlet />
+					</main>
+				</ToastProvider>
 				<Scripts />
 			</body>
 		</html>

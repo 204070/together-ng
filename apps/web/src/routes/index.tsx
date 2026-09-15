@@ -27,6 +27,7 @@ function HomePage() {
 								<Link to="/requests/$requestId" params={{ requestId: item.id }}>
 									{item.title}
 								</Link>
+								<span className="vote-count-badge">{item.voteCount ?? 0} votes</span>
 							</li>
 						))}
 					</ul>

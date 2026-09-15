@@ -114,6 +114,76 @@ export class RequestStore {
 		>`UPDATE requests SET state='published', published_at=now(), updated_at=now() WHERE id=${id} RETURNING id, author_id, category_id, title, goal, barrier, help_needed, state, modality, help_type, location, time_commitment, duration, deadline, skill_level, intended_outcome, quantity, published_at, closed_at, closed_reason, under_review, created_at, updated_at`;
 		return rows[0];
 	}
+
+	async addVote(userId: string, requestId: string): Promise<boolean> {
+		try {
+			await this.sql`
+				INSERT INTO votes (user_id, request_id)
+				VALUES (${userId}, ${requestId})
+			`;
+			return true;
+		} catch {
+			return false;
+		}
+	}
+
+	async removeVote(userId: string, requestId: string): Promise<boolean> {
+		const result = await this.sql`
+			DELETE FROM votes WHERE user_id = ${userId} AND request_id = ${requestId}
+		`;
+		return (result as unknown as { count: number }).count > 0;
+	}
+
+	async findVote(userId: string, requestId: string): Promise<{ id: string } | undefined> {
+		const rows = await this.sql<{ id: string }[]>`
+			SELECT id FROM votes WHERE user_id = ${userId} AND request_id = ${requestId}
+		`;
+		return rows[0];
+	}
+
+	async countVotes(requestId: string): Promise<number> {
+		const rows = await this.sql<{ count: string }[]>`
+			SELECT count(*)::text AS count FROM votes WHERE request_id = ${requestId}
+		`;
+		return Number(rows[0]?.count ?? 0);
+	}
+
+	async findVotesForRequests(
+		requestIds: string[],
+		userId?: string,
+	): Promise<Map<string, { voteCount: number; hasVoted: boolean }>> {
+		const result = new Map<string, { voteCount: number; hasVoted: boolean }>();
+		if (requestIds.length === 0) return result;
+
+		const counts = await this.sql<{ request_id: string; count: string }[]>`
+			SELECT request_id, count(*)::text AS count
+			FROM votes
+			WHERE request_id = ANY(${requestIds})
+			GROUP BY request_id
+		`;
+		for (const row of counts) {
+			result.set(row.request_id, { voteCount: Number(row.count), hasVoted: false });
+		}
+
+		if (userId) {
+			const userVotes = await this.sql<{ request_id: string }[]>`
+				SELECT request_id FROM votes
+				WHERE user_id = ${userId} AND request_id = ANY(${requestIds})
+			`;
+			for (const uv of userVotes) {
+				const entry = result.get(uv.request_id);
+				if (entry) entry.hasVoted = true;
+			}
+		}
+
+		for (const id of requestIds) {
+			if (!result.has(id)) {
+				result.set(id, { voteCount: 0, hasVoted: false });
+			}
+		}
+
+		return result;
+	}
 }
 export function toResponse(row: RequestRow) {
 	return {

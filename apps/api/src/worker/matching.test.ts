@@ -4,7 +4,11 @@ import { resolve } from 'node:path';
 import { createClient, migrate, type Sql } from '@together/db';
 import { makeApp } from '../app';
 import { createMatchingQueue, MATCHING_QUEUE } from '../queue';
-import { createInlineMatchingService, recomputeMatches } from './matching';
+import {
+	createInlineMatchingService,
+	createInternalMatchingRouter,
+	recomputeMatches,
+} from './matching';
 
 const DB_URL =
 	process.env.TEST_DATABASE_URL ??
@@ -278,6 +282,13 @@ describe('matching queue (Postgres-backed)', () => {
 				'request_quality',
 			].sort(),
 		);
+
+		// createInternalMatchingRouter throws if auth enabled without jwtSecret
+		expect(() =>
+			createInternalMatchingRouter(sql, {
+				findUserById: async () => undefined,
+			} as never),
+		).toThrow('jwtSecret is required when auth is enabled');
 	});
 
 	test('internal matches endpoint returns 404 for unknown requests with admin token', async () => {

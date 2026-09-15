@@ -2,6 +2,7 @@ import { jwt } from '@elysiajs/jwt';
 import type { Sql } from '@together/db';
 import { Elysia, t } from 'elysia';
 import type { JwtVerifier } from '../lib/authentication';
+import { HttpError } from '../lib/errors';
 import { requireAdmin } from '../modules/admin/routes';
 import type { UserRow } from '../modules/auth/store';
 
@@ -225,10 +226,6 @@ export function totalScore(breakdown: FactorBreakdown): number {
 		sum += MATCH_WEIGHTS[key] * breakdown[key];
 	}
 	return round4(100 * sum);
-}
-
-export interface RecomputeOptions {
-	now?: () => Date;
 }
 
 /**
@@ -476,60 +473,54 @@ export async function readMatches(sql: Sql, requestId: string): Promise<MatchRes
 
 export interface InternalMatchingRouterOptions {
 	findUserById?: (id: string) => Promise<UserRow | undefined>;
-	jwtSecret?: string;
+	jwtSecret: string;
 }
 
 /** Internal read model for the notification dispatcher (#13) and debugging. */
-export function createInternalMatchingRouter(sql: Sql, options?: InternalMatchingRouterOptions) {
-	return new Elysia()
-		.use(jwt({ name: 'jwt', secret: options?.jwtSecret ?? 'secret', exp: '15m' }))
-		.get(
-			'/internal/requests/:id/matches',
-			async ({ params, headers, jwt: verifier, set }) => {
-				if (options?.findUserById) {
-					const authHeader = (headers as { authorization?: string }).authorization;
-					if (!authHeader) {
-						set.status = 401;
-						return { error: 'UNAUTHORIZED', message: 'Authentication required' };
-					}
-					try {
-						await requireAdmin(
-							headers as { authorization?: string },
-							verifier as unknown as JwtVerifier,
-							{ findUserById: options.findUserById },
-						);
-					} catch (err: unknown) {
-						if (
-							err &&
-							typeof err === 'object' &&
-							'status' in err &&
-							typeof err.status === 'number' &&
-							'body' in err &&
-							typeof (err as { body: unknown }).body === 'function'
-						) {
-							set.status = err.status;
-							return (err as unknown as { body: () => unknown }).body();
-						}
-						set.status = 403;
-						return { error: 'ADMIN_ACCESS_REQUIRED', message: 'Admin access required' };
-					}
+export function createInternalMatchingRouter(sql: Sql, options: InternalMatchingRouterOptions) {
+	if (options.findUserById && !options.jwtSecret) {
+		throw new Error('jwtSecret is required when auth is enabled in createInternalMatchingRouter');
+	}
+	return new Elysia().use(jwt({ name: 'jwt', secret: options.jwtSecret, exp: '15m' })).get(
+		'/internal/requests/:id/matches',
+		async ({ params, headers, jwt: verifier, set }) => {
+			if (options.findUserById) {
+				const authHeader = (headers as { authorization?: string }).authorization;
+				if (!authHeader) {
+					set.status = 401;
+					return { error: 'UNAUTHORIZED', message: 'Authentication required' };
 				}
-				const exists = await sql<{ id: string }[]>`SELECT id FROM requests WHERE id = ${params.id}`;
-				if (!exists[0]) {
-					set.status = 404;
-					return { error: 'NOT_FOUND', message: 'Request not found' };
+				try {
+					await requireAdmin(
+						headers as { authorization?: string },
+						verifier as unknown as JwtVerifier,
+						{ findUserById: options.findUserById },
+					);
+				} catch (err: unknown) {
+					if (err instanceof HttpError) {
+						set.status = err.status;
+						return err.body();
+					}
+					set.status = 403;
+					return { error: 'ADMIN_ACCESS_REQUIRED', message: 'Admin access required' };
 				}
-				const matches = await readMatches(sql, params.id);
-				return {
-					requestId: params.id,
-					matches: matches.map((match) => ({
-						contributorId: match.contributorId,
-						totalScore: match.totalScore,
-						rank: match.rank,
-						factorBreakdown: match.factorBreakdown,
-					})),
-				};
-			},
-			{ params: t.Object({ id: t.String({ format: 'uuid' }) }) },
-		);
+			}
+			const exists = await sql<{ id: string }[]>`SELECT id FROM requests WHERE id = ${params.id}`;
+			if (!exists[0]) {
+				set.status = 404;
+				return { error: 'NOT_FOUND', message: 'Request not found' };
+			}
+			const matches = await readMatches(sql, params.id);
+			return {
+				requestId: params.id,
+				matches: matches.map((match) => ({
+					contributorId: match.contributorId,
+					totalScore: match.totalScore,
+					rank: match.rank,
+					factorBreakdown: match.factorBreakdown,
+				})),
+			};
+		},
+		{ params: t.Object({ id: t.String({ format: 'uuid' }) }) },
+	);
 }

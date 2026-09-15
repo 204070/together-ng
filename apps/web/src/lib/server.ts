@@ -409,13 +409,6 @@ export const updateProfileFn = createServerFn({ method: 'PATCH' })
 		return res.data;
 	});
 
-export const getCategoriesFn = createServerFn({ method: 'GET' }).handler(async () => {
-	const api = createApiClient(await apiBaseUrl());
-	const { data, error } = await api.categories.get();
-	if (error !== null || data === null) throw new Error('Categories unavailable');
-	return data;
-});
-
 export const getSkillsForCategoryFn = createServerFn({ method: 'GET' })
 	.validator((input: unknown) => {
 		if (typeof input !== 'number') throw new Error('Category id is required');

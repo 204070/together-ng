@@ -49,7 +49,7 @@ export function createAuthServices(
 	const provider = env.otpProvider ?? configEnv.OTP_PROVIDER;
 	const now = env.now ?? (() => new Date());
 	const sql = (deps.sql ?? env.sql ?? createClient(databaseUrl)) as Sql;
-	const db = deps.db ?? env.db ?? createDb(sql);
+	const db = deps.db ?? env.db ?? createDb(databaseUrl);
 	const store = new AuthStore(db);
 	const otpSender = env.sql === undefined ? createOtpSender(provider) : ensureMockSender(provider);
 	return {

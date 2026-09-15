@@ -29,7 +29,7 @@ export function createProfileServices(
 	const databaseUrl = env.databaseUrl ?? configEnv.DATABASE_URL;
 	const jwtSecret = env.jwtSecret ?? configEnv.JWT_SECRET;
 	const sql = (deps.sql ?? env.sql ?? createClient(databaseUrl)) as Sql;
-	const db = deps.db ?? env.db ?? createDb(sql);
+	const db = deps.db ?? env.db ?? createDb(databaseUrl);
 	const store = new ProfileStore(db);
 	const storage = deps.storage ?? env.storage ?? photoStorage;
 

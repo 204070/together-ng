@@ -21,7 +21,7 @@ loadEnv();
 export function makeApp(env: AppEnv = {}) {
 	const databaseUrl = env.databaseUrl ?? configEnv.DATABASE_URL;
 	const sql = (env.sql ?? createClient(databaseUrl)) as Sql;
-	const db: Db = env.db ?? createDb(sql);
+	const db: Db = env.db ?? createDb(databaseUrl);
 
 	const authServices = createAuthServices(env, { sql, db });
 	const profileServices = createProfileServices(env, {
@@ -71,7 +71,7 @@ export function makeApp(env: AppEnv = {}) {
 		.use(createVoteRouter(requestServices))
 		.use(createVoteWsRouter())
 		.use(
-			createInternalMatchingRouter(authServices.sql, {
+			createInternalMatchingRouter(db, {
 				findUserById: (id: string) => authServices.store.findUserById(id),
 				jwtSecret: authServices.jwtSecret,
 			}),

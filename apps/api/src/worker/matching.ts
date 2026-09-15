@@ -1,5 +1,29 @@
 import { jwt } from '@elysiajs/jwt';
-import type { Sql } from '@together/db';
+import {
+	and,
+	asc,
+	contributions,
+	contributorCapabilities,
+	createDb,
+	type Db,
+	desc,
+	eq,
+	gt,
+	inArray,
+	isNull,
+	ne,
+	notInArray,
+	notificationPreferences,
+	or,
+	outcomeConfirmations,
+	profiles,
+	requestMatches,
+	requests,
+	type Sql,
+	skills,
+	sql,
+	users,
+} from '@together/db';
 import { Elysia, t } from 'elysia';
 import type { JwtVerifier } from '../lib/authentication';
 import { HttpError } from '../lib/errors';
@@ -63,49 +87,44 @@ export interface MatchingService {
 	recompute(requestId: string): Promise<void>;
 }
 
-export function createInlineMatchingService(sql: Sql, now?: () => Date): MatchingService {
+function resolveDb(dbOrSql: Db | Sql): Db {
+	return 'select' in dbOrSql ? dbOrSql : createDb(dbOrSql);
+}
+
+export function createInlineMatchingService(dbOrSql: Db | Sql, now?: () => Date): MatchingService {
+	const db = resolveDb(dbOrSql);
 	return {
-		recompute: (requestId: string) => recomputeMatches(sql, requestId, { now }).then(() => {}),
+		recompute: (requestId: string) => recomputeMatches(db, requestId, { now }).then(() => {}),
 	};
 }
 
 interface RequestRow {
 	id: string;
-	author_id: string;
-	category_id: number | null;
+	authorId: string;
+	categoryId: number | null;
 	modality: string | null;
-	help_type: string | null;
+	helpType: string | null;
 	location: string | null;
 	title: string;
 	goal: string;
 	barrier: string;
-	help_needed: string;
-	time_commitment: string | null;
+	helpNeeded: string;
+	timeCommitment: string | null;
 	duration: string | null;
 	deadline: Date | null;
-	skill_level: string | null;
-	intended_outcome: string | null;
+	skillLevel: string | null;
+	intendedOutcome: string | null;
 	quantity: string | null;
 }
 
 interface CapabilityRow {
-	user_id: string;
-	category_id: number | null;
-	skill_id: number | null;
+	userId: string;
+	categoryId: number | null;
+	skillId: number | null;
 	modality: string;
 	location: string | null;
 }
 
-interface PrefsRow {
-	user_id: string;
-	notify_new_matches: boolean;
-	notify_remote: boolean;
-	notify_local: boolean;
-	notify_resource_lending: boolean;
-	notify_mentorship: boolean;
-}
-
-const HELPFUL_RESPONSES = ['yes_significantly', 'yes_somewhat'];
 const LENDING_HELP_TYPES = ['borrow', 'receive', 'access'];
 const MENTOR_HELP_TYPES = ['learn', 'collaborate'];
 const FATIGUE_WINDOW_HOURS = 24;
@@ -134,26 +153,44 @@ export function requestRequiresLocation(
  * Contributors without a preferences row get the all-true defaults.
  */
 export function passesPreferencesGate(
-	request: Pick<RequestRow, 'location' | 'modality' | 'help_type'>,
-	prefs: PrefsRow | undefined,
+	request: {
+		location?: string | null;
+		modality?: string | null;
+		helpType?: string | null;
+		help_type?: string | null;
+	},
+	prefs:
+		| {
+				notifyNewMatches?: boolean;
+				notifyRemote?: boolean;
+				notifyLocal?: boolean;
+				notifyResourceLending?: boolean;
+				notifyMentorship?: boolean;
+				notify_new_matches?: boolean;
+				notify_remote?: boolean;
+				notify_local?: boolean;
+				notify_resource_lending?: boolean;
+				notify_mentorship?: boolean;
+		  }
+		| undefined,
 ): boolean {
-	const p = {
-		notify_new_matches: true,
-		notify_remote: true,
-		notify_local: true,
-		notify_resource_lending: true,
-		notify_mentorship: true,
-		...prefs,
-	};
-	if (!p.notify_new_matches) return false;
-	if (requestRequiresLocation(request)) {
-		if (!p.notify_local) return false;
-	} else if (!p.notify_remote) {
+	const notifyNewMatches = prefs?.notifyNewMatches ?? prefs?.notify_new_matches ?? true;
+	const notifyRemote = prefs?.notifyRemote ?? prefs?.notify_remote ?? true;
+	const notifyLocal = prefs?.notifyLocal ?? prefs?.notify_local ?? true;
+	const notifyResourceLending =
+		prefs?.notifyResourceLending ?? prefs?.notify_resource_lending ?? true;
+	const notifyMentorship = prefs?.notifyMentorship ?? prefs?.notify_mentorship ?? true;
+
+	if (!notifyNewMatches) return false;
+	if (requestRequiresLocation(request as Pick<RequestRow, 'location' | 'modality'>)) {
+		if (!notifyLocal) return false;
+	} else if (!notifyRemote) {
 		return false;
 	}
-	if (request.help_type !== null && request.help_type !== undefined) {
-		if (LENDING_HELP_TYPES.includes(request.help_type) && !p.notify_resource_lending) return false;
-		if (MENTOR_HELP_TYPES.includes(request.help_type) && !p.notify_mentorship) return false;
+	const helpType = request.helpType ?? request.help_type;
+	if (helpType !== null && helpType !== undefined) {
+		if (LENDING_HELP_TYPES.includes(helpType) && !notifyResourceLending) return false;
+		if (MENTOR_HELP_TYPES.includes(helpType) && !notifyMentorship) return false;
 	}
 	return true;
 }
@@ -195,18 +232,31 @@ function fatigueScore(recentMatches: number): number {
 	return Math.exp(-FATIGUE_DECAY * recentMatches);
 }
 
-/** Request-level factor: fraction of optional structured fields filled (0.4-1.0). */
-export function requestQualityScore(request: RequestRow): number {
+export function requestQualityScore(request: {
+	modality?: string | null;
+	helpType?: string | null;
+	help_type?: string | null;
+	location?: string | null;
+	timeCommitment?: string | null;
+	time_commitment?: string | null;
+	duration?: string | null;
+	deadline?: Date | string | null;
+	skillLevel?: string | null;
+	skill_level?: string | null;
+	intendedOutcome?: string | null;
+	intended_outcome?: string | null;
+	quantity?: string | null;
+}): number {
 	const optional: (string | Date | null)[] = [
-		request.modality,
-		request.help_type,
-		request.location,
-		request.time_commitment,
-		request.duration,
-		request.deadline,
-		request.skill_level,
-		request.intended_outcome,
-		request.quantity,
+		request.modality ?? null,
+		request.helpType ?? request.help_type ?? null,
+		request.location ?? null,
+		request.timeCommitment ?? request.time_commitment ?? null,
+		request.duration ?? null,
+		request.deadline ? new Date(request.deadline) : null,
+		request.skillLevel ?? request.skill_level ?? null,
+		request.intendedOutcome ?? request.intended_outcome ?? null,
+		request.quantity ?? null,
 	];
 	const filled = optional.filter((value) => {
 		if (value === null || value === undefined) return false;
@@ -237,126 +287,178 @@ export function totalScore(breakdown: FactorBreakdown): number {
 export const MAX_CANDIDATES = 200;
 
 export async function recomputeMatches(
-	sql: Sql,
+	dbOrSql: Db | Sql,
 	requestId: string,
 	options: { now?: () => Date } = {},
 ): Promise<MatchResult[]> {
+	const db = resolveDb(dbOrSql);
 	const now = options.now?.() ?? new Date();
 
-	const requestRows = await sql<RequestRow[]>`
-		SELECT id, author_id, category_id, modality, help_type, location, title, goal,
-			barrier, help_needed, time_commitment, duration, deadline, skill_level,
-			intended_outcome, quantity
-		FROM requests WHERE id = ${requestId}
-	`;
+	const requestRows = await db
+		.select({
+			id: requests.id,
+			authorId: requests.authorId,
+			categoryId: requests.categoryId,
+			modality: requests.modality,
+			helpType: requests.helpType,
+			location: requests.location,
+			title: requests.title,
+			goal: requests.goal,
+			barrier: requests.barrier,
+			helpNeeded: requests.helpNeeded,
+			timeCommitment: requests.timeCommitment,
+			duration: requests.duration,
+			deadline: requests.deadline,
+			skillLevel: requests.skillLevel,
+			intendedOutcome: requests.intendedOutcome,
+			quantity: requests.quantity,
+		})
+		.from(requests)
+		.where(eq(requests.id, requestId))
+		.limit(1);
+
 	const request = requestRows[0];
 	if (!request) return [];
-	if (request.category_id === null) {
-		await sql`DELETE FROM request_matches WHERE request_id = ${requestId} AND notified_at IS NULL`;
+	if (request.categoryId === null) {
+		await db
+			.delete(requestMatches)
+			.where(and(eq(requestMatches.requestId, requestId), isNull(requestMatches.notifiedAt)));
 		return [];
 	}
-	const categoryId = request.category_id;
+	const categoryId = request.categoryId;
 
-	const skillRows = await sql<{ id: number }[]>`
-		SELECT id FROM skills WHERE category_id = ${categoryId} AND retired_at IS NULL
-	`;
+	const skillRows = await db
+		.select({ id: skills.id })
+		.from(skills)
+		.where(and(eq(skills.categoryId, categoryId), isNull(skills.retiredAt)));
 	const skillIds = skillRows.map((row) => row.id);
 
-	let capabilities: CapabilityRow[];
-	if (skillIds.length > 0) {
-		capabilities = await sql<CapabilityRow[]>`
-			SELECT cc.user_id, cc.category_id, cc.skill_id, cc.modality, cc.location
-			FROM contributor_capabilities cc
-			JOIN users u ON u.id = cc.user_id
-			WHERE (cc.category_id = ${categoryId} OR cc.skill_id = ANY(${skillIds}::int[]))
-				AND cc.user_id <> ${request.author_id}
-				AND u.status = 'active' AND u.deleted_at IS NULL
-			LIMIT 1000
-		`;
-	} else {
-		capabilities = await sql<CapabilityRow[]>`
-			SELECT cc.user_id, cc.category_id, cc.skill_id, cc.modality, cc.location
-			FROM contributor_capabilities cc
-			JOIN users u ON u.id = cc.user_id
-			WHERE cc.category_id = ${categoryId}
-				AND cc.user_id <> ${request.author_id}
-				AND u.status = 'active' AND u.deleted_at IS NULL
-			LIMIT 1000
-		`;
-	}
+	const capabilityFilter =
+		skillIds.length > 0
+			? or(
+					eq(contributorCapabilities.categoryId, categoryId),
+					inArray(contributorCapabilities.skillId, skillIds),
+				)
+			: eq(contributorCapabilities.categoryId, categoryId);
+
+	const capabilities = await db
+		.select({
+			userId: contributorCapabilities.userId,
+			categoryId: contributorCapabilities.categoryId,
+			skillId: contributorCapabilities.skillId,
+			modality: contributorCapabilities.modality,
+			location: contributorCapabilities.location,
+		})
+		.from(contributorCapabilities)
+		.innerJoin(users, eq(users.id, contributorCapabilities.userId))
+		.where(
+			and(
+				capabilityFilter,
+				ne(contributorCapabilities.userId, request.authorId),
+				eq(users.status, 'active'),
+				isNull(users.deletedAt),
+			),
+		)
+		.limit(1000);
 
 	if (capabilities.length === 0) {
-		await sql`DELETE FROM request_matches WHERE request_id = ${requestId} AND notified_at IS NULL`;
+		await db
+			.delete(requestMatches)
+			.where(and(eq(requestMatches.requestId, requestId), isNull(requestMatches.notifiedAt)));
 		return [];
 	}
 
 	const byUser = new Map<string, CapabilityRow[]>();
 	for (const cap of capabilities) {
-		const list = byUser.get(cap.user_id) ?? [];
+		const list = byUser.get(cap.userId) ?? [];
 		list.push(cap);
-		byUser.set(cap.user_id, list);
+		byUser.set(cap.userId, list);
 	}
 	const userIds = [...byUser.keys()].slice(0, MAX_CANDIDATES);
 	const skillIdSet = new Set(skillIds);
 
 	const prefsRows =
 		userIds.length > 0
-			? await sql<PrefsRow[]>`
-				SELECT user_id, notify_new_matches, notify_remote, notify_local,
-					notify_resource_lending, notify_mentorship
-				FROM notification_preferences WHERE user_id = ANY(${userIds}::uuid[])
-			`
+			? await db
+					.select({
+						userId: notificationPreferences.userId,
+						notifyNewMatches: notificationPreferences.notifyNewMatches,
+						notifyRemote: notificationPreferences.notifyRemote,
+						notifyLocal: notificationPreferences.notifyLocal,
+						notifyResourceLending: notificationPreferences.notifyResourceLending,
+						notifyMentorship: notificationPreferences.notifyMentorship,
+					})
+					.from(notificationPreferences)
+					.where(inArray(notificationPreferences.userId, userIds))
 			: [];
-	const prefsByUser = new Map(prefsRows.map((row) => [row.user_id, row]));
+	const prefsByUser = new Map(prefsRows.map((row) => [row.userId, row]));
 
 	const completedRows =
 		userIds.length > 0
-			? await sql<{ contributor_id: string; completed: number }[]>`
-				SELECT contributor_id, count(*)::int AS completed
-				FROM contributions
-				WHERE contributor_id = ANY(${userIds}::uuid[]) AND status = 'completed'
-				GROUP BY contributor_id
-			`
+			? await db
+					.select({
+						contributorId: contributions.contributorId,
+						completed: sql<number>`count(*)::int`,
+					})
+					.from(contributions)
+					.where(
+						and(
+							inArray(contributions.contributorId, userIds),
+							eq(contributions.status, 'completed'),
+						),
+					)
+					.groupBy(contributions.contributorId)
 			: [];
-	const completedByUser = new Map(completedRows.map((row) => [row.contributor_id, row.completed]));
+	const completedByUser = new Map(completedRows.map((row) => [row.contributorId, row.completed]));
 
 	const confirmationRows =
 		userIds.length > 0
-			? await sql<{ contributor_id: string; total: number; helpful: number }[]>`
-				SELECT c.contributor_id,
-					count(*)::int AS total,
-					count(*) FILTER (WHERE oc.response = ANY(${HELPFUL_RESPONSES}::outcome_response[]))::int AS helpful
-				FROM outcome_confirmations oc
-				JOIN contributions c ON c.id = oc.contribution_id
-				WHERE c.contributor_id = ANY(${userIds}::uuid[])
-				GROUP BY c.contributor_id
-			`
+			? await db
+					.select({
+						contributorId: contributions.contributorId,
+						total: sql<number>`count(*)::int`,
+						helpful: sql<number>`count(*) FILTER (WHERE ${outcomeConfirmations.response} = ANY(ARRAY['yes_significantly', 'yes_somewhat']::outcome_response[]))::int`,
+					})
+					.from(outcomeConfirmations)
+					.innerJoin(contributions, eq(contributions.id, outcomeConfirmations.contributionId))
+					.where(inArray(contributions.contributorId, userIds))
+					.groupBy(contributions.contributorId)
 			: [];
 	const confirmationsByUser = new Map(
-		confirmationRows.map((row) => [row.contributor_id, { helpful: row.helpful, total: row.total }]),
+		confirmationRows.map((row) => [row.contributorId, { helpful: row.helpful, total: row.total }]),
 	);
 
 	const windowStart = new Date(now.getTime() - FATIGUE_WINDOW_HOURS * 3600 * 1000);
 	const recentRows =
 		userIds.length > 0
-			? await sql<{ contributor_id: string; recent: number }[]>`
-				SELECT contributor_id, count(*)::int AS recent
-				FROM request_matches
-				WHERE contributor_id = ANY(${userIds}::uuid[])
-					AND request_id <> ${requestId}
-					AND created_at > ${windowStart}
-				GROUP BY contributor_id
-			`
+			? await db
+					.select({
+						contributorId: requestMatches.contributorId,
+						recent: sql<number>`count(*)::int`,
+					})
+					.from(requestMatches)
+					.where(
+						and(
+							inArray(requestMatches.contributorId, userIds),
+							ne(requestMatches.requestId, requestId),
+							gt(requestMatches.createdAt, windowStart),
+						),
+					)
+					.groupBy(requestMatches.contributorId)
 			: [];
-	const recentByUser = new Map(recentRows.map((row) => [row.contributor_id, row.recent]));
+	const recentByUser = new Map(recentRows.map((row) => [row.contributorId, row.recent]));
 
 	const profileRows =
 		userIds.length > 0
-			? await sql<{ user_id: string; location: string | null }[]>`
-				SELECT user_id, location FROM profiles WHERE user_id = ANY(${userIds}::uuid[])
-			`
+			? await db
+					.select({
+						userId: profiles.userId,
+						location: profiles.location,
+					})
+					.from(profiles)
+					.where(inArray(profiles.userId, userIds))
 			: [];
-	const profileLocationByUser = new Map(profileRows.map((row) => [row.user_id, row.location]));
+	const profileLocationByUser = new Map(profileRows.map((row) => [row.userId, row.location]));
 
 	const requiresLocation = requestRequiresLocation(request);
 	const quality = requestQualityScore(request);
@@ -365,14 +467,12 @@ export async function recomputeMatches(
 	for (const userId of userIds) {
 		if (!passesPreferencesGate(request, prefsByUser.get(userId))) continue;
 		const caps = (byUser.get(userId) ?? []).sort((a, b) => {
-			const sa = a.skill_id ?? -1;
-			const sb = b.skill_id ?? -1;
+			const sa = a.skillId ?? -1;
+			const sb = b.skillId ?? -1;
 			if (sa !== sb) return sa - sb;
-			return (a.category_id ?? -1) - (b.category_id ?? -1);
+			return (a.categoryId ?? -1) - (b.categoryId ?? -1);
 		});
-		const hasSkillOverlap = caps.some(
-			(cap) => cap.skill_id !== null && skillIdSet.has(cap.skill_id),
-		);
+		const hasSkillOverlap = caps.some((cap) => cap.skillId !== null && skillIdSet.has(cap.skillId));
 		const breakdown: FactorBreakdown = {
 			capability_match: capabilityScore(hasSkillOverlap, caps.length),
 			modality_fit: Math.max(...caps.map((cap) => modalityFit(request.modality, cap.modality))),
@@ -403,49 +503,63 @@ export async function recomputeMatches(
 	const ranked: MatchResult[] = scored.map((row, index) => ({ ...row, rank: index + 1 }));
 
 	if (ranked.length === 0) {
-		await sql`DELETE FROM request_matches WHERE request_id = ${requestId} AND notified_at IS NULL`;
+		await db
+			.delete(requestMatches)
+			.where(and(eq(requestMatches.requestId, requestId), isNull(requestMatches.notifiedAt)));
 		return [];
 	}
 
 	const keepContributorIds = ranked.map((r) => r.contributorId);
 	const rowsToUpsert = ranked.map((row) => ({
-		request_id: requestId,
-		contributor_id: row.contributorId,
-		score: row.totalScore,
-		reasons: sql.json({
+		requestId,
+		contributorId: row.contributorId,
+		score: String(row.totalScore),
+		reasons: {
 			total_score: row.totalScore,
 			rank: row.rank,
 			weights: { ...MATCH_WEIGHTS },
 			factor_breakdown: { ...row.factorBreakdown },
-		}),
+		},
 	}));
 
-	await sql.begin(async (tx) => {
-		await tx`
-			INSERT INTO request_matches ${tx(rowsToUpsert, 'request_id', 'contributor_id', 'score', 'reasons')}
-			ON CONFLICT (request_id, contributor_id)
-			DO UPDATE SET
-				score = EXCLUDED.score,
-				reasons = EXCLUDED.reasons
-		`;
-		await tx`
-			DELETE FROM request_matches
-			WHERE request_id = ${requestId}
-				AND NOT (contributor_id = ANY(${keepContributorIds}::uuid[]))
-				AND notified_at IS NULL
-		`;
+	await db.transaction(async (tx) => {
+		await tx
+			.insert(requestMatches)
+			.values(rowsToUpsert)
+			.onConflictDoUpdate({
+				target: [requestMatches.requestId, requestMatches.contributorId],
+				set: {
+					score: sql`excluded.score`,
+					reasons: sql`excluded.reasons`,
+				},
+			});
+		await tx
+			.delete(requestMatches)
+			.where(
+				and(
+					eq(requestMatches.requestId, requestId),
+					notInArray(requestMatches.contributorId, keepContributorIds),
+					isNull(requestMatches.notifiedAt),
+				),
+			);
 	});
 
 	return ranked;
 }
 
 /** Read stored matches back under the issue's `total_score`/`rank`/`factor_breakdown` names. */
-export async function readMatches(sql: Sql, requestId: string): Promise<MatchResult[]> {
-	const rows = await sql<{ contributor_id: string; score: string; reasons: unknown }[]>`
-		SELECT contributor_id, score::text AS score, reasons
-		FROM request_matches WHERE request_id = ${requestId}
-		ORDER BY score DESC, contributor_id ASC
-	`;
+export async function readMatches(dbOrSql: Db | Sql, requestId: string): Promise<MatchResult[]> {
+	const db = resolveDb(dbOrSql);
+	const rows = await db
+		.select({
+			contributorId: requestMatches.contributorId,
+			score: requestMatches.score,
+			reasons: requestMatches.reasons,
+		})
+		.from(requestMatches)
+		.where(eq(requestMatches.requestId, requestId))
+		.orderBy(desc(requestMatches.score), asc(requestMatches.contributorId));
+
 	return rows.map((row, index) => {
 		const reasons = (row.reasons ?? {}) as {
 			total_score?: number;
@@ -453,7 +567,7 @@ export async function readMatches(sql: Sql, requestId: string): Promise<MatchRes
 			factor_breakdown?: FactorBreakdown;
 		};
 		return {
-			contributorId: row.contributor_id,
+			contributorId: row.contributorId,
 			totalScore: reasons.total_score ?? Number(row.score),
 			rank: reasons.rank ?? index + 1,
 			factorBreakdown:
@@ -477,7 +591,11 @@ export interface InternalMatchingRouterOptions {
 }
 
 /** Internal read model for the notification dispatcher (#13) and debugging. */
-export function createInternalMatchingRouter(sql: Sql, options: InternalMatchingRouterOptions) {
+export function createInternalMatchingRouter(
+	dbOrSql: Db | Sql,
+	options: InternalMatchingRouterOptions,
+) {
+	const db = resolveDb(dbOrSql);
 	if (options.findUserById && !options.jwtSecret) {
 		throw new Error('jwtSecret is required when auth is enabled in createInternalMatchingRouter');
 	}
@@ -505,12 +623,16 @@ export function createInternalMatchingRouter(sql: Sql, options: InternalMatching
 					return { error: 'ADMIN_ACCESS_REQUIRED', message: 'Admin access required' };
 				}
 			}
-			const exists = await sql<{ id: string }[]>`SELECT id FROM requests WHERE id = ${params.id}`;
+			const exists = await db
+				.select({ id: requests.id })
+				.from(requests)
+				.where(eq(requests.id, params.id))
+				.limit(1);
 			if (!exists[0]) {
 				set.status = 404;
 				return { error: 'NOT_FOUND', message: 'Request not found' };
 			}
-			const matches = await readMatches(sql, params.id);
+			const matches = await readMatches(db, params.id);
 			return {
 				requestId: params.id,
 				matches: matches.map((match) => ({

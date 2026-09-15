@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
 	createDraftFn,
 	getCategoriesFn,
+	getDraftFn,
 	getPreviewFn,
 	publishRequestFn,
 	updateDraftFn,
@@ -16,25 +17,36 @@ import { TextStep } from './text-step';
 import type { Category, PreviewData, WizardData, WizardStep } from './types';
 import { INITIAL_WIZARD_DATA, WIZARD_STEPS } from './types';
 
-export function RequestWizard() {
+interface RequestWizardProps {
+	initialStep?: string;
+	initialDraftId?: string;
+}
+
+export function RequestWizard({ initialStep, initialDraftId }: RequestWizardProps) {
 	const navigate = useNavigate();
 	const fetchCategories = useServerFn(getCategoriesFn);
 	const createDraft = useServerFn(createDraftFn);
 	const updateDraft = useServerFn(updateDraftFn);
 	const fetchPreview = useServerFn(getPreviewFn);
 	const publish = useServerFn(publishRequestFn);
+	const fetchDraft = useServerFn(getDraftFn);
 
-	const [currentStep, setCurrentStep] = useState<WizardStep>('category');
+	const [currentStep, setCurrentStep] = useState<WizardStep>(() => {
+		const validStep = WIZARD_STEPS.find((s) => s.key === initialStep);
+		return validStep ? validStep.key : 'category';
+	});
 	const [completedSteps, setCompletedSteps] = useState<Set<WizardStep>>(new Set());
 	const [data, setData] = useState<WizardData>(INITIAL_WIZARD_DATA);
 	const [categories, setCategories] = useState<Category[] | null>(null);
 	const [categoriesError, setCategoriesError] = useState<string | null>(null);
-	const [draftId, setDraftId] = useState<string | null>(null);
+	const [draftId, setDraftId] = useState<string | null>(initialDraftId ?? null);
 	const [preview, setPreview] = useState<PreviewData | null>(null);
 	const [publishErrors, setPublishErrors] = useState<Record<string, string> | null>(null);
 	const [isPublishing, setIsPublishing] = useState(false);
 	const [qualityHints, setQualityHints] = useState<string[]>([]);
-	const draftIdRef = useRef<string | null>(null);
+	const [published, setPublished] = useState(false);
+	const draftIdRef = useRef<string | null>(initialDraftId ?? null);
+	const [draftLoaded, setDraftLoaded] = useState(false);
 
 	const loadCategories = useCallback(async () => {
 		setCategoriesError(null);
@@ -49,6 +61,59 @@ export function RequestWizard() {
 	useEffect(() => {
 		loadCategories();
 	}, [loadCategories]);
+
+	const loadDraft = useCallback(
+		async (id: string) => {
+			try {
+				const draft = await fetchDraft({ data: id });
+				setData({
+					title: draft.title ?? '',
+					goal: draft.goal ?? '',
+					barrier: draft.barrier ?? '',
+					helpNeeded: draft.helpNeeded ?? '',
+					categoryId: draft.categoryId ?? null,
+					modality: draft.modality ?? null,
+					helpType: draft.helpType ?? null,
+					location: draft.location ?? null,
+					deadline: draft.deadline ?? null,
+					timeCommitment: draft.timeCommitment ?? null,
+					duration: draft.duration ?? null,
+					skillLevel: draft.skillLevel ?? null,
+					quantity: draft.quantity ?? null,
+					intendedOutcome: draft.intendedOutcome ?? null,
+				});
+				setQualityHints(draft.qualityHints ?? []);
+			} catch {
+				// Draft not found or inaccessible
+			} finally {
+				setDraftLoaded(true);
+			}
+		},
+		[fetchDraft],
+	);
+
+	useEffect(() => {
+		if (initialDraftId && !draftLoaded) {
+			loadDraft(initialDraftId);
+		} else {
+			setDraftLoaded(true);
+		}
+	}, [initialDraftId, draftLoaded, loadDraft]);
+
+	const updateStepInUrl = useCallback(
+		(step: WizardStep) => {
+			setCurrentStep(step);
+			navigate({
+				search: (prev) => ({
+					...prev,
+					step,
+					...(draftIdRef.current ? { draft: draftIdRef.current } : {}),
+				}),
+				replace: true,
+			});
+		},
+		[navigate],
+	);
 
 	const persistDraft = useCallback(
 		async (patch: Partial<WizardData>) => {
@@ -69,12 +134,16 @@ export function RequestWizard() {
 					setDraftId(created.id);
 					draftIdRef.current = created.id;
 					setQualityHints(created.qualityHints ?? []);
+					navigate({
+						search: (prev) => ({ ...prev, draft: created.id }),
+						replace: true,
+					});
 				}
 			} catch {
 				// Silently fail - draft save is best-effort
 			}
 		},
-		[createDraft, updateDraft],
+		[createDraft, updateDraft, navigate],
 	);
 
 	const updateData = useCallback(
@@ -114,16 +183,16 @@ export function RequestWizard() {
 		setCompletedSteps((prev) => new Set([...prev, currentStep]));
 		const nextIndex = currentIndex + 1;
 		if (nextIndex < WIZARD_STEPS.length) {
-			setCurrentStep(WIZARD_STEPS[nextIndex].key);
+			updateStepInUrl(WIZARD_STEPS[nextIndex].key);
 		}
-	}, [canAdvance, currentStep, currentIndex]);
+	}, [canAdvance, currentStep, currentIndex, updateStepInUrl]);
 
 	const goBack = useCallback(() => {
 		const prevIndex = currentIndex - 1;
 		if (prevIndex >= 0) {
-			setCurrentStep(WIZARD_STEPS[prevIndex].key);
+			updateStepInUrl(WIZARD_STEPS[prevIndex].key);
 		}
-	}, [currentIndex]);
+	}, [currentIndex, updateStepInUrl]);
 
 	const handlePublish = useCallback(async () => {
 		if (!draftId) return;
@@ -131,7 +200,10 @@ export function RequestWizard() {
 		setPublishErrors(null);
 		try {
 			await publish({ data: draftId });
-			navigate({ to: '/requests/$requestId', params: { requestId: draftId } });
+			setPublished(true);
+			setTimeout(() => {
+				navigate({ to: '/requests/$requestId', params: { requestId: draftId } });
+			}, 1500);
 		} catch (error) {
 			const message = error instanceof Error ? error.message : 'Could not publish';
 			try {
@@ -181,6 +253,12 @@ export function RequestWizard() {
 
 	return (
 		<div className="request-wizard">
+			{published && (
+				<div role="status" className="success-toast">
+					Request published!
+				</div>
+			)}
+
 			<ProgressIndicator currentStep={currentStep} completedSteps={completedSteps} />
 
 			{currentStep === 'category' && (
@@ -225,7 +303,7 @@ export function RequestWizard() {
 			)}
 
 			{currentStep === 'optionalDetails' && (
-				<OptionalDetailsStep data={data} onUpdate={updateData} />
+				<OptionalDetailsStep data={data} onUpdate={updateData} categoryId={data.categoryId} />
 			)}
 
 			{currentStep === 'preview' && preview && (

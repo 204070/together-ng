@@ -197,6 +197,22 @@ export const updateDraftFn = createServerFn({ method: 'POST' })
 		return res.data;
 	});
 
+export const getDraftFn = createServerFn({ method: 'GET' })
+	.validator((input: unknown) => {
+		if (typeof input !== 'string' || input === '') {
+			throw new Error('Request id is required');
+		}
+		return input;
+	})
+	.handler(async ({ data: id }) => {
+		const authorization = await incomingAuth();
+		if (authorization === undefined) throw new Error('Sign in to view a draft');
+		const api = createApiClient(await apiBaseUrl());
+		const res = await api.requests({ id }).get({ headers: { authorization } });
+		if (res.error !== null || res.data === null) throw new Error('Draft not found');
+		return res.data;
+	});
+
 export const getPreviewFn = createServerFn({ method: 'GET' })
 	.validator((input: unknown) => {
 		if (typeof input !== 'string' || input === '') {

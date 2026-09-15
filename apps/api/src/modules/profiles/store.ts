@@ -51,11 +51,14 @@ export class ProfileStore {
 				areasOfInterest: input.areasOfInterest,
 				skills: input.skills,
 				resources: input.resources,
-				contributionAvailability: input.contributionAvailability as any,
+				contributionAvailability:
+					input.contributionAvailability as Profile['contributionAvailability'],
 				exactAddress: input.exactAddress,
 			})
 			.returning();
-		return rows[0]!;
+		const row = rows[0];
+		if (!row) throw new Error('Failed to create profile');
+		return row;
 	}
 
 	async updateReplace(
@@ -89,13 +92,16 @@ export class ProfileStore {
 				areasOfInterest: input.areasOfInterest,
 				skills: input.skills,
 				resources: input.resources,
-				contributionAvailability: input.contributionAvailability as any,
+				contributionAvailability:
+					input.contributionAvailability as Profile['contributionAvailability'],
 				exactAddress: input.exactAddress,
 				updatedAt: new Date(),
 			})
 			.where(eq(profiles.id, id))
 			.returning();
-		return rows[0]!;
+		const row = rows[0];
+		if (!row) throw new Error('Failed to update profile');
+		return row;
 	}
 
 	async updatePatch(
@@ -161,7 +167,9 @@ export class ProfileStore {
 			.set({ profilePhotoKey: key, updatedAt: new Date() })
 			.where(eq(profiles.id, id))
 			.returning();
-		return rows[0]!;
+		const row = rows[0];
+		if (!row) throw new Error('Failed to update photo key');
+		return row;
 	}
 }
 

@@ -53,7 +53,7 @@ export function createRequestServices(
 	const jwtSecret = env.jwtSecret ?? configEnv.JWT_SECRET;
 	const now = deps.now ?? env.now ?? (() => new Date());
 	const sql = (deps.sql ?? env.sql ?? createClient(databaseUrl)) as Sql;
-	const db = deps.db ?? createDb(databaseUrl);
+	const db = deps.db ?? createDb(sql);
 	const store = new RequestStore(db);
 
 	let limiter: AsyncRateLimiter;

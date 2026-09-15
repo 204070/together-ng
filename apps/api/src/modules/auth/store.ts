@@ -42,7 +42,9 @@ export class AuthStore {
 				phone: input.phone,
 			})
 			.returning();
-		return rows[0]!;
+		const row = rows[0];
+		if (!row) throw new Error('Failed to insert user');
+		return row;
 	}
 
 	async setPhoneVerified(userId: string): Promise<void> {
@@ -80,7 +82,9 @@ export class AuthStore {
 				expiresAt: input.expiresAt,
 			})
 			.returning();
-		return rows[0]!;
+		const row = rows[0];
+		if (!row) throw new Error('Failed to insert OTP');
+		return row;
 	}
 
 	async findOtpForPhone(phone: string): Promise<OtpToken | undefined> {
@@ -117,7 +121,9 @@ export class AuthStore {
 				expiresAt: input.expiresAt,
 			})
 			.returning();
-		return rows[0]!;
+		const row = rows[0];
+		if (!row) throw new Error('Failed to insert session');
+		return row;
 	}
 
 	async findSessionByRefreshHash(refreshHash: string): Promise<Session | undefined> {

@@ -46,18 +46,20 @@ export class RequestStore {
 				barrier,
 				helpNeeded,
 				categoryId,
-				modality: modality as any,
-				helpType: helpType as any,
+				modality: modality as Request['modality'],
+				helpType: helpType as Request['helpType'],
 				location,
 				timeCommitment,
 				duration,
 				deadline,
-				skillLevel: skillLevel as any,
+				skillLevel: skillLevel as Request['skillLevel'],
 				intendedOutcome,
 				quantity,
 			})
 			.returning();
-		return rows[0]!;
+		const row = rows[0];
+		if (!row) throw new Error('Failed to create request');
+		return row;
 	}
 
 	async findRequestById(id: string): Promise<Request | undefined> {
@@ -76,8 +78,10 @@ export class RequestStore {
 				patch.helpNeeded !== undefined ? (patch.helpNeeded as string) : existing.helpNeeded,
 			categoryId:
 				patch.categoryId !== undefined ? (patch.categoryId as number | null) : existing.categoryId,
-			modality: patch.modality !== undefined ? (patch.modality as any) : existing.modality,
-			helpType: patch.helpType !== undefined ? (patch.helpType as any) : existing.helpType,
+			modality:
+				patch.modality !== undefined ? (patch.modality as Request['modality']) : existing.modality,
+			helpType:
+				patch.helpType !== undefined ? (patch.helpType as Request['helpType']) : existing.helpType,
 			location:
 				patch.location !== undefined ? (patch.location as string | null) : existing.location,
 			timeCommitment:
@@ -92,7 +96,10 @@ export class RequestStore {
 						? new Date(patch.deadline as string)
 						: null
 					: existing.deadline,
-			skillLevel: patch.skillLevel !== undefined ? (patch.skillLevel as any) : existing.skillLevel,
+			skillLevel:
+				patch.skillLevel !== undefined
+					? (patch.skillLevel as Request['skillLevel'])
+					: existing.skillLevel,
 			intendedOutcome:
 				patch.intendedOutcome !== undefined
 					? (patch.intendedOutcome as string | null)
@@ -102,7 +109,7 @@ export class RequestStore {
 			updatedAt: new Date(),
 		};
 		const rows = await this.db.update(requests).set(next).where(eq(requests.id, id)).returning();
-		return rows[0]!;
+		return rows[0];
 	}
 
 	async publishRequest(id: string): Promise<Request | undefined> {
@@ -115,7 +122,7 @@ export class RequestStore {
 			})
 			.where(eq(requests.id, id))
 			.returning();
-		return rows[0]!;
+		return rows[0];
 	}
 
 	async addVote(userId: string, requestId: string): Promise<boolean> {

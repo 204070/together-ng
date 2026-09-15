@@ -19,6 +19,7 @@ export const users = pgTable(
 		phone: text('phone'),
 		phoneVerified: boolean('phone_verified').notNull().default(false),
 		passwordHash: text('password_hash').notNull(),
+		isAdmin: boolean('is_admin').notNull().default(false),
 		status: userStatus('status').notNull().default('active'),
 		lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

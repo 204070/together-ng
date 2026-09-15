@@ -2,6 +2,7 @@ import { loadEnv } from '@together/config';
 import { Elysia } from 'elysia';
 import { ValidationError } from 'elysia/error';
 import { HttpError } from './lib/errors';
+import { createAdminRouter } from './modules/admin/routes';
 import { createAuthRouter } from './modules/auth/routes';
 import { type AppEnv, createAuthServices } from './modules/auth/services';
 import { createFeedRouter } from './modules/feed';
@@ -53,6 +54,7 @@ export function makeApp(env: AppEnv = {}) {
 		})
 		.use(createAuthRouter(authServices))
 		.use(createFeedRouter(authServices))
+		.use(createAdminRouter(authServices))
 		.use(createProfileRouter(profileServices))
 		.use(createRequestRouter(requestServices))
 		.use(createInternalMatchingRouter(authServices.sql));

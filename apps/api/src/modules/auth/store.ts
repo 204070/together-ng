@@ -7,6 +7,7 @@ export interface UserRow {
 	phone: string | null;
 	phone_verified: boolean;
 	password_hash: string;
+	is_admin: boolean;
 	status: string;
 	last_login_at: Date | null;
 	created_at: Date;
@@ -39,7 +40,7 @@ export class AuthStore {
 
 	async findUserByEmail(email: string): Promise<UserRow | undefined> {
 		const rows = await this.sql<UserRow[]>`
-			SELECT id, email, email_verified, phone, phone_verified, password_hash, status,
+			SELECT id, email, email_verified, phone, phone_verified, password_hash, is_admin, status,
 				last_login_at, created_at, updated_at, deleted_at
 			FROM users
 			WHERE email = ${email}
@@ -49,7 +50,7 @@ export class AuthStore {
 
 	async findUserByPhone(phone: string): Promise<UserRow | undefined> {
 		const rows = await this.sql<UserRow[]>`
-			SELECT id, email, email_verified, phone, phone_verified, password_hash, status,
+			SELECT id, email, email_verified, phone, phone_verified, password_hash, is_admin, status,
 				last_login_at, created_at, updated_at, deleted_at
 			FROM users
 			WHERE phone = ${phone}
@@ -59,7 +60,7 @@ export class AuthStore {
 
 	async findUserById(id: string): Promise<UserRow | undefined> {
 		const rows = await this.sql<UserRow[]>`
-			SELECT id, email, email_verified, phone, phone_verified, password_hash, status,
+			SELECT id, email, email_verified, phone, phone_verified, password_hash, is_admin, status,
 				last_login_at, created_at, updated_at, deleted_at
 			FROM users
 			WHERE id = ${id}
@@ -75,7 +76,7 @@ export class AuthStore {
 		const rows = await this.sql<UserRow[]>`
 			INSERT INTO users (email, password_hash, phone)
 			VALUES (${input.email}, ${input.passwordHash}, ${input.phone})
-			RETURNING id, email, email_verified, phone, phone_verified, password_hash, status,
+			RETURNING id, email, email_verified, phone, phone_verified, password_hash, is_admin, status,
 				last_login_at, created_at, updated_at, deleted_at
 		`;
 		return rows[0] as UserRow;

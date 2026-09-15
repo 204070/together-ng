@@ -1,8 +1,9 @@
 {
 	"extends": "@together/config/tsconfig",
 	"compilerOptions": {
-		"outDir": "./dist",
-		"rootDir": "./src"
+		"jsx": "react-jsx",
+		"lib": ["ESNext", "DOM", "DOM.Iterable"],
+		"types": ["bun", "vite/client"]
 	},
-	"include": ["src"]
+	"include": ["src", "vite.config.ts", "vitest.config.ts"]
 }

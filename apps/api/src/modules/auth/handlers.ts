@@ -38,9 +38,13 @@ export function clientIpFrom(request: Request): string {
 
 export function uniqueViolationCode(error: unknown): string | undefined {
 	if (typeof error !== 'object' || error === null) return undefined;
-	const candidate = error as { code?: unknown; constraint_name?: unknown };
-	if (candidate.code !== '23505') return undefined;
-	return typeof candidate.constraint_name === 'string' ? candidate.constraint_name : undefined;
+	const candidate = error as { code?: unknown; constraint_name?: unknown; cause?: unknown };
+	let target = candidate;
+	if (candidate.code === undefined && typeof candidate.cause === 'object' && candidate.cause !== null) {
+		target = candidate.cause as { code?: unknown; constraint_name?: unknown };
+	}
+	if (target.code !== '23505') return undefined;
+	return typeof target.constraint_name === 'string' ? target.constraint_name : undefined;
 }
 
 let dummyPasswordHashPromise: Promise<string> | undefined;
@@ -128,7 +132,7 @@ export async function sendOtpToPhone(services: AuthServices, phone: string): Pro
 	await issueOtp(services, {
 		userId: user.id,
 		phone,
-		context: user.phone_verified ? 'login' : 'verify',
+		context: user.phoneVerified ? 'login' : 'verify',
 	});
 }
 
@@ -140,14 +144,14 @@ export async function consumeOtp(
 	const otp = await services.store.findOtpForPhone(phone);
 	if (otp === undefined) throw invalidOtpError();
 	if (otp.attempts >= 5) throw otpAttemptsExceededError();
-	if (otp.used_at !== null) throw otpAlreadyUsedError();
-	if (otp.expires_at.getTime() <= services.now().getTime()) throw otpExpiredError();
-	if (!(await Bun.password.verify(code, otp.code_hash))) {
+	if (otp.usedAt !== null) throw otpAlreadyUsedError();
+	if (otp.expiresAt.getTime() <= services.now().getTime()) throw otpExpiredError();
+	if (!(await Bun.password.verify(code, otp.codeHash))) {
 		await services.store.incrementOtpAttempts(otp.id);
 		throw invalidOtpError();
 	}
 	await services.store.markOtpUsed(otp.id);
-	return { userId: otp.user_id, context: otp.context };
+	return { userId: otp.userId, context: otp.context as OtpContext };
 }
 
 export async function verifyOtp(
@@ -193,10 +197,10 @@ export async function loginWithPassword(
 		await Bun.password.verify(input.password as string, await dummyPasswordHash());
 		throw invalidCredentialsError();
 	}
-	if (user.status !== 'active' || user.deleted_at !== null) throw invalidCredentialsError();
-	if (!(await Bun.password.verify(input.password as string, user.password_hash)))
+	if (user.status !== 'active' || user.deletedAt !== null) throw invalidCredentialsError();
+	if (!(await Bun.password.verify(input.password as string, user.passwordHash)))
 		throw invalidCredentialsError();
-	if (!user.phone_verified) throw phoneNotVerifiedError();
+	if (!user.phoneVerified) throw phoneNotVerifiedError();
 
 	await services.store.touchLastLogin(user.id);
 	return issueSession(services, user, signAccessToken);
@@ -216,8 +220,8 @@ export async function loginWithOtp(
 
 	const user = await services.store.findUserByPhone(phone);
 	if (user === undefined) throw phoneNotVerifiedError();
-	if (user.status !== 'active' || user.deleted_at !== null) throw invalidCredentialsError();
-	if (!user.phone_verified) throw phoneNotVerifiedError();
+	if (user.status !== 'active' || user.deletedAt !== null) throw invalidCredentialsError();
+	if (!user.phoneVerified) throw phoneNotVerifiedError();
 
 	await consumeOtp(services, phone, input.code as string);
 	await services.store.touchLastLogin(user.id);
@@ -232,11 +236,11 @@ export async function refreshWithToken(
 	const refreshHash = hashRefreshToken(rawRefreshToken);
 	const session = await services.store.findSessionByRefreshHash(refreshHash);
 	if (session === undefined) throw unauthorizedError();
-	if (session.expires_at.getTime() <= services.now().getTime()) {
+	if (session.expiresAt.getTime() <= services.now().getTime()) {
 		await services.store.deleteSessionById(session.id);
 		throw unauthorizedError();
 	}
-	const user = await services.store.findUserById(session.user_id);
+	const user = await services.store.findUserById(session.userId);
 	if (user === undefined || user.status !== 'active') {
 		await services.store.deleteSessionById(session.id);
 		throw unauthorizedError();

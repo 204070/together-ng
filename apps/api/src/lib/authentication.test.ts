@@ -19,7 +19,7 @@ describe('authentication boundary', () => {
 		const actor = await requireActiveActor(
 			{ authorization: 'Bearer token' },
 			{ verify: async () => ({ sub: 'user-1', sid: 'session-1' }) },
-			{ findUserById: async () => ({ status: 'active', deleted_at: null }) },
+			{ findUserById: async () => ({ status: 'active', deletedAt: null }) },
 		);
 		expect(actor).toEqual({ userId: 'user-1', sessionId: 'session-1' });
 	});
@@ -29,7 +29,7 @@ describe('authentication boundary', () => {
 			await requireActiveActor(
 				{ authorization: 'Bearer token' },
 				{ verify: async () => ({ sub: 'user-1', sid: 'session-1' }) },
-				{ findUserById: async () => ({ status: 'suspended', deleted_at: null }) },
+				{ findUserById: async () => ({ status: 'suspended', deletedAt: null }) },
 			);
 			expect.unreachable();
 		} catch (error) {
@@ -42,7 +42,7 @@ describe('authentication boundary', () => {
 		const userEntity = {
 			id: 'user-1',
 			status: 'active',
-			deleted_at: null,
+			deletedAt: null,
 			email: 'test@example.com',
 		};
 		const result = await requireActiveUser(
@@ -72,7 +72,7 @@ describe('authentication boundary', () => {
 				createAuthGuard(
 					{
 						findUserById: async (id) =>
-							id === 'user-guard' ? { status: 'active', deleted_at: null } : undefined,
+							id === 'user-guard' ? { status: 'active', deletedAt: null } : undefined,
 					},
 					secret,
 				),

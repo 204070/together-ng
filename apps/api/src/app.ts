@@ -8,6 +8,7 @@ import { createAdminRouter } from './modules/admin/routes';
 import { createAuthRouter } from './modules/auth/routes';
 import { type AppEnv, createAuthServices } from './modules/auth/services';
 import { createFeedRouter } from './modules/feed';
+import { createNotificationRouter } from './modules/notifications/routes';
 import { createProfileRouter } from './modules/profiles/routes';
 import { createProfileServices } from './modules/profiles/services';
 import { createRequestRouter } from './modules/requests/routes';
@@ -67,6 +68,15 @@ export function makeApp(env: AppEnv = {}) {
 		.use(createRequestRouter(requestServices))
 		.use(createVoteRouter(requestServices))
 		.use(createVoteWsRouter())
+		.use(
+			createNotificationRouter(
+				{ db },
+				{
+					findUserById: (id: string) => authServices.store.findUserById(id),
+					jwtSecret: authServices.jwtSecret,
+				},
+			),
+		)
 		.use(
 			createInternalMatchingRouter(db, {
 				findUserById: (id: string) => authServices.store.findUserById(id),

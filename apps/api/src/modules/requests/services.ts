@@ -17,6 +17,7 @@ export interface RequestEnv {
 	databaseUrl?: string;
 	jwtSecret?: string;
 	sql?: Sql;
+	db?: Db;
 	now?: () => Date;
 	redisUrl?: string;
 }

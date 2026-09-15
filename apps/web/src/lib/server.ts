@@ -157,6 +157,84 @@ export const createRequestFn = createServerFn({ method: 'POST' })
 		return res.data;
 	});
 
+export const getCategoriesFn = createServerFn({ method: 'GET' }).handler(async () => {
+	const api = createApiClient(await apiBaseUrl());
+	const res = await api.categories.get();
+	if (res.error !== null || res.data === null) throw new Error('Could not load categories');
+	return res.data;
+});
+
+export const createDraftFn = createServerFn({ method: 'POST' })
+	.validator((input: unknown) => {
+		const value = input as Record<string, unknown>;
+		return value;
+	})
+	.handler(async ({ data }) => {
+		const authorization = await incomingAuth();
+		if (authorization === undefined) throw new Error('Sign in to create a request');
+		const api = createApiClient(await apiBaseUrl());
+		const res = await api.requests.post(data as never, { headers: { authorization } });
+		if (res.error !== null || res.data === null) throw new Error('Could not create draft');
+		return res.data;
+	});
+
+export const updateDraftFn = createServerFn({ method: 'POST' })
+	.validator((input: unknown) => {
+		const value = input as { id?: unknown; patch?: unknown };
+		if (typeof value?.id !== 'string' || value.id === '') {
+			throw new Error('Request id is required');
+		}
+		return { id: value.id, patch: (value.patch as Record<string, unknown>) ?? {} };
+	})
+	.handler(async ({ data }) => {
+		const authorization = await incomingAuth();
+		if (authorization === undefined) throw new Error('Sign in to update a request');
+		const api = createApiClient(await apiBaseUrl());
+		const res = await api
+			.requests({ id: data.id })
+			.patch(data.patch, { headers: { authorization } });
+		if (res.error !== null || res.data === null) throw new Error('Could not update draft');
+		return res.data;
+	});
+
+export const getPreviewFn = createServerFn({ method: 'GET' })
+	.validator((input: unknown) => {
+		if (typeof input !== 'string' || input === '') {
+			throw new Error('Request id is required');
+		}
+		return input;
+	})
+	.handler(async ({ data: id }) => {
+		const authorization = await incomingAuth();
+		if (authorization === undefined) throw new Error('Sign in to preview a request');
+		const api = createApiClient(await apiBaseUrl());
+		const res = await api.requests({ id }).preview.get({ headers: { authorization } });
+		if (res.error !== null || res.data === null) throw new Error('Could not load preview');
+		return res.data;
+	});
+
+export const publishRequestFn = createServerFn({ method: 'POST' })
+	.validator((input: unknown) => {
+		if (typeof input !== 'string' || input === '') {
+			throw new Error('Request id is required');
+		}
+		return input;
+	})
+	.handler(async ({ data: id }) => {
+		const authorization = await incomingAuth();
+		if (authorization === undefined) throw new Error('Sign in to publish a request');
+		const api = createApiClient(await apiBaseUrl());
+		const res = await api.requests({ id }).publish.post(undefined, { headers: { authorization } });
+		if (res.error !== null || res.data === null) {
+			const errorData = res.error as { fields?: Record<string, string> } | null;
+			if (errorData?.fields) {
+				throw new Error(JSON.stringify({ fields: errorData.fields }));
+			}
+			throw new Error('Could not publish request');
+		}
+		return res.data;
+	});
+
 export const loginFn = createServerFn({ method: 'POST' })
 	.validator((input: unknown) => {
 		const value = input as { email?: unknown; password?: unknown };

@@ -19,5 +19,7 @@
 		"lint": "biome check .",
 		"typecheck": "tsc --noEmit",
 		"test": "bun test"
-	}
+	},
+	"main": "./src/app.ts",
+	"types": "./src/app.ts"
 }

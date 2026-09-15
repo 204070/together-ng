@@ -13,7 +13,7 @@ export interface JwtVerifier {
 
 export interface ActiveUser {
 	status: string;
-	deleted_at: Date | null;
+	deletedAt: Date | null;
 }
 
 export interface ActiveUserLookup<TUser extends ActiveUser = ActiveUser> {
@@ -58,7 +58,7 @@ export async function requireActiveUser<TUser extends ActiveUser>(
 	if (typeof sub !== 'string' || typeof sid !== 'string') throw unauthorizedError();
 
 	const user = await users.findUserById(sub);
-	if (user?.status !== 'active' || user.deleted_at !== null) throw unauthorizedError();
+	if (user?.status !== 'active' || user.deletedAt !== null) throw unauthorizedError();
 	return { actor: { userId: sub, sessionId: sid }, user };
 }
 

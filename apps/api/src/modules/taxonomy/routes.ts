@@ -1,3 +1,4 @@
+import { eq, isNull, categories, skills } from '@together/db';
 import { Category, Skill, Type } from '@together/schemas';
 import { Elysia } from 'elysia';
 import type { AuthServices } from '../auth/services';
@@ -10,13 +11,21 @@ export function createTaxonomyRouter(services: AuthServices) {
 		.get(
 			'/categories',
 			async () => {
-				const rows = await services.sql<{
-					id: number;
-					name: string;
-					slug: string;
-					description: string | null;
-				}>`SELECT id, name, slug, description FROM categories WHERE retired_at IS NULL ORDER BY name`;
-				return rows;
+				const rows = await services.db
+					.select()
+					.from(categories)
+					.where(isNull(categories.retiredAt))
+					.orderBy(categories.name);
+				return rows.map((r) => ({
+					id: r.id,
+					name: r.name,
+					slug: r.slug,
+					description: r.description,
+					parentId: r.parentId,
+					retiredAt: r.retiredAt ? r.retiredAt.toISOString() : null,
+					createdAt: r.createdAt.toISOString(),
+					updatedAt: r.updatedAt.toISOString(),
+				}));
 			},
 			{
 				response: { 200: CategoryList },
@@ -25,13 +34,20 @@ export function createTaxonomyRouter(services: AuthServices) {
 		.get(
 			'/categories/:id/skills',
 			async ({ params }) => {
-				const rows = await services.sql<{
-					id: number;
-					category_id: number;
-					name: string;
-					slug: string;
-				}>`SELECT id, category_id, name, slug FROM skills WHERE category_id = ${params.id} AND retired_at IS NULL ORDER BY name`;
-				return rows;
+				const rows = await services.db
+					.select()
+					.from(skills)
+					.where(eq(skills.categoryId, Number(params.id)) && isNull(skills.retiredAt))
+					.orderBy(skills.name);
+				return rows.map((r) => ({
+					id: r.id,
+					categoryId: r.categoryId,
+					name: r.name,
+					slug: r.slug,
+					retiredAt: r.retiredAt ? r.retiredAt.toISOString() : null,
+					createdAt: r.createdAt.toISOString(),
+					updatedAt: r.updatedAt.toISOString(),
+				}));
 			},
 			{
 				response: { 200: SkillList },

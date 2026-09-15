@@ -17,7 +17,7 @@ function profileExistsError(): HttpError {
 }
 
 function toPublic(row: ProfileRow, contributorSince: Date | null, storage: PhotoStorage) {
-	const photoKey = row.profile_photo_key;
+	const photoKey = row.profilePhotoKey;
 	const photoUrl =
 		photoKey === null
 			? null
@@ -26,25 +26,25 @@ function toPublic(row: ProfileRow, contributorSince: Date | null, storage: Photo
 				: storage.publicUrl(photoKey);
 	return {
 		id: row.id,
-		userId: row.user_id,
-		name: row.display_name,
+		userId: row.userId,
+		name: row.displayName,
 		photoUrl,
 		location: row.location ?? null,
 		description: row.bio ?? null,
-		areasOfInterest: (row.areas_of_interest as number[] | null) ?? [],
+		areasOfInterest: (row.areasOfInterest as number[] | null) ?? [],
 		skills: (row.skills as number[] | null) ?? [],
 		resources: (row.resources as string[] | null) ?? [],
-		contributionAvailability: (row.contribution_availability as unknown) ?? null,
+		contributionAvailability: (row.contributionAvailability as unknown) ?? null,
 		contributorSince: contributorSince ? contributorSince.toISOString() : null,
-		createdAt: row.created_at.toISOString(),
-		updatedAt: row.updated_at.toISOString(),
+		createdAt: row.createdAt.toISOString(),
+		updatedAt: row.updatedAt.toISOString(),
 	};
 }
 
 function toPrivate(row: ProfileRow, contributorSince: Date | null, storage: PhotoStorage) {
 	return {
 		...toPublic(row, contributorSince, storage),
-		exactAddress: row.exact_address ?? null,
+		exactAddress: row.exactAddress ?? null,
 	};
 }
 
@@ -172,7 +172,7 @@ export function createProfileRouter(services: ProfileServices) {
 				const { userId } = actor;
 				const row = await store.findById(params.id);
 				if (row === undefined) throw notFoundError();
-				if (row.user_id !== userId) throw forbiddenError();
+				if (row.userId !== userId) throw forbiddenError();
 				const input = mapReplaceBody(body as Record<string, unknown>);
 				const updated = await store.updateReplace(params.id, input);
 				const since = await store.contributorSince(userId);
@@ -190,7 +190,7 @@ export function createProfileRouter(services: ProfileServices) {
 				const { userId } = actor;
 				const row = await store.findById(params.id);
 				if (row === undefined) throw notFoundError();
-				if (row.user_id !== userId) throw forbiddenError();
+				if (row.userId !== userId) throw forbiddenError();
 				const patch = mapPatchBody(body as Record<string, unknown>);
 				const updated = await store.updatePatch(params.id, patch);
 				const since = await store.contributorSince(userId);
@@ -207,7 +207,7 @@ export function createProfileRouter(services: ProfileServices) {
 				const { userId } = actor;
 				const row = await store.findById(params.id);
 				if (row === undefined) throw notFoundError();
-				if (row.user_id !== userId) throw forbiddenError();
+				if (row.userId !== userId) throw forbiddenError();
 				const file = (body as { photo?: unknown }).photo as File | undefined;
 				if (!(file instanceof File)) {
 					throw new HttpError(
@@ -257,7 +257,7 @@ export function createProfileRouter(services: ProfileServices) {
 		async ({ params }) => {
 			const row = await store.findById(params.id);
 			if (row === undefined) throw notFoundError();
-			const since = await store.contributorSince(row.user_id);
+			const since = await store.contributorSince(row.userId);
 			return toPublic(row, since, storage);
 		},
 		{ params: t.Object({ id: t.String({ format: 'uuid' }) }) },

@@ -70,7 +70,7 @@ export function createVoteRouter(services: RequestServices) {
 					const row = await store.findRequestById(requestId);
 					if (!row) throw notFound();
 
-					if (row.author_id === userId) throw cannotVoteOnOwnRequest();
+					if (row.authorId === userId) throw cannotVoteOnOwnRequest();
 
 					if (!VOTEABLE_STATES.has(row.state)) {
 						throw votingNotAllowedInState(row.state);

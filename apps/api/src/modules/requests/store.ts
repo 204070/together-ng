@@ -1,44 +1,18 @@
-import type { Sql } from '@together/db';
-export interface RequestRow {
-	id: string;
-	author_id: string;
-	category_id: number | null;
-	title: string;
-	goal: string;
-	barrier: string;
-	help_needed: string;
-	state: string;
-	modality: string | null;
-	help_type: string | null;
-	location: string | null;
-	time_commitment: string | null;
-	duration: string | null;
-	deadline: Date | null;
-	skill_level: string | null;
-	intended_outcome: string | null;
-	quantity: string | null;
-	published_at: Date | null;
-	closed_at: Date | null;
-	closed_reason: string | null;
-	under_review: boolean;
-	search_vector?: string | null;
-	created_at: Date;
-	updated_at: Date;
-}
-export interface CategoryRow {
-	id: number;
-	slug: string;
-	retired_at: Date | null;
-}
+import { eq, and, sql, inArray, type Db, requests, categories, votes, type Request, type Category } from '@together/db';
+
 export class RequestStore {
-	constructor(private readonly sql: Sql) {}
-	async findCategoryById(id: number): Promise<CategoryRow | undefined> {
-		const rows = await this.sql<
-			CategoryRow[]
-		>`SELECT id, slug, retired_at FROM categories WHERE id = ${id}`;
+	constructor(private readonly db: Db) {}
+
+	async findCategoryById(id: number): Promise<Category | undefined> {
+		const rows = await this.db
+			.select()
+			.from(categories)
+			.where(eq(categories.id, id))
+			.limit(1);
 		return rows[0];
 	}
-	async createRequest(authorId: string, input: Record<string, unknown>): Promise<RequestRow> {
+
+	async createRequest(authorId: string, input: Record<string, unknown>): Promise<Request> {
 		const title = (input.title as string | undefined) ?? '';
 		const goal = (input.goal as string | undefined) ?? '';
 		const barrier = (input.barrier as string | undefined) ?? '';
@@ -55,37 +29,62 @@ export class RequestStore {
 		const skillLevel = (input.skillLevel as string | undefined) ?? null;
 		const intendedOutcome = (input.intendedOutcome as string | undefined) ?? null;
 		const quantity = (input.quantity as string | undefined) ?? null;
-		const rows = await this.sql<
-			RequestRow[]
-		>`INSERT INTO requests (author_id, category_id, title, goal, barrier, help_needed, state, modality, help_type, location, time_commitment, duration, deadline, skill_level, intended_outcome, quantity) VALUES (${authorId}, ${categoryId}, ${title}, ${goal}, ${barrier}, ${helpNeeded}, 'draft', ${modality}, ${helpType}, ${location}, ${timeCommitment}, ${duration}, ${deadline}, ${skillLevel}, ${intendedOutcome}, ${quantity}) RETURNING id, author_id, category_id, title, goal, barrier, help_needed, state, modality, help_type, location, time_commitment, duration, deadline, skill_level, intended_outcome, quantity, published_at, closed_at, closed_reason, under_review, created_at, updated_at`;
-		return rows[0] as RequestRow;
+
+		const rows = await this.db
+			.insert(requests)
+			.values({
+				authorId,
+				title,
+				goal,
+				barrier,
+				helpNeeded,
+				categoryId,
+				modality: modality as any,
+				helpType: helpType as any,
+				location,
+				timeCommitment,
+				duration,
+				deadline,
+				skillLevel: skillLevel as any,
+				intendedOutcome,
+				quantity,
+			})
+			.returning();
+		return rows[0]!;
 	}
-	async findRequestById(id: string): Promise<RequestRow | undefined> {
-		const rows = await this.sql<
-			RequestRow[]
-		>`SELECT id, author_id, category_id, title, goal, barrier, help_needed, state, modality, help_type, location, time_commitment, duration, deadline, skill_level, intended_outcome, quantity, published_at, closed_at, closed_reason, under_review, created_at, updated_at FROM requests WHERE id = ${id}`;
+
+	async findRequestById(id: string): Promise<Request | undefined> {
+		const rows = await this.db
+			.select()
+			.from(requests)
+			.where(eq(requests.id, id))
+			.limit(1);
 		return rows[0];
 	}
-	async updateRequest(id: string, patch: Record<string, unknown>): Promise<RequestRow | undefined> {
+
+	async updateRequest(id: string, patch: Record<string, unknown>): Promise<Request | undefined> {
 		const existing = await this.findRequestById(id);
 		if (!existing) return undefined;
 		const next = {
 			title: (patch.title as string | undefined) ?? existing.title,
 			goal: (patch.goal as string | undefined) ?? existing.goal,
 			barrier: (patch.barrier as string | undefined) ?? existing.barrier,
-			help_needed: (patch.helpNeeded as string | undefined) ?? existing.help_needed,
-			category_id:
-				patch.categoryId !== undefined ? (patch.categoryId as number | null) : existing.category_id,
+			helpNeeded:
+				patch.helpNeeded !== undefined
+					? (patch.helpNeeded as string)
+					: existing.helpNeeded,
+			categoryId:
+				patch.categoryId !== undefined ? (patch.categoryId as number | null) : existing.categoryId,
 			modality:
-				patch.modality !== undefined ? (patch.modality as string | null) : existing.modality,
-			help_type:
-				patch.helpType !== undefined ? (patch.helpType as string | null) : existing.help_type,
+				patch.modality !== undefined ? (patch.modality as any) : existing.modality,
+			helpType:
+				patch.helpType !== undefined ? (patch.helpType as any) : existing.helpType,
 			location:
 				patch.location !== undefined ? (patch.location as string | null) : existing.location,
-			time_commitment:
+			timeCommitment:
 				patch.timeCommitment !== undefined
 					? (patch.timeCommitment as string | null)
-					: existing.time_commitment,
+					: existing.timeCommitment,
 			duration:
 				patch.duration !== undefined ? (patch.duration as string | null) : existing.duration,
 			deadline:
@@ -94,33 +93,40 @@ export class RequestStore {
 						? new Date(patch.deadline as string)
 						: null
 					: existing.deadline,
-			skill_level:
-				patch.skillLevel !== undefined ? (patch.skillLevel as string | null) : existing.skill_level,
-			intended_outcome:
+			skillLevel:
+				patch.skillLevel !== undefined ? (patch.skillLevel as any) : existing.skillLevel,
+			intendedOutcome:
 				patch.intendedOutcome !== undefined
 					? (patch.intendedOutcome as string | null)
-					: existing.intended_outcome,
+					: existing.intendedOutcome,
 			quantity:
 				patch.quantity !== undefined ? (patch.quantity as string | null) : existing.quantity,
+			updatedAt: new Date(),
 		};
-		const rows = await this.sql<
-			RequestRow[]
-		>`UPDATE requests SET title=${next.title}, goal=${next.goal}, barrier=${next.barrier}, help_needed=${next.help_needed}, category_id=${next.category_id}, modality=${next.modality}, help_type=${next.help_type}, location=${next.location}, time_commitment=${next.time_commitment}, duration=${next.duration}, deadline=${next.deadline}, skill_level=${next.skill_level}, intended_outcome=${next.intended_outcome}, quantity=${next.quantity}, updated_at=now() WHERE id=${id} RETURNING id, author_id, category_id, title, goal, barrier, help_needed, state, modality, help_type, location, time_commitment, duration, deadline, skill_level, intended_outcome, quantity, published_at, closed_at, closed_reason, under_review, created_at, updated_at`;
-		return rows[0];
+		const rows = await this.db
+			.update(requests)
+			.set(next)
+			.where(eq(requests.id, id))
+			.returning();
+		return rows[0]!;
 	}
-	async publishRequest(id: string): Promise<RequestRow | undefined> {
-		const rows = await this.sql<
-			RequestRow[]
-		>`UPDATE requests SET state='published', published_at=now(), updated_at=now() WHERE id=${id} RETURNING id, author_id, category_id, title, goal, barrier, help_needed, state, modality, help_type, location, time_commitment, duration, deadline, skill_level, intended_outcome, quantity, published_at, closed_at, closed_reason, under_review, created_at, updated_at`;
-		return rows[0];
+
+	async publishRequest(id: string): Promise<Request | undefined> {
+		const rows = await this.db
+			.update(requests)
+			.set({
+				state: 'published',
+				publishedAt: new Date(),
+				updatedAt: new Date(),
+			})
+			.where(eq(requests.id, id))
+			.returning();
+		return rows[0]!;
 	}
 
 	async addVote(userId: string, requestId: string): Promise<boolean> {
 		try {
-			await this.sql`
-				INSERT INTO votes (user_id, request_id)
-				VALUES (${userId}, ${requestId})
-			`;
+			await this.db.insert(votes).values({ userId, requestId });
 			return true;
 		} catch {
 			return false;
@@ -128,24 +134,28 @@ export class RequestStore {
 	}
 
 	async removeVote(userId: string, requestId: string): Promise<boolean> {
-		const result = await this.sql`
-			DELETE FROM votes WHERE user_id = ${userId} AND request_id = ${requestId}
-		`;
-		return (result as unknown as { count: number }).count > 0;
+		const result = await this.db
+			.delete(votes)
+			.where(and(eq(votes.userId, userId), eq(votes.requestId, requestId)))
+			.returning();
+		return result.length > 0;
 	}
 
 	async findVote(userId: string, requestId: string): Promise<{ id: string } | undefined> {
-		const rows = await this.sql<{ id: string }[]>`
-			SELECT id FROM votes WHERE user_id = ${userId} AND request_id = ${requestId}
-		`;
+		const rows = await this.db
+			.select({ id: votes.id })
+			.from(votes)
+			.where(and(eq(votes.userId, userId), eq(votes.requestId, requestId)))
+			.limit(1);
 		return rows[0];
 	}
 
 	async countVotes(requestId: string): Promise<number> {
-		const rows = await this.sql<{ count: string }[]>`
-			SELECT count(*)::text AS count FROM votes WHERE request_id = ${requestId}
-		`;
-		return Number(rows[0]?.count ?? 0);
+		const rows = await this.db
+			.select({ count: sql<number>`count(*)::int` })
+			.from(votes)
+			.where(eq(votes.requestId, requestId));
+		return rows[0]?.count ?? 0;
 	}
 
 	async findVotesForRequests(
@@ -155,23 +165,26 @@ export class RequestStore {
 		const result = new Map<string, { voteCount: number; hasVoted: boolean }>();
 		if (requestIds.length === 0) return result;
 
-		const counts = await this.sql<{ request_id: string; count: string }[]>`
-			SELECT request_id, count(*)::text AS count
-			FROM votes
-			WHERE request_id = ANY(${requestIds})
-			GROUP BY request_id
-		`;
+		const counts = await this.db
+			.select({
+				requestId: votes.requestId,
+				count: sql<number>`count(*)::int`,
+			})
+			.from(votes)
+			.where(inArray(votes.requestId, requestIds))
+			.groupBy(votes.requestId);
+
 		for (const row of counts) {
-			result.set(row.request_id, { voteCount: Number(row.count), hasVoted: false });
+			result.set(row.requestId, { voteCount: row.count, hasVoted: false });
 		}
 
 		if (userId) {
-			const userVotes = await this.sql<{ request_id: string }[]>`
-				SELECT request_id FROM votes
-				WHERE user_id = ${userId} AND request_id = ANY(${requestIds})
-			`;
+			const userVotes = await this.db
+				.select({ requestId: votes.requestId })
+				.from(votes)
+				.where(and(eq(votes.userId, userId), inArray(votes.requestId, requestIds)));
 			for (const uv of userVotes) {
-				const entry = result.get(uv.request_id);
+				const entry = result.get(uv.requestId);
 				if (entry) entry.hasVoted = true;
 			}
 		}
@@ -185,30 +198,31 @@ export class RequestStore {
 		return result;
 	}
 }
-export function toResponse(row: RequestRow) {
+
+export function toResponse(row: Request) {
 	return {
 		id: row.id,
-		authorId: row.author_id,
-		categoryId: row.category_id,
+		authorId: row.authorId,
+		categoryId: row.categoryId,
 		title: row.title,
 		goal: row.goal,
 		barrier: row.barrier,
-		helpNeeded: row.help_needed,
+		helpNeeded: row.helpNeeded,
 		state: row.state,
 		modality: row.modality,
-		helpType: row.help_type,
+		helpType: row.helpType,
 		location: row.location,
-		timeCommitment: row.time_commitment,
+		timeCommitment: row.timeCommitment,
 		duration: row.duration,
 		deadline: row.deadline ? row.deadline.toISOString() : null,
-		skillLevel: row.skill_level,
-		intendedOutcome: row.intended_outcome,
+		skillLevel: row.skillLevel,
+		intendedOutcome: row.intendedOutcome,
 		quantity: row.quantity,
-		publishedAt: row.published_at ? row.published_at.toISOString() : null,
-		closedAt: row.closed_at ? row.closed_at.toISOString() : null,
-		closedReason: row.closed_reason,
-		underReview: row.under_review,
-		createdAt: row.created_at.toISOString(),
-		updatedAt: row.updated_at.toISOString(),
+		publishedAt: row.publishedAt ? row.publishedAt.toISOString() : null,
+		closedAt: row.closedAt ? row.closedAt.toISOString() : null,
+		closedReason: row.closedReason,
+		underReview: row.underReview,
+		createdAt: row.createdAt.toISOString(),
+		updatedAt: row.updatedAt.toISOString(),
 	};
 }

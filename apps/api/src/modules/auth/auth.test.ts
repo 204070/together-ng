@@ -23,7 +23,7 @@ function senderOf(app: App): MockOtpSender {
 
 function mkApp(now?: () => Date): App {
 	return makeApp({
-		databaseUrl: '',
+		databaseUrl: DB_URL,
 		sql,
 		otpProvider: 'mock',
 		isProduction: false,
@@ -389,7 +389,7 @@ describe('POST /auth/login', () => {
 
 	test('refresh cookie is Secure in production', async () => {
 		const app = makeApp({
-			databaseUrl: '',
+			databaseUrl: DB_URL,
 			sql,
 			otpProvider: 'mock',
 			isProduction: true,

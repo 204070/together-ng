@@ -90,6 +90,7 @@ async function addCompletedContribution(
 		await db.insert(outcomeConfirmations).values({
 			contributionId: row.id,
 			recipientId,
+			received: true,
 			response: helpful ? 'yes_significantly' : 'no',
 		});
 	}

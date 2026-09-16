@@ -40,7 +40,7 @@ export const outcomeConfirmations = pgTable(
 		recipientId: uuid('recipient_id')
 			.notNull()
 			.references(() => users.id, { onDelete: 'cascade' }),
-		received: boolean('received').notNull(),
+		received: boolean('received').notNull().default(true),
 		response: outcomeResponse('response'),
 		explanation: text('explanation'),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

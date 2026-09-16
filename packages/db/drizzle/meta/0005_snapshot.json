@@ -1,6 +1,6 @@
 {
-	"id": "794b2e1c-2cb3-4267-ba7e-be908769d9da",
-	"prevId": "5e11384d-521b-4c78-ac66-a022ab987e85",
+	"id": "dbef9071-578b-4508-9058-7f1f0dda901b",
+	"prevId": "794b2e1c-2cb3-4267-ba7e-be908769d9da",
 	"version": "7",
 	"dialect": "postgresql",
 	"tables": {
@@ -804,7 +804,8 @@
 					"name": "received",
 					"type": "boolean",
 					"primaryKey": false,
-					"notNull": true
+					"notNull": true,
+					"default": true
 				},
 				"response": {
 					"name": "response",

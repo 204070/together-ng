@@ -1,12 +1,10 @@
-import { beforeAll, describe, expect, test } from 'bun:test';
-import { count, eq, getDatabase, migrate } from '@together/db';
+import { describe, expect, test } from 'bun:test';
+import { count, eq, getDatabase } from '@together/db';
 import { otpTokens, profiles, sessions, users } from '@together/db/schema';
 import { makeApp } from '../../app';
 import type { MockOtpSender } from './otp-sender';
 import type { AuthServices } from './services';
 
-const DB_URL =
-	process.env.TEST_DATABASE_URL ?? 'postgresql://together:together@localhost:5433/together_test';
 const JWT_SECRET = 'test-secret';
 
 type App = ReturnType<typeof makeApp>;
@@ -21,7 +19,6 @@ function senderOf(app: App): MockOtpSender {
 
 function mkApp(now?: () => Date): App {
 	return makeApp({
-		databaseUrl: DB_URL,
 		db: getDatabase(),
 		otpProvider: 'mock',
 		isProduction: false,
@@ -31,7 +28,7 @@ function mkApp(now?: () => Date): App {
 }
 
 function req(app: App, path: string, init: RequestInit = {}): Promise<Response> {
-	return app.handle(new Request(`http://localhost:4004${path}`, init));
+	return app.handle(new Request(`http://localhost${path}`, init));
 }
 
 // biome-ignore lint/suspicious/noExplicitAny: heterogeneous JSON response bodies
@@ -93,10 +90,6 @@ async function signExpiredToken(secret: string, sub: string, sid: string): Promi
 	).toString('base64url');
 	return `${input}.${signature}`;
 }
-
-beforeAll(async () => {
-	await migrate(DB_URL);
-});
 
 describe('GET /health', () => {
 	test('returns 200 { status: ok }', async () => {
@@ -399,7 +392,6 @@ describe('POST /auth/login', () => {
 
 	test('refresh cookie is Secure in production', async () => {
 		const app = makeApp({
-			databaseUrl: DB_URL,
 			db: getDatabase(),
 			otpProvider: 'mock',
 			isProduction: true,

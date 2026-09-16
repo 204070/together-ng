@@ -10,12 +10,11 @@ import {
 	eq,
 	getDatabase,
 	getPool,
-	migrate,
 	outcomeConfirmations,
 	requestMatches,
 	sql,
 } from '@together/db';
-import { makeApp } from '../app';
+import type { makeApp } from '../app';
 import { createMatchingQueue, MATCHING_QUEUE } from '../queue';
 import {
 	addCapability,
@@ -23,9 +22,10 @@ import {
 	createRequest as createRequestRow,
 	createSkillId as createSkill,
 	createUser,
-	DEFAULT_JWT_SECRET,
 	loginToken,
+	makeTestApp,
 	setPrefs,
+	TEST_DATABASE_URL,
 } from '../testing/helpers';
 import {
 	createInlineMatchingService,
@@ -33,29 +33,17 @@ import {
 	recomputeMatches,
 } from './matching';
 
-const DB_URL =
-	process.env.TEST_DATABASE_URL ??
-	'postgresql://together:together@localhost:5433/together_wt12_test';
-const JWT_SECRET = DEFAULT_JWT_SECRET;
-
 let db: Db;
 let queue: ReturnType<typeof createMatchingQueue>;
 
 type App = ReturnType<typeof makeApp>;
 
 function mkApp(): App {
-	return makeApp({
-		databaseUrl: DB_URL,
-		db: getDatabase(),
-		otpProvider: 'mock',
-		isProduction: false,
-		jwtSecret: JWT_SECRET,
-		matching: queue.asService(),
-	});
+	return makeTestApp({ matching: queue.asService() });
 }
 
 function req(app: App, path: string, init: RequestInit = {}): Promise<Response> {
-	return app.handle(new Request(`http://localhost:4012${path}`, init));
+	return app.handle(new Request(`http://localhost${path}`, init));
 }
 
 async function waitForMatchRows(requestId: string, timeoutMs = 5000) {
@@ -150,8 +138,7 @@ async function matchRows(requestId: string) {
 beforeAll(async () => {
 	(globalThis as Record<string, unknown>).__SKIP_TX_ISOLATION__ = true;
 	db = getDatabase();
-	await migrate(DB_URL);
-	queue = createMatchingQueue({ connectionString: DB_URL, db });
+	queue = createMatchingQueue({ connectionString: TEST_DATABASE_URL, db });
 	await queue.start();
 });
 

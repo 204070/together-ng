@@ -47,6 +47,14 @@ if (packages.length === 0) {
 	process.exit(1);
 }
 
+// Migrate database once before running test suites
+console.log('test: ensuring database schema is migrated...');
+spawnSync(process.execPath, ['run', '--filter', '@together/db', 'db:migrate'], {
+	cwd: REPO_ROOT,
+	env: process.env,
+	stdio: 'inherit',
+});
+
 const failed: string[] = [];
 for (const pkg of packages) {
 	console.log(`\ntest: ${pkg.name} (${pkg.dir})`);

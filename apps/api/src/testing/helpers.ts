@@ -14,6 +14,10 @@ export const DEFAULT_PASSWORD = 'password123';
 export const DEFAULT_PASSWORD_HASH =
 	'$argon2id$v=19$m=65536,t=2,p=1$khyolO2YTML8xcB1vMoAIu13FszlR7i6u2suxwYCcvI$RMWKolHN6VZnXsTK8+ue5qQrdFNjWFLsa4FvItIWepU';
 export const DEFAULT_JWT_SECRET = process.env.JWT_SECRET ?? 'test-secret';
+export const TEST_DATABASE_URL =
+	process.env.DATABASE_URL ??
+	process.env.TEST_DATABASE_URL ??
+	'postgresql://together:together@localhost:5433/together_test';
 
 let seq = 0;
 export function unique(prefix: string): string {

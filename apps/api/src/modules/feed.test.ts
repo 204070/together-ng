@@ -1,16 +1,7 @@
-import { beforeAll, beforeEach, describe, expect, test } from 'bun:test';
-import { migrate } from '@together/db';
+import { beforeEach, describe, expect, test } from 'bun:test';
 import { createRequestFixture, makeTestApp } from '../testing/helpers';
 
-const DB_URL =
-	process.env.TEST_DATABASE_URL ??
-	'postgresql://together:together@localhost:5433/together_wt7_test';
-
 let app: ReturnType<typeof makeTestApp>;
-
-beforeAll(async () => {
-	await migrate(DB_URL);
-});
 
 beforeEach(() => {
 	app = makeTestApp();

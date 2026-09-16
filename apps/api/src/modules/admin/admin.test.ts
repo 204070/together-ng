@@ -1,17 +1,9 @@
-import { beforeAll, beforeEach, describe, expect, test } from 'bun:test';
-import { eq, getDatabase, migrate } from '@together/db';
+import { beforeEach, describe, expect, test } from 'bun:test';
+import { eq, getDatabase } from '@together/db';
 import { users } from '@together/db/schema';
 import { adminAuth, makeTestApp, userAuth } from '../../testing/helpers';
 
-const DB_URL =
-	process.env.TEST_DATABASE_URL ??
-	'postgresql://together:together@localhost:5433/together_wt18_test';
-
 let app: ReturnType<typeof makeTestApp>;
-
-beforeAll(async () => {
-	await migrate(DB_URL);
-});
 
 beforeEach(() => {
 	app = makeTestApp();

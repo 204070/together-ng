@@ -4,14 +4,16 @@ import {
 	getDatabase,
 	getPool,
 	initDatabase,
+	migrate,
 	type PoolClient,
 	setDatabase,
 } from '@together/db';
 import * as schema from '@together/db/schema';
 
-// Initialize database once for all test workers
+// Initialize database and ensure schema is migrated once for all test workers
 if (process.env.DATABASE_URL) {
 	initDatabase(process.env.DATABASE_URL);
+	await migrate(process.env.DATABASE_URL);
 }
 
 let client: PoolClient | null = null;

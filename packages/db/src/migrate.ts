@@ -19,47 +19,54 @@ export async function migrate(databaseUrl: string = env.DATABASE_URL): Promise<v
 	const pool = new Pool({ connectionString: databaseUrl, max: 1 });
 	const client = await pool.connect();
 	try {
-		await client.query(`
-			CREATE TABLE IF NOT EXISTS public.drizzle_migrations (
-				id bigint generated always as identity primary key,
-				file_name text not null unique,
-				hash text not null,
-				applied_at timestamptz not null default now()
-			)
-		`);
+		await client.query('SELECT pg_advisory_lock(837261947)');
+		try {
+			await client.query(`
+				CREATE TABLE IF NOT EXISTS public.drizzle_migrations (
+					id bigint generated always as identity primary key,
+					file_name text not null unique,
+					hash text not null,
+					applied_at timestamptz not null default now()
+				)
+			`);
 
-		const result = await client.query<{ file_name: string }>(
-			'SELECT file_name FROM public.drizzle_migrations',
-		);
-		const applied = new Set(result.rows.map((row) => row.file_name));
+			const result = await client.query<{ file_name: string }>(
+				'SELECT file_name FROM public.drizzle_migrations',
+			);
+			const applied = new Set(result.rows.map((row) => row.file_name));
 
-		const files = readdirSync(migrationsDir)
-			.filter((file) => file.endsWith('.sql'))
-			.sort();
+			const files = readdirSync(migrationsDir)
+				.filter((file) => file.endsWith('.sql'))
+				.sort();
 
-		let appliedCount = 0;
-		for (const file of files) {
-			if (applied.has(file)) continue;
-			const content = readFileSync(resolve(migrationsDir, file), 'utf8');
-			const hash = createHash('sha256').update(content).digest('hex');
-			await client.query('BEGIN');
-			try {
-				for (const statement of splitStatements(content)) {
-					await client.query(statement);
+			let appliedCount = 0;
+			for (const file of files) {
+				if (applied.has(file)) continue;
+				const content = readFileSync(resolve(migrationsDir, file), 'utf8');
+				const hash = createHash('sha256').update(content).digest('hex');
+				await client.query('BEGIN');
+				try {
+					for (const statement of splitStatements(content)) {
+						await client.query(statement);
+					}
+					await client.query(
+						'INSERT INTO public.drizzle_migrations (file_name, hash) VALUES ($1, $2)',
+						[file, hash],
+					);
+					await client.query('COMMIT');
+				} catch (err) {
+					await client.query('ROLLBACK');
+					throw err;
 				}
-				await client.query(
-					'INSERT INTO public.drizzle_migrations (file_name, hash) VALUES ($1, $2)',
-					[file, hash],
-				);
-				await client.query('COMMIT');
-			} catch (err) {
-				await client.query('ROLLBACK');
-				throw err;
+				appliedCount += 1;
+				console.log(`applied migration ${file}`);
 			}
-			appliedCount += 1;
-			console.log(`applied migration ${file}`);
+			console.log(
+				`drizzle_migrations applied: ${appliedCount + applied.size}, new: ${appliedCount}`,
+			);
+		} finally {
+			await client.query('SELECT pg_advisory_unlock(837261947)');
 		}
-		console.log(`drizzle_migrations applied: ${appliedCount + applied.size}, new: ${appliedCount}`);
 	} finally {
 		client.release();
 		await pool.end();

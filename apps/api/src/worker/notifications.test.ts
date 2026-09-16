@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
-import { type Db, desc, eq, getDatabase, getPool, migrate } from '@together/db';
+import { type Db, desc, eq, getDatabase, getPool } from '@together/db';
 import { notificationDispatchLog, notifications, requestMatches } from '@together/db/schema';
-import { makeApp } from '../app';
+import type { makeApp } from '../app';
 import { createMatchingQueue } from '../queue';
 import {
 	addCapability,
@@ -9,17 +9,13 @@ import {
 	createRequest as createRequestRow,
 	createSkillId as createSkill,
 	createUser,
-	DEFAULT_JWT_SECRET,
 	loginToken,
+	makeTestApp,
 	setPrefs,
+	TEST_DATABASE_URL,
 } from '../testing/helpers';
 import { recomputeMatches } from './matching';
 import { buildNotificationBody, dispatchNotifications } from './notifications';
-
-const DB_URL =
-	process.env.TEST_DATABASE_URL ??
-	'postgresql://together:together@localhost:5433/together_wt13_test';
-const JWT_SECRET = DEFAULT_JWT_SECRET;
 
 let db: Db;
 let queue: ReturnType<typeof createMatchingQueue>;
@@ -27,18 +23,11 @@ let queue: ReturnType<typeof createMatchingQueue>;
 type App = ReturnType<typeof makeApp>;
 
 function mkApp(): App {
-	return makeApp({
-		databaseUrl: '',
-		db,
-		otpProvider: 'mock',
-		isProduction: false,
-		jwtSecret: JWT_SECRET,
-		matching: queue.asService(),
-	});
+	return makeTestApp({ matching: queue.asService() });
 }
 
 function req(app: App, path: string, init: RequestInit = {}): Promise<Response> {
-	return app.handle(new Request(`http://localhost:4013${path}`, init));
+	return app.handle(new Request(`http://localhost${path}`, init));
 }
 
 async function waitForMatchRows(requestId: string, timeoutMs = 5000) {
@@ -92,9 +81,8 @@ async function dispatchLogRows(requestId: string) {
 
 beforeAll(async () => {
 	(globalThis as Record<string, unknown>).__SKIP_TX_ISOLATION__ = true;
-	await migrate(DB_URL);
 	db = getDatabase();
-	queue = createMatchingQueue({ connectionString: DB_URL, db });
+	queue = createMatchingQueue({ connectionString: TEST_DATABASE_URL, db });
 	await queue.start();
 });
 

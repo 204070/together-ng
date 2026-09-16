@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { createClient, migrate, type Sql } from '@together/db';
+import { createClient, type Db, drizzle, migrate, type Sql } from '@together/db';
 import { makeApp } from '../app';
 import { createMatchingQueue, MATCHING_QUEUE } from '../queue';
 import {
@@ -16,6 +16,7 @@ const DB_URL =
 const JWT_SECRET = 'test-secret';
 
 let sql: Sql;
+let db: Db;
 let queue: ReturnType<typeof createMatchingQueue>;
 
 type App = ReturnType<typeof makeApp>;
@@ -195,8 +196,10 @@ async function matchRows(requestId: string) {
 
 beforeAll(async () => {
 	sql = createClient(DB_URL);
+	const drizzleClient = createClient(DB_URL);
+	db = drizzle(drizzleClient);
 	await migrate(DB_URL);
-	queue = createMatchingQueue({ connectionString: DB_URL, sql });
+	queue = createMatchingQueue({ connectionString: DB_URL, db });
 	await queue.start();
 });
 

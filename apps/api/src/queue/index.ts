@@ -1,4 +1,4 @@
-import { createDb, type Db, type Sql } from '@together/db';
+import { createDb, type Db } from '@together/db';
 import { PgBoss } from 'pg-boss';
 import { type MatchingService, recomputeMatches } from '../worker/matching';
 import {
@@ -110,7 +110,6 @@ export function createJobQueue<TData extends object>(
 export interface MatchingQueueOptions {
 	connectionString: string;
 	db?: Db;
-	sql?: Sql;
 	now?: () => Date;
 	pollingIntervalSeconds?: number;
 	awaitTimeoutMs?: number;
@@ -125,8 +124,14 @@ function isMatchingJobData(data: unknown): data is MatchingJobData {
 }
 
 export function createMatchingQueue(options: MatchingQueueOptions) {
-	const db = options.db ?? createDb(options.sql ?? options.connectionString);
+	const db = options.db ?? createDb(options.connectionString);
 	const now = options.now ?? (() => new Date());
+
+	const notificationQueue = createNotificationQueue({
+		connectionString: options.connectionString,
+		db,
+	});
+
 	const queue = createJobQueue<MatchingJobData>({
 		connectionString: options.connectionString,
 		queue: MATCHING_QUEUE,
@@ -135,7 +140,7 @@ export function createMatchingQueue(options: MatchingQueueOptions) {
 		handler: async (data) => {
 			if (!isMatchingJobData(data)) return;
 			await recomputeMatches(db, data.requestId, { now });
-			await dispatchNotifications(options.sql ?? db.$client, data.requestId);
+			await notificationQueue.send({ requestId: data.requestId });
 		},
 	});
 
@@ -145,14 +150,18 @@ export function createMatchingQueue(options: MatchingQueueOptions) {
 		},
 	};
 
-	return { ...queue, asService: (): MatchingService => service };
+	return {
+		...queue,
+		asService: (): MatchingService => service,
+		notificationQueue,
+	};
 }
 
 export type MatchingQueue = ReturnType<typeof createMatchingQueue>;
 
 export interface NotificationQueueOptions {
 	connectionString: string;
-	sql: Sql;
+	db: Db;
 	pollingIntervalSeconds?: number;
 	awaitTimeoutMs?: number;
 }
@@ -173,7 +182,7 @@ export function createNotificationQueue(options: NotificationQueueOptions) {
 		awaitTimeoutMs: options.awaitTimeoutMs,
 		handler: async (data) => {
 			if (!isNotificationDispatchJobData(data)) return;
-			await dispatchNotifications(options.sql, data.requestId);
+			await dispatchNotifications(options.db, data.requestId);
 		},
 	});
 

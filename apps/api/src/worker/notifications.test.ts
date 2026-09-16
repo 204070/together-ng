@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
-import { createClient, migrate, type Sql } from '@together/db';
+import { createClient, type Db, drizzle, type Sql } from '@together/db';
 import { makeApp } from '../app';
 import { createMatchingQueue } from '../queue';
 import { recomputeMatches } from './matching';
@@ -11,6 +11,7 @@ const DB_URL =
 const JWT_SECRET = 'test-secret';
 
 let sql: Sql;
+let db: Db;
 let queue: ReturnType<typeof createMatchingQueue>;
 
 type App = ReturnType<typeof makeApp>;
@@ -18,7 +19,7 @@ type App = ReturnType<typeof makeApp>;
 function mkApp(): App {
 	return makeApp({
 		databaseUrl: '',
-		sql,
+		db,
 		otpProvider: 'mock',
 		isProduction: false,
 		jwtSecret: JWT_SECRET,
@@ -178,9 +179,11 @@ async function dispatchLogRows(requestId: string) {
 
 beforeAll(async () => {
 	sql = createClient(DB_URL);
-	await migrate(DB_URL);
-	queue = createMatchingQueue({ connectionString: DB_URL, sql });
+	const drizzleClient = createClient(DB_URL);
+	db = drizzle(drizzleClient);
+	queue = createMatchingQueue({ connectionString: DB_URL, db });
 	await queue.start();
+	await queue.notificationQueue.start();
 });
 
 afterAll(async () => {
@@ -200,8 +203,8 @@ describe('notification dispatch worker', () => {
 		await addCapability({ userId: contributor.id, categoryId });
 		const requestId = await createRequestRow(author.id, { categoryId });
 
-		await recomputeMatches(sql, requestId);
-		const { sent, suppressed } = await dispatchNotifications(sql, requestId);
+		await recomputeMatches(db, requestId);
+		const { sent, suppressed } = await dispatchNotifications(db, requestId);
 
 		expect(sent).toBe(1);
 		expect(suppressed).toBe(0);
@@ -222,8 +225,8 @@ describe('notification dispatch worker', () => {
 		await addCapability({ userId: contributor.id, categoryId, skillId });
 		const requestId = await createRequestRow(author.id, { categoryId });
 
-		await recomputeMatches(sql, requestId);
-		const { sent } = await dispatchNotifications(sql, requestId);
+		await recomputeMatches(db, requestId);
+		const { sent } = await dispatchNotifications(db, requestId);
 
 		expect(sent).toBe(1);
 		const rows = await notificationRows(contributor.id);
@@ -249,12 +252,12 @@ describe('notification dispatch worker', () => {
 			helpType: 'borrow',
 		});
 
-		await recomputeMatches(sql, requestId);
+		await recomputeMatches(db, requestId);
 
 		// Change preferences AFTER matching to test the notification worker's own check
 		await setPrefs(contributor.id, { notify_resource_lending: false });
 
-		const { sent, suppressed } = await dispatchNotifications(sql, requestId);
+		const { sent, suppressed } = await dispatchNotifications(db, requestId);
 
 		expect(sent).toBe(0);
 		expect(suppressed).toBe(1);
@@ -276,8 +279,8 @@ describe('notification dispatch worker', () => {
 		await setPrefs(contributor.id, { in_app_enabled: false });
 		const requestId = await createRequestRow(author.id, { categoryId });
 
-		await recomputeMatches(sql, requestId);
-		const { sent, suppressed } = await dispatchNotifications(sql, requestId);
+		await recomputeMatches(db, requestId);
+		const { sent, suppressed } = await dispatchNotifications(db, requestId);
 
 		expect(sent).toBe(0);
 		expect(suppressed).toBe(1);
@@ -299,8 +302,8 @@ describe('notification dispatch worker', () => {
 
 		for (let i = 0; i < 4; i++) {
 			const requestId = await createRequestRow(author.id, { categoryId });
-			await recomputeMatches(sql, requestId);
-			await dispatchNotifications(sql, requestId);
+			await recomputeMatches(db, requestId);
+			await dispatchNotifications(db, requestId);
 		}
 
 		const rows = await notificationRows(contributor.id);
@@ -323,8 +326,8 @@ describe('notification dispatch worker', () => {
 		await addCapability({ userId: contributor.id, categoryId });
 		const requestId = await createRequestRow(author.id, { categoryId });
 
-		await recomputeMatches(sql, requestId);
-		await dispatchNotifications(sql, requestId);
+		await recomputeMatches(db, requestId);
+		await dispatchNotifications(db, requestId);
 
 		const logRows = await dispatchLogRows(requestId);
 		expect(logRows.length).toBe(1);
@@ -340,9 +343,9 @@ describe('notification dispatch worker', () => {
 		await addCapability({ userId: contributor.id, categoryId });
 		const requestId = await createRequestRow(author.id, { categoryId });
 
-		await recomputeMatches(sql, requestId);
-		await dispatchNotifications(sql, requestId);
-		await dispatchNotifications(sql, requestId);
+		await recomputeMatches(db, requestId);
+		await dispatchNotifications(db, requestId);
+		await dispatchNotifications(db, requestId);
 
 		const rows = await notificationRows(contributor.id);
 		expect(rows.length).toBe(1);
@@ -354,8 +357,8 @@ describe('notification dispatch worker', () => {
 		await addCapability({ userId: author.id, categoryId });
 		const requestId = await createRequestRow(author.id, { categoryId });
 
-		await recomputeMatches(sql, requestId);
-		await dispatchNotifications(sql, requestId);
+		await recomputeMatches(db, requestId);
+		await dispatchNotifications(db, requestId);
 
 		const rows = await notificationRows(author.id);
 		expect(rows.length).toBe(0);
@@ -378,8 +381,8 @@ describe('notification routes', () => {
 		const token = await loginToken(app, contributor.email);
 
 		const requestId = await createRequestRow(author.id, { categoryId });
-		await recomputeMatches(sql, requestId);
-		await dispatchNotifications(sql, requestId);
+		await recomputeMatches(db, requestId);
+		await dispatchNotifications(db, requestId);
 
 		const res = await req(app, '/notifications', {
 			headers: { authorization: `Bearer ${token}` },
@@ -404,8 +407,8 @@ describe('notification routes', () => {
 		const token = await loginToken(app, contributor.email);
 
 		const requestId = await createRequestRow(author.id, { categoryId });
-		await recomputeMatches(sql, requestId);
-		await dispatchNotifications(sql, requestId);
+		await recomputeMatches(db, requestId);
+		await dispatchNotifications(db, requestId);
 
 		const notifRows = await notificationRows(contributor.id);
 		const notifId = notifRows[0]?.id as string;
@@ -435,8 +438,8 @@ describe('notification routes', () => {
 		const token = await loginToken(app, contributor.email);
 
 		const requestId = await createRequestRow(author.id, { categoryId });
-		await recomputeMatches(sql, requestId);
-		await dispatchNotifications(sql, requestId);
+		await recomputeMatches(db, requestId);
+		await dispatchNotifications(db, requestId);
 
 		const notifRows = await notificationRows(contributor.id);
 		const notifId = notifRows[0]?.id as string;
@@ -469,8 +472,8 @@ describe('notification routes', () => {
 		const token2 = await loginToken(app, contributor2.email);
 
 		const requestId = await createRequestRow(author.id, { categoryId });
-		await recomputeMatches(sql, requestId);
-		await dispatchNotifications(sql, requestId);
+		await recomputeMatches(db, requestId);
+		await dispatchNotifications(db, requestId);
 
 		const res1 = await req(app, '/notifications', {
 			headers: { authorization: `Bearer ${token1}` },
@@ -520,7 +523,13 @@ describe('matching queue integration', () => {
 
 		await waitForMatchRows(draftBody.id);
 
-		const notifRows = await notificationRows(contributor.id);
+		// Wait for notification queue to process
+		const notifDeadline = Date.now() + 5000;
+		let notifRows = await notificationRows(contributor.id);
+		while (notifRows.length === 0 && Date.now() < notifDeadline) {
+			await new Promise((r) => setTimeout(r, 50));
+			notifRows = await notificationRows(contributor.id);
+		}
 		expect(notifRows.length).toBe(1);
 		expect(notifRows[0]?.type).toBe('new_match');
 	});

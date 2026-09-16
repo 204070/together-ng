@@ -1,6 +1,12 @@
-import { createDb, type Db, type Sql } from '@together/db';
+import { createDb, type Db } from '@together/db';
 import { PgBoss } from 'pg-boss';
 import { type MatchingService, recomputeMatches } from '../worker/matching';
+import {
+	dispatchNotifications,
+	NOTIFICATION_QUEUE,
+	type NotificationDispatchJobData,
+	type NotificationService,
+} from '../worker/notifications';
 
 // ---------------------------------------------------------------------------
 // Queue infrastructure choice: pg-boss (Postgres-backed, PRD 65.2).
@@ -104,7 +110,6 @@ export function createJobQueue<TData extends object>(
 export interface MatchingQueueOptions {
 	connectionString: string;
 	db?: Db;
-	sql?: Sql;
 	now?: () => Date;
 	pollingIntervalSeconds?: number;
 	awaitTimeoutMs?: number;
@@ -119,8 +124,14 @@ function isMatchingJobData(data: unknown): data is MatchingJobData {
 }
 
 export function createMatchingQueue(options: MatchingQueueOptions) {
-	const db = options.db ?? createDb(options.sql ?? options.connectionString);
+	const db = options.db ?? createDb(options.connectionString);
 	const now = options.now ?? (() => new Date());
+
+	const notificationQueue = createNotificationQueue({
+		connectionString: options.connectionString,
+		db,
+	});
+
 	const queue = createJobQueue<MatchingJobData>({
 		connectionString: options.connectionString,
 		queue: MATCHING_QUEUE,
@@ -129,6 +140,7 @@ export function createMatchingQueue(options: MatchingQueueOptions) {
 		handler: async (data) => {
 			if (!isMatchingJobData(data)) return;
 			await recomputeMatches(db, data.requestId, { now });
+			await notificationQueue.send({ requestId: data.requestId });
 		},
 	});
 
@@ -138,7 +150,58 @@ export function createMatchingQueue(options: MatchingQueueOptions) {
 		},
 	};
 
-	return { ...queue, asService: (): MatchingService => service };
+	return {
+		...queue,
+		start: async () => {
+			await queue.start();
+			await notificationQueue.start();
+		},
+		stop: async () => {
+			await queue.stop();
+			await notificationQueue.stop();
+		},
+		asService: (): MatchingService => service,
+		notificationQueue,
+	};
 }
 
 export type MatchingQueue = ReturnType<typeof createMatchingQueue>;
+
+export interface NotificationQueueOptions {
+	connectionString: string;
+	db: Db;
+	pollingIntervalSeconds?: number;
+	awaitTimeoutMs?: number;
+}
+
+function isNotificationDispatchJobData(data: unknown): data is NotificationDispatchJobData {
+	return (
+		typeof data === 'object' &&
+		data !== null &&
+		typeof (data as { requestId?: unknown }).requestId === 'string'
+	);
+}
+
+export function createNotificationQueue(options: NotificationQueueOptions) {
+	const queue = createJobQueue<NotificationDispatchJobData>({
+		connectionString: options.connectionString,
+		queue: NOTIFICATION_QUEUE,
+		pollingIntervalSeconds: options.pollingIntervalSeconds,
+		awaitTimeoutMs: options.awaitTimeoutMs,
+		handler: async (data) => {
+			if (!isNotificationDispatchJobData(data)) return;
+			await dispatchNotifications(options.db, data.requestId);
+		},
+	});
+
+	const service: NotificationService = {
+		dispatch: async (requestId: string) => {
+			await queue.send({ requestId });
+			return { sent: 0, suppressed: 0 };
+		},
+	};
+
+	return { ...queue, asService: (): NotificationService => service };
+}
+
+export type NotificationQueue = ReturnType<typeof createNotificationQueue>;

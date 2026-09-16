@@ -29,6 +29,13 @@
 			"when": 1789403876934,
 			"tag": "0003_add_is_admin_to_users",
 			"breakpoints": true
+		},
+		{
+			"idx": 4,
+			"version": "7",
+			"when": 1789499072442,
+			"tag": "0004_add_notification_dispatch_log",
+			"breakpoints": true
 		}
 	]
 }

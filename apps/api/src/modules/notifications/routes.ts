@@ -1,0 +1,86 @@
+import { jwt } from '@elysiajs/jwt';
+import type { Db } from '@together/db';
+import { Elysia, t } from 'elysia';
+import { type JwtVerifier, requireActiveActor } from '../../lib/authentication';
+import { NotificationStore, toNotificationResponse } from './store';
+
+export interface NotificationRouterOptions {
+	jwtSecret: string;
+	findUserById: (id: string) => Promise<{ status: string; deletedAt: Date | null } | undefined>;
+}
+
+export function createNotificationRouter(env: { db: Db }, options: NotificationRouterOptions) {
+	const store = new NotificationStore(env.db);
+
+	return new Elysia()
+		.use(jwt({ name: 'jwt', secret: options.jwtSecret, exp: '15m' }))
+		.derive(async ({ headers, jwt: verifier }) => {
+			const authHeader = (headers as { authorization?: string }).authorization;
+			if (!authHeader) return { actor: null as { userId: string } | null };
+			try {
+				const actor = await requireActiveActor(
+					headers as { authorization?: string },
+					verifier as unknown as JwtVerifier,
+					options,
+				);
+				return { actor };
+			} catch {
+				return { actor: null as { userId: string } | null };
+			}
+		})
+		.get(
+			'/notifications',
+			async ({ actor, set }) => {
+				if (!actor) {
+					set.status = 401;
+					return { error: 'UNAUTHORIZED', message: 'Authentication required' };
+				}
+				const notifications = await store.findByUserId(actor.userId);
+				const unreadCount = await store.countUnread(actor.userId);
+				return {
+					notifications: notifications.map(toNotificationResponse),
+					unreadCount,
+				};
+			},
+			{},
+		)
+		.patch(
+			'/notifications/:id',
+			async ({ params, body, actor, set }) => {
+				if (!actor) {
+					set.status = 401;
+					return { error: 'UNAUTHORIZED', message: 'Authentication required' };
+				}
+				const existing = await store.findByIdAndUser(params.id, actor.userId);
+				if (!existing) {
+					set.status = 404;
+					return { error: 'NOT_FOUND', message: 'Notification not found' };
+				}
+				const b = body as { read?: boolean };
+				let updated = existing;
+				if (b.read === true) {
+					updated = (await store.markRead(params.id, actor.userId)) ?? existing;
+				} else if (b.read === false) {
+					updated = (await store.markUnread(params.id, actor.userId)) ?? existing;
+				}
+				return toNotificationResponse(updated);
+			},
+			{
+				params: t.Object({ id: t.String({ format: 'uuid' }) }),
+				body: t.Object({ read: t.Boolean() }),
+			},
+		)
+		.post(
+			'/notifications/read-all',
+			async ({ actor, set }) => {
+				if (!actor) {
+					set.status = 401;
+					return { error: 'UNAUTHORIZED', message: 'Authentication required' };
+				}
+				await store.markAllRead(actor.userId);
+				set.status = 204;
+				return undefined;
+			},
+			{},
+		);
+}

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { createClient, migrate, type Sql } from '@together/db';
+import { createClient, type Db, drizzle, migrate, type Sql } from '@together/db';
 import { makeApp } from '../app';
 import { createMatchingQueue, MATCHING_QUEUE } from '../queue';
 import {
@@ -16,6 +16,7 @@ const DB_URL =
 const JWT_SECRET = 'test-secret';
 
 let sql: Sql;
+let db: Db;
 let queue: ReturnType<typeof createMatchingQueue>;
 
 type App = ReturnType<typeof makeApp>;
@@ -58,6 +59,20 @@ async function waitForMatchRows(requestId: string, timeoutMs = 5000) {
 		await new Promise((r) => setTimeout(r, 50));
 	}
 	return matchRows(requestId);
+}
+
+async function waitForCompletedJob(queueName: string, timeoutMs = 5000): Promise<number> {
+	const deadline = Date.now() + timeoutMs;
+	while (Date.now() < deadline) {
+		const jobs = await sql<{ count: number }[]>`
+			SELECT count(*)::int AS count FROM pgboss.job
+			WHERE name = ${queueName} AND state = 'completed'
+		`;
+		const count = jobs[0]?.count ?? 0;
+		if (count > 0) return count;
+		await new Promise((r) => setTimeout(r, 50));
+	}
+	return 0;
 }
 
 async function loginToken(app: App, email: string): Promise<string> {
@@ -195,8 +210,10 @@ async function matchRows(requestId: string) {
 
 beforeAll(async () => {
 	sql = createClient(DB_URL);
+	const drizzleClient = createClient(DB_URL);
+	db = drizzle(drizzleClient);
 	await migrate(DB_URL);
-	queue = createMatchingQueue({ connectionString: DB_URL, sql });
+	queue = createMatchingQueue({ connectionString: DB_URL, db });
 	await queue.start();
 });
 
@@ -223,11 +240,8 @@ describe('matching queue (Postgres-backed)', () => {
 		expect(rows.length).toBe(1);
 		expect(rows[0]?.contributor_id).toBe(contributor.id);
 
-		const jobs = await sql<{ count: number }[]>`
-			SELECT count(*)::int AS count FROM pgboss.job
-			WHERE name = ${MATCHING_QUEUE} AND state = 'completed'
-		`;
-		expect(jobs[0]?.count ?? 0).toBeGreaterThan(0);
+		const completedCount = await waitForCompletedJob(MATCHING_QUEUE);
+		expect(completedCount).toBeGreaterThan(0);
 	});
 
 	test('internal matches endpoint requires admin authentication and exposes breakdown', async () => {

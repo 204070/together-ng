@@ -1,15 +1,15 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { type Db, desc, eq, getDatabase, getPool, migrate } from '@together/db';
 import {
-	users,
 	categories,
-	skills,
 	contributorCapabilities,
-	notificationPreferences,
-	requests,
-	requestMatches,
-	notifications,
 	notificationDispatchLog,
+	notificationPreferences,
+	notifications,
+	requestMatches,
+	requests,
+	skills,
+	users,
 } from '@together/db/schema';
 import { makeApp } from '../app';
 import { createMatchingQueue } from '../queue';
@@ -50,12 +50,15 @@ function unique(prefix: string): string {
 async function createUser(email?: string, isAdmin = false): Promise<{ id: string; email: string }> {
 	const address = email ?? `${unique('m')}@example.com`;
 	const hash = await Bun.password.hash('password123', { algorithm: 'argon2id' });
-	const [row] = await getDatabase().insert(users).values({
-		email: address,
-		passwordHash: hash,
-		phoneVerified: true,
-		isAdmin,
-	}).returning();
+	const [row] = await getDatabase()
+		.insert(users)
+		.values({
+			email: address,
+			passwordHash: hash,
+			phoneVerified: true,
+			isAdmin,
+		})
+		.returning();
 	return { id: row!.id, email: address };
 }
 
@@ -78,7 +81,10 @@ async function createCategory(slug?: string): Promise<number> {
 
 async function createSkill(categoryId: number, slug?: string): Promise<number> {
 	const s = slug ?? unique('skill');
-	const [row] = await getDatabase().insert(skills).values({ categoryId, name: s, slug: s }).returning();
+	const [row] = await getDatabase()
+		.insert(skills)
+		.values({ categoryId, name: s, slug: s })
+		.returning();
 	return row!.id;
 }
 
@@ -89,13 +95,15 @@ async function addCapability(input: {
 	modality?: string;
 	location?: string | null;
 }): Promise<void> {
-	await getDatabase().insert(contributorCapabilities).values({
-		userId: input.userId,
-		categoryId: input.categoryId ?? null,
-		skillId: input.skillId ?? null,
-		modality: (input.modality as 'online' | 'in_person' | 'both') ?? 'both',
-		location: input.location ?? null,
-	});
+	await getDatabase()
+		.insert(contributorCapabilities)
+		.values({
+			userId: input.userId,
+			categoryId: input.categoryId ?? null,
+			skillId: input.skillId ?? null,
+			modality: (input.modality as 'online' | 'in_person' | 'both') ?? 'both',
+			location: input.location ?? null,
+		});
 }
 
 async function setPrefs(userId: string, patch: Record<string, unknown>): Promise<void> {
@@ -108,25 +116,28 @@ async function setPrefs(userId: string, patch: Record<string, unknown>): Promise
 		in_app_enabled: true,
 		...patch,
 	};
-	await getDatabase().insert(notificationPreferences).values({
-		userId,
-		inAppEnabled: defaults.in_app_enabled as boolean,
-		notifyNewMatches: defaults.notify_new_matches as boolean,
-		notifyRemote: defaults.notify_remote as boolean,
-		notifyLocal: defaults.notify_local as boolean,
-		notifyResourceLending: defaults.notify_resource_lending as boolean,
-		notifyMentorship: defaults.notify_mentorship as boolean,
-	}).onConflictDoUpdate({
-		target: [notificationPreferences.userId],
-		set: {
+	await getDatabase()
+		.insert(notificationPreferences)
+		.values({
+			userId,
 			inAppEnabled: defaults.in_app_enabled as boolean,
 			notifyNewMatches: defaults.notify_new_matches as boolean,
 			notifyRemote: defaults.notify_remote as boolean,
 			notifyLocal: defaults.notify_local as boolean,
 			notifyResourceLending: defaults.notify_resource_lending as boolean,
 			notifyMentorship: defaults.notify_mentorship as boolean,
-		},
-	});
+		})
+		.onConflictDoUpdate({
+			target: [notificationPreferences.userId],
+			set: {
+				inAppEnabled: defaults.in_app_enabled as boolean,
+				notifyNewMatches: defaults.notify_new_matches as boolean,
+				notifyRemote: defaults.notify_remote as boolean,
+				notifyLocal: defaults.notify_local as boolean,
+				notifyResourceLending: defaults.notify_resource_lending as boolean,
+				notifyMentorship: defaults.notify_mentorship as boolean,
+			},
+		});
 }
 
 async function createRequestRow(
@@ -139,61 +150,75 @@ async function createRequestRow(
 		state?: string;
 	},
 ): Promise<string> {
-	const [row] = await getDatabase().insert(requests).values({
-		authorId,
-		categoryId: fields.categoryId,
-		title: 'Help with soldering',
-		goal: 'Learn to solder a simple circuit for a school project',
-		barrier: 'No tools and no guidance from anyone nearby',
-		helpNeeded: 'Someone patient who can show me the basics',
-		state: (fields.state as 'draft' | 'published' | 'closed') ?? 'published',
-		modality: (fields.modality as 'online' | 'in_person' | 'both') ?? 'both',
-		helpType: (fields.helpType as 'borrow' | 'learn' | null) ?? null,
-		location: fields.location ?? null,
-	}).returning();
+	const [row] = await getDatabase()
+		.insert(requests)
+		.values({
+			authorId,
+			categoryId: fields.categoryId,
+			title: 'Help with soldering',
+			goal: 'Learn to solder a simple circuit for a school project',
+			barrier: 'No tools and no guidance from anyone nearby',
+			helpNeeded: 'Someone patient who can show me the basics',
+			state: (fields.state as 'draft' | 'published' | 'closed') ?? 'published',
+			modality: (fields.modality as 'online' | 'in_person' | 'both') ?? 'both',
+			helpType: (fields.helpType as 'borrow' | 'learn' | null) ?? null,
+			location: fields.location ?? null,
+		})
+		.returning();
 	return row!.id;
 }
 
 async function waitForMatchRows(requestId: string, timeoutMs = 5000) {
 	const deadline = Date.now() + timeoutMs;
 	while (Date.now() < deadline) {
-		const rows = await getDatabase().select({
-			contributor_id: requestMatches.contributorId,
-		}).from(requestMatches).where(eq(requestMatches.requestId, requestId));
+		const rows = await getDatabase()
+			.select({
+				contributor_id: requestMatches.contributorId,
+			})
+			.from(requestMatches)
+			.where(eq(requestMatches.requestId, requestId));
 		if (rows.length > 0) return rows;
 		await new Promise((r) => setTimeout(r, 50));
 	}
-	return getDatabase().select({
-		contributor_id: requestMatches.contributorId,
-	}).from(requestMatches).where(eq(requestMatches.requestId, requestId));
+	return getDatabase()
+		.select({
+			contributor_id: requestMatches.contributorId,
+		})
+		.from(requestMatches)
+		.where(eq(requestMatches.requestId, requestId));
 }
 
 async function notificationRows(userId: string) {
-	return getDatabase().select({
-		id: notifications.id,
-		user_id: notifications.userId,
-		request_id: notifications.requestId,
-		type: notifications.type,
-		title: notifications.title,
-		body: notifications.body,
-		read_at: notifications.readAt,
-	}).from(notifications)
-	.where(eq(notifications.userId, userId))
-	.orderBy(desc(notifications.createdAt));
+	return getDatabase()
+		.select({
+			id: notifications.id,
+			user_id: notifications.userId,
+			request_id: notifications.requestId,
+			type: notifications.type,
+			title: notifications.title,
+			body: notifications.body,
+			read_at: notifications.readAt,
+		})
+		.from(notifications)
+		.where(eq(notifications.userId, userId))
+		.orderBy(desc(notifications.createdAt));
 }
 
 async function dispatchLogRows(requestId: string) {
-	return getDatabase().select({
-		user_id: notificationDispatchLog.userId,
-		decision: notificationDispatchLog.decision,
-		reason: notificationDispatchLog.reason,
-		caps_evaluated: notificationDispatchLog.capsEvaluated,
-		cap_window: notificationDispatchLog.capWindow,
-	}).from(notificationDispatchLog)
-	.where(eq(notificationDispatchLog.requestId, requestId));
+	return getDatabase()
+		.select({
+			user_id: notificationDispatchLog.userId,
+			decision: notificationDispatchLog.decision,
+			reason: notificationDispatchLog.reason,
+			caps_evaluated: notificationDispatchLog.capsEvaluated,
+			cap_window: notificationDispatchLog.capWindow,
+		})
+		.from(notificationDispatchLog)
+		.where(eq(notificationDispatchLog.requestId, requestId));
 }
 
 beforeAll(async () => {
+	(globalThis as Record<string, unknown>).__SKIP_TX_ISOLATION__ = true;
 	await migrate(DB_URL);
 	db = getDatabase();
 	queue = createMatchingQueue({ connectionString: DB_URL, db });
@@ -202,11 +227,12 @@ beforeAll(async () => {
 
 afterAll(async () => {
 	await queue.stop();
-	await getPool().end();
+	delete (globalThis as Record<string, unknown>).__SKIP_TX_ISOLATION__;
 });
 
 beforeEach(async () => {
 	await getPool().query('TRUNCATE users, categories, skills RESTART IDENTITY CASCADE');
+	db = getDatabase();
 });
 
 describe('notification dispatch worker', () => {
@@ -323,12 +349,14 @@ describe('notification dispatch worker', () => {
 		const rows = await notificationRows(contributor.id);
 		expect(rows.length).toBe(3);
 
-		const allLogRows = await getDatabase().select({
-			user_id: notificationDispatchLog.userId,
-			decision: notificationDispatchLog.decision,
-			reason: notificationDispatchLog.reason,
-		}).from(notificationDispatchLog)
-		.where(eq(notificationDispatchLog.userId, contributor.id));
+		const allLogRows = await getDatabase()
+			.select({
+				user_id: notificationDispatchLog.userId,
+				decision: notificationDispatchLog.decision,
+				reason: notificationDispatchLog.reason,
+			})
+			.from(notificationDispatchLog)
+			.where(eq(notificationDispatchLog.userId, contributor.id));
 		const suppressed = allLogRows.filter((r) => r.decision === 'suppressed');
 		expect(suppressed.length).toBe(1);
 		expect(suppressed[0]?.reason).toBe('frequency_cap_exceeded');

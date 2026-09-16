@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { eq, getDatabase, getPool, migrate } from '@together/db';
-import { users, categories, requests } from '@together/db/schema';
+import { categories, requests, users } from '@together/db/schema';
 import { makeApp } from '../../app';
 
 const DB_URL =
@@ -10,15 +10,15 @@ let app: ReturnType<typeof makeApp>;
 
 beforeAll(async () => {
 	await migrate(DB_URL);
-	app = makeApp({ databaseUrl: DB_URL, db: getDatabase(), otpProvider: 'mock', isProduction: false });
 });
 
-afterAll(async () => {
-	await getPool().end();
-});
-
-beforeEach(async () => {
-	await getPool().query('TRUNCATE users, categories, requests RESTART IDENTITY CASCADE');
+beforeEach(() => {
+	app = makeApp({
+		databaseUrl: DB_URL,
+		db: getDatabase(),
+		otpProvider: 'mock',
+		isProduction: false,
+	});
 });
 
 let userSeq = 0;
@@ -26,11 +26,14 @@ async function createUser(): Promise<{ id: string; email: string }> {
 	userSeq += 1;
 	const email = `req-user-${Date.now()}-${userSeq}@example.com`;
 	const hash = await Bun.password.hash('password123', { algorithm: 'argon2id' });
-	const [row] = await getDatabase().insert(users).values({
-		email,
-		passwordHash: hash,
-		phoneVerified: true,
-	}).returning();
+	const [row] = await getDatabase()
+		.insert(users)
+		.values({
+			email,
+			passwordHash: hash,
+			phoneVerified: true,
+		})
+		.returning();
 	if (!row) throw new Error('Failed to create user');
 	return { id: row.id, email };
 }
@@ -49,10 +52,13 @@ async function loginToken(email: string): Promise<string> {
 
 async function createCategory(): Promise<number> {
 	const slug = `cat-${Date.now()}-${Math.random()}`;
-	const [row] = await getDatabase().insert(categories).values({
-		name: 'Test Cat',
-		slug,
-	}).returning();
+	const [row] = await getDatabase()
+		.insert(categories)
+		.values({
+			name: 'Test Cat',
+			slug,
+		})
+		.returning();
 	if (!row) throw new Error('Failed to create category');
 	return row.id;
 }
@@ -61,15 +67,18 @@ describe('GET /requests/:id (Discovery & Social cards access)', () => {
 	test('unauthenticated visitor can view a published request', async () => {
 		const author = await createUser();
 		const catId = await createCategory();
-		const [row] = await getDatabase().insert(requests).values({
-			authorId: author.id,
-			categoryId: catId,
-			title: 'Solar Panel Setup',
-			goal: 'Install solar for school',
-			barrier: 'Need technician',
-			helpNeeded: 'Guidance',
-			state: 'published',
-		}).returning();
+		const [row] = await getDatabase()
+			.insert(requests)
+			.values({
+				authorId: author.id,
+				categoryId: catId,
+				title: 'Solar Panel Setup',
+				goal: 'Install solar for school',
+				barrier: 'Need technician',
+				helpNeeded: 'Guidance',
+				state: 'published',
+			})
+			.returning();
 		if (!row) throw new Error('Failed to create request');
 		const requestId = row.id;
 
@@ -88,15 +97,18 @@ describe('GET /requests/:id (Discovery & Social cards access)', () => {
 		const reader = await createUser();
 		const token = await loginToken(reader.email);
 		const catId = await createCategory();
-		const [row] = await getDatabase().insert(requests).values({
-			authorId: author.id,
-			categoryId: catId,
-			title: 'Book Donation',
-			goal: 'Gather books',
-			barrier: 'Transport',
-			helpNeeded: 'Van driver',
-			state: 'published',
-		}).returning();
+		const [row] = await getDatabase()
+			.insert(requests)
+			.values({
+				authorId: author.id,
+				categoryId: catId,
+				title: 'Book Donation',
+				goal: 'Gather books',
+				barrier: 'Transport',
+				helpNeeded: 'Van driver',
+				state: 'published',
+			})
+			.returning();
 		if (!row) throw new Error('Failed to create request');
 		const requestId = row.id;
 
@@ -115,15 +127,18 @@ describe('GET /requests/:id (Discovery & Social cards access)', () => {
 		const author = await createUser();
 		const token = await loginToken(author.email);
 		const catId = await createCategory();
-		const [row] = await getDatabase().insert(requests).values({
-			authorId: author.id,
-			categoryId: catId,
-			title: 'Laptop Needed',
-			goal: 'I need a laptop',
-			barrier: 'No funds',
-			helpNeeded: 'Used laptop',
-			state: 'published',
-		}).returning();
+		const [row] = await getDatabase()
+			.insert(requests)
+			.values({
+				authorId: author.id,
+				categoryId: catId,
+				title: 'Laptop Needed',
+				goal: 'I need a laptop',
+				barrier: 'No funds',
+				helpNeeded: 'Used laptop',
+				state: 'published',
+			})
+			.returning();
 		if (!row) throw new Error('Failed to create request');
 		const requestId = row.id;
 
@@ -141,15 +156,18 @@ describe('GET /requests/:id (Discovery & Social cards access)', () => {
 	test('unauthenticated visitor receives 404 for a draft request', async () => {
 		const author = await createUser();
 		const catId = await createCategory();
-		const [row] = await getDatabase().insert(requests).values({
-			authorId: author.id,
-			categoryId: catId,
-			title: 'Draft Title',
-			goal: 'Draft Goal',
-			barrier: 'Draft Barrier',
-			helpNeeded: 'Draft Help',
-			state: 'draft',
-		}).returning();
+		const [row] = await getDatabase()
+			.insert(requests)
+			.values({
+				authorId: author.id,
+				categoryId: catId,
+				title: 'Draft Title',
+				goal: 'Draft Goal',
+				barrier: 'Draft Barrier',
+				helpNeeded: 'Draft Help',
+				state: 'draft',
+			})
+			.returning();
 		if (!row) throw new Error('Failed to create request');
 		const requestId = row.id;
 
@@ -162,15 +180,18 @@ describe('GET /requests/:id (Discovery & Social cards access)', () => {
 		const other = await createUser();
 		const token = await loginToken(other.email);
 		const catId = await createCategory();
-		const [row] = await getDatabase().insert(requests).values({
-			authorId: author.id,
-			categoryId: catId,
-			title: 'Draft Title',
-			goal: 'Draft Goal',
-			barrier: 'Draft Barrier',
-			helpNeeded: 'Draft Help',
-			state: 'draft',
-		}).returning();
+		const [row] = await getDatabase()
+			.insert(requests)
+			.values({
+				authorId: author.id,
+				categoryId: catId,
+				title: 'Draft Title',
+				goal: 'Draft Goal',
+				barrier: 'Draft Barrier',
+				helpNeeded: 'Draft Help',
+				state: 'draft',
+			})
+			.returning();
 		if (!row) throw new Error('Failed to create request');
 		const requestId = row.id;
 
@@ -186,15 +207,18 @@ describe('GET /requests/:id (Discovery & Social cards access)', () => {
 		const author = await createUser();
 		const token = await loginToken(author.email);
 		const catId = await createCategory();
-		const [row] = await getDatabase().insert(requests).values({
-			authorId: author.id,
-			categoryId: catId,
-			title: 'Draft Title',
-			goal: 'Draft Goal',
-			barrier: 'Draft Barrier',
-			helpNeeded: 'Draft Help',
-			state: 'draft',
-		}).returning();
+		const [row] = await getDatabase()
+			.insert(requests)
+			.values({
+				authorId: author.id,
+				categoryId: catId,
+				title: 'Draft Title',
+				goal: 'Draft Goal',
+				barrier: 'Draft Barrier',
+				helpNeeded: 'Draft Help',
+				state: 'draft',
+			})
+			.returning();
 		if (!row) throw new Error('Failed to create request');
 		const requestId = row.id;
 

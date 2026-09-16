@@ -582,10 +582,7 @@ export interface InternalMatchingRouterOptions {
 }
 
 /** Internal read model for the notification dispatcher (#13) and debugging. */
-export function createInternalMatchingRouter(
-	db: Db,
-	options: InternalMatchingRouterOptions,
-) {
+export function createInternalMatchingRouter(db: Db, options: InternalMatchingRouterOptions) {
 	if (options.findUserById && !options.jwtSecret) {
 		throw new Error('jwtSecret is required when auth is enabled in createInternalMatchingRouter');
 	}

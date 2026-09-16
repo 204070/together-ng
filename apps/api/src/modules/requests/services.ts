@@ -1,5 +1,5 @@
 import { env as configEnv } from '@together/config';
-import { createDb, getPool, type Db, eq, users } from '@together/db';
+import { createDb, type Db, eq, getPool, users } from '@together/db';
 import {
 	FixedWindowRateLimiter,
 	type RateLimitDecision,
@@ -96,6 +96,7 @@ export function createRequestServices(
 		now,
 		matching: deps.matching,
 		findUserById,
-		close: () => (env.db === undefined && deps.db === undefined ? getPool().end() : Promise.resolve()),
+		close: () =>
+			env.db === undefined && deps.db === undefined ? getPool().end() : Promise.resolve(),
 	};
 }

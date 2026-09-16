@@ -47,14 +47,6 @@ beforeAll(async () => {
 	await migrate(DB_URL);
 });
 
-afterAll(async () => {
-	await getPool().end();
-});
-
-beforeEach(async () => {
-	await getPool().query('TRUNCATE otp_tokens, sessions, users, requests CASCADE');
-});
-
 describe('GET /requests/featured', () => {
 	test('returns { items: [] } on an empty database', async () => {
 		const res = await mkApp().handle(new Request('http://localhost/requests/featured'));

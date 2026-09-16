@@ -1,5 +1,5 @@
 import { env as configEnv } from '@together/config';
-import { createDb, getPool, type Db } from '@together/db';
+import { createDb, type Db, getPool } from '@together/db';
 import type { ActiveUserLookup } from '../../lib/authentication';
 import { type PhotoStorage, photoStorage } from '../../lib/storage';
 import { ProfileStore } from './store';
@@ -36,6 +36,7 @@ export function createProfileServices(
 		storage,
 		users: deps.users,
 		jwtSecret,
-		close: () => (env.db === undefined && deps.db === undefined ? getPool().end() : Promise.resolve()),
+		close: () =>
+			env.db === undefined && deps.db === undefined ? getPool().end() : Promise.resolve(),
 	};
 }

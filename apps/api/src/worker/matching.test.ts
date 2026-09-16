@@ -1,7 +1,26 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { type Db, and, asc, desc, eq, getDatabase, getPool, migrate, sql, users, categories, skills, contributorCapabilities, notificationPreferences, requests, requestMatches, contributions, outcomeConfirmations } from '@together/db';
+import {
+	and,
+	asc,
+	categories,
+	contributions,
+	contributorCapabilities,
+	type Db,
+	desc,
+	eq,
+	getDatabase,
+	getPool,
+	migrate,
+	notificationPreferences,
+	outcomeConfirmations,
+	requestMatches,
+	requests,
+	skills,
+	sql,
+	users,
+} from '@together/db';
 import { makeApp } from '../app';
 import { createMatchingQueue, MATCHING_QUEUE } from '../queue';
 import {
@@ -44,12 +63,15 @@ function unique(prefix: string): string {
 async function createUser(email?: string, isAdmin = false): Promise<{ id: string; email: string }> {
 	const address = email ?? `${unique('m')}@example.com`;
 	const hash = await Bun.password.hash('password123', { algorithm: 'argon2id' });
-	const [row] = await getDatabase().insert(users).values({
-		email: address,
-		passwordHash: hash,
-		phoneVerified: true,
-		isAdmin,
-	}).returning();
+	const [row] = await getDatabase()
+		.insert(users)
+		.values({
+			email: address,
+			passwordHash: hash,
+			phoneVerified: true,
+			isAdmin,
+		})
+		.returning();
 	return { id: row!.id, email: address };
 }
 
@@ -96,7 +118,10 @@ async function createCategory(slug?: string): Promise<number> {
 
 async function createSkill(categoryId: number, slug?: string): Promise<number> {
 	const s = slug ?? unique('skill');
-	const [row] = await getDatabase().insert(skills).values({ categoryId, name: s, slug: s }).returning();
+	const [row] = await getDatabase()
+		.insert(skills)
+		.values({ categoryId, name: s, slug: s })
+		.returning();
 	return row!.id;
 }
 
@@ -107,13 +132,15 @@ async function addCapability(input: {
 	modality?: string;
 	location?: string | null;
 }): Promise<void> {
-	await getDatabase().insert(contributorCapabilities).values({
-		userId: input.userId,
-		categoryId: input.categoryId ?? null,
-		skillId: input.skillId ?? null,
-		modality: (input.modality as 'online' | 'in_person' | 'both') ?? 'both',
-		location: input.location ?? null,
-	});
+	await getDatabase()
+		.insert(contributorCapabilities)
+		.values({
+			userId: input.userId,
+			categoryId: input.categoryId ?? null,
+			skillId: input.skillId ?? null,
+			modality: (input.modality as 'online' | 'in_person' | 'both') ?? 'both',
+			location: input.location ?? null,
+		});
 }
 
 async function setPrefs(userId: string, patch: Record<string, boolean>): Promise<void> {
@@ -125,23 +152,26 @@ async function setPrefs(userId: string, patch: Record<string, boolean>): Promise
 		notify_mentorship: true,
 		...patch,
 	};
-	await getDatabase().insert(notificationPreferences).values({
-		userId,
-		notifyNewMatches: defaults.notify_new_matches,
-		notifyRemote: defaults.notify_remote,
-		notifyLocal: defaults.notify_local,
-		notifyResourceLending: defaults.notify_resource_lending,
-		notifyMentorship: defaults.notify_mentorship,
-	}).onConflictDoUpdate({
-		target: [notificationPreferences.userId],
-		set: {
+	await getDatabase()
+		.insert(notificationPreferences)
+		.values({
+			userId,
 			notifyNewMatches: defaults.notify_new_matches,
 			notifyRemote: defaults.notify_remote,
 			notifyLocal: defaults.notify_local,
 			notifyResourceLending: defaults.notify_resource_lending,
 			notifyMentorship: defaults.notify_mentorship,
-		},
-	});
+		})
+		.onConflictDoUpdate({
+			target: [notificationPreferences.userId],
+			set: {
+				notifyNewMatches: defaults.notify_new_matches,
+				notifyRemote: defaults.notify_remote,
+				notifyLocal: defaults.notify_local,
+				notifyResourceLending: defaults.notify_resource_lending,
+				notifyMentorship: defaults.notify_mentorship,
+			},
+		});
 }
 
 async function createRequestRow(
@@ -153,18 +183,21 @@ async function createRequestRow(
 		location?: string | null;
 	},
 ): Promise<string> {
-	const [row] = await getDatabase().insert(requests).values({
-		authorId,
-		categoryId: fields.categoryId,
-		title: 'Help with soldering',
-		goal: 'Learn to solder a simple circuit for a school project',
-		barrier: 'No tools and no guidance from anyone nearby',
-		helpNeeded: 'Someone patient who can show me the basics',
-		state: 'published',
-		modality: (fields.modality as 'online' | 'in_person' | 'both') ?? 'both',
-		helpType: (fields.helpType as 'borrow' | 'learn' | null) ?? null,
-		location: fields.location ?? null,
-	}).returning();
+	const [row] = await getDatabase()
+		.insert(requests)
+		.values({
+			authorId,
+			categoryId: fields.categoryId,
+			title: 'Help with soldering',
+			goal: 'Learn to solder a simple circuit for a school project',
+			barrier: 'No tools and no guidance from anyone nearby',
+			helpNeeded: 'Someone patient who can show me the basics',
+			state: 'published',
+			modality: (fields.modality as 'online' | 'in_person' | 'both') ?? 'both',
+			helpType: (fields.helpType as 'borrow' | 'learn' | null) ?? null,
+			location: fields.location ?? null,
+		})
+		.returning();
 	return row!.id;
 }
 
@@ -175,12 +208,15 @@ async function addCompletedContribution(
 	recipientId: string,
 ): Promise<void> {
 	const db = getDatabase();
-	const [row] = await db.insert(contributions).values({
-		requestId,
-		contributorId,
-		status: 'completed',
-		completedAt: new Date(),
-	}).returning();
+	const [row] = await db
+		.insert(contributions)
+		.values({
+			requestId,
+			contributorId,
+			status: 'completed',
+			completedAt: new Date(),
+		})
+		.returning();
 	if (helpful !== null && row) {
 		await db.insert(outcomeConfirmations).values({
 			contributionId: row.id,
@@ -219,16 +255,19 @@ async function publishViaHttp(
 }
 
 async function matchRows(requestId: string) {
-	return getDatabase().select({
-		contributor_id: requestMatches.contributorId,
-		score: sql<string>`score::text`,
-		reasons: requestMatches.reasons,
-	}).from(requestMatches)
-	.where(eq(requestMatches.requestId, requestId))
-	.orderBy(desc(requestMatches.score), asc(requestMatches.contributorId));
+	return getDatabase()
+		.select({
+			contributor_id: requestMatches.contributorId,
+			score: sql<string>`score::text`,
+			reasons: requestMatches.reasons,
+		})
+		.from(requestMatches)
+		.where(eq(requestMatches.requestId, requestId))
+		.orderBy(desc(requestMatches.score), asc(requestMatches.contributorId));
 }
 
 beforeAll(async () => {
+	(globalThis as Record<string, unknown>).__SKIP_TX_ISOLATION__ = true;
 	db = getDatabase();
 	await migrate(DB_URL);
 	queue = createMatchingQueue({ connectionString: DB_URL, db });
@@ -237,11 +276,12 @@ beforeAll(async () => {
 
 afterAll(async () => {
 	await queue.stop();
-	await getPool().end();
+	delete (globalThis as Record<string, unknown>).__SKIP_TX_ISOLATION__;
 });
 
 beforeEach(async () => {
 	await getPool().query('TRUNCATE users, categories, skills RESTART IDENTITY CASCADE');
+	db = getDatabase();
 });
 
 describe('matching queue (Postgres-backed)', () => {
@@ -665,18 +705,30 @@ describe('determinism and edge cases', () => {
 		await recomputeMatches(db, requestId);
 		// Simulate contributor being notified
 		const notifiedDate = new Date('2026-09-15T12:00:00Z');
-		await getDatabase().update(requestMatches).set({ notifiedAt: notifiedDate }).where(
-			and(eq(requestMatches.requestId, requestId), eq(requestMatches.contributorId, contributor.id)),
-		);
+		await getDatabase()
+			.update(requestMatches)
+			.set({ notifiedAt: notifiedDate })
+			.where(
+				and(
+					eq(requestMatches.requestId, requestId),
+					eq(requestMatches.contributorId, contributor.id),
+				),
+			);
 
 		// Recompute matches again
 		await recomputeMatches(db, requestId);
 
 		const rows = await matchRows(requestId);
 		expect(rows.length).toBe(1);
-		const [notified] = await getDatabase().select({ notifiedAt: requestMatches.notifiedAt })
+		const [notified] = await getDatabase()
+			.select({ notifiedAt: requestMatches.notifiedAt })
 			.from(requestMatches)
-			.where(and(eq(requestMatches.requestId, requestId), eq(requestMatches.contributorId, contributor.id)));
+			.where(
+				and(
+					eq(requestMatches.requestId, requestId),
+					eq(requestMatches.contributorId, contributor.id),
+				),
+			);
 		expect(notified?.notifiedAt).toEqual(notifiedDate);
 	});
 

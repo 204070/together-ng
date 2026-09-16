@@ -84,21 +84,16 @@ async function verifiedToken(
 	const verify = await postJson(app, '/auth/verify-otp', { phone: input.phone, code });
 	expect(verify.status).toBe(200);
 	if (input.admin) {
-		await getDatabase().update(users).set({ isAdmin: true }).where(eq(users.email, input.email.toLowerCase()));
+		await getDatabase()
+			.update(users)
+			.set({ isAdmin: true })
+			.where(eq(users.email, input.email.toLowerCase()));
 	}
 	return loginToken(app, input.email, password);
 }
 
 beforeAll(async () => {
 	await migrate(DB_URL);
-});
-
-afterAll(async () => {
-	await getPool().end();
-});
-
-beforeEach(async () => {
-	await getPool().query('TRUNCATE otp_tokens, sessions, users CASCADE');
 });
 
 describe('GET /admin/reports', () => {
@@ -162,7 +157,10 @@ describe('GET /admin/reports', () => {
 			phone: '+2348012345678',
 			admin: true,
 		});
-		await getDatabase().update(users).set({ status: 'suspended' }).where(eq(users.email, 'admin@x.com'));
+		await getDatabase()
+			.update(users)
+			.set({ status: 'suspended' })
+			.where(eq(users.email, 'admin@x.com'));
 		const res = await get(app, '/admin/reports', token);
 		expect(res.status).toBe(401);
 	});

@@ -1,35 +1,35 @@
-import { Pool } from 'pg';
-import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { env, loadEnv } from '@together/config';
+import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
+import { Pool } from 'pg';
 import * as schema from './schema';
 
 loadEnv();
 
-let pool: Pool;
-let db: NodePgDatabase<typeof schema>;
+export type Db = NodePgDatabase<typeof schema>;
 
-export function initDatabase(databaseUrl: string = env.DATABASE_URL) {
+let pool: Pool;
+let db: Db;
+
+export function initDatabase(databaseUrl: string = env.DATABASE_URL): Db {
 	pool = new Pool({ connectionString: databaseUrl, max: 10 });
-	db = drizzle(pool, { schema });
+	db = drizzle(pool, { schema }) as unknown as Db;
 	return db;
 }
 
-export function getDatabase() {
+export function getDatabase(): Db {
 	if (!db) throw new Error('Database not initialized');
 	return db;
 }
 
-export function getPool() {
+export function getPool(): Pool {
 	if (!pool) throw new Error('Database not initialized');
 	return pool;
 }
 
-export function setDatabase(newDb: NodePgDatabase<typeof schema>) {
+export function setDatabase(newDb: Db) {
 	db = newDb;
 }
 
-export function createDb(databaseUrl: string = env.DATABASE_URL) {
+export function createDb(databaseUrl: string = env.DATABASE_URL): Db {
 	return initDatabase(databaseUrl);
 }
-
-export type Db = NodePgDatabase<typeof schema>;

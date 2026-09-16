@@ -1,10 +1,9 @@
-import { eq, getDatabase } from '@together/db';
+import { getDatabase } from '@together/db';
 import {
-	contributorCapabilities,
 	categories,
+	contributorCapabilities,
 	notificationPreferences,
 	requests,
-	requestMatches,
 	skills,
 	users,
 } from '@together/db/schema';
@@ -38,10 +37,7 @@ export async function createUser(overrides?: {
 export async function createCategory(name?: string): Promise<{ id: number; slug: string }> {
 	const db = getDatabase();
 	const slug = name ?? unique('cat');
-	const [row] = await db
-		.insert(categories)
-		.values({ name: slug, slug })
-		.returning();
+	const [row] = await db.insert(categories).values({ name: slug, slug }).returning();
 	return { id: row!.id, slug };
 }
 
@@ -51,10 +47,7 @@ export async function createSkill(
 ): Promise<{ id: number; slug: string }> {
 	const db = getDatabase();
 	const slug = name ?? unique('skill');
-	const [row] = await db
-		.insert(skills)
-		.values({ categoryId, name: slug, slug })
-		.returning();
+	const [row] = await db.insert(skills).values({ categoryId, name: slug, slug }).returning();
 	return { id: row!.id, slug };
 }
 
@@ -75,10 +68,7 @@ export async function addCapability(input: {
 	});
 }
 
-export async function setPrefs(
-	userId: string,
-	patch: Record<string, unknown>,
-): Promise<void> {
+export async function setPrefs(userId: string, patch: Record<string, unknown>): Promise<void> {
 	const db = getDatabase();
 	const defaults = {
 		notifyNewMatches: true,

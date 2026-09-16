@@ -82,12 +82,12 @@ describe('database schema and migrations', () => {
 			WHERE c.relname = 'requests' AND c.relnamespace = 'public'::regnamespace
 				AND a.attnum > 0 AND NOT a.attisdropped
 		`);
-		expect(columns.rows.some((c) => c.column_name === 'search_vector' && c.type === 'tsvector')).toBe(
-			true,
-		);
-		expect(columns.rows.some((c) => c.column_name === 'embedding' && c.type === 'vector(384)')).toBe(
-			true,
-		);
+		expect(
+			columns.rows.some((c) => c.column_name === 'search_vector' && c.type === 'tsvector'),
+		).toBe(true);
+		expect(
+			columns.rows.some((c) => c.column_name === 'embedding' && c.type === 'vector(384)'),
+		).toBe(true);
 
 		const ginIndexes = await pool.query<{ indexname: string }>(`
 			SELECT indexname

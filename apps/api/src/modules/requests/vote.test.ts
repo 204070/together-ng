@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
-import { and, count, eq, getDatabase, getPool, migrate } from '@together/db';
-import { users, categories, requests, votes } from '@together/db/schema';
+import { and, count, eq, getDatabase, migrate, sql } from '@together/db';
+import { categories, requests, users, votes } from '@together/db/schema';
 import { makeApp } from '../../app';
 
 const DB_URL =
@@ -11,15 +11,15 @@ let app: ReturnType<typeof makeApp>;
 
 beforeAll(async () => {
 	await migrate(DB_URL);
-	app = makeApp({ databaseUrl: DB_URL, db: getDatabase(), otpProvider: 'mock', isProduction: false });
 });
 
-afterAll(async () => {
-	await getPool().end();
-});
-
-beforeEach(async () => {
-	await getPool().query('TRUNCATE users, categories, requests, votes RESTART IDENTITY CASCADE');
+beforeEach(() => {
+	app = makeApp({
+		databaseUrl: DB_URL,
+		db: getDatabase(),
+		otpProvider: 'mock',
+		isProduction: false,
+	});
 });
 
 let userSeq = 0;
@@ -27,11 +27,14 @@ async function createUser(): Promise<{ id: string; email: string }> {
 	userSeq += 1;
 	const email = `vote-user-${Date.now()}-${userSeq}@example.com`;
 	const hash = await Bun.password.hash('password123', { algorithm: 'argon2id' });
-	const [row] = await getDatabase().insert(users).values({
-		email,
-		passwordHash: hash,
-		phoneVerified: true,
-	}).returning();
+	const [row] = await getDatabase()
+		.insert(users)
+		.values({
+			email,
+			passwordHash: hash,
+			phoneVerified: true,
+		})
+		.returning();
 	if (!row) throw new Error('Failed to create user');
 	return { id: row.id, email };
 }
@@ -50,52 +53,64 @@ async function loginToken(email: string): Promise<string> {
 
 async function createCategory(): Promise<number> {
 	const slug = `cat-${Date.now()}-${Math.random()}`;
-	const [row] = await getDatabase().insert(categories).values({
-		name: 'Test Cat',
-		slug,
-	}).returning();
+	const [row] = await getDatabase()
+		.insert(categories)
+		.values({
+			name: 'Test Cat',
+			slug,
+		})
+		.returning();
 	if (!row) throw new Error('Failed to create category');
 	return row.id;
 }
 
 async function createPublishedRequest(authorId: string, catId: number): Promise<string> {
-	const [row] = await getDatabase().insert(requests).values({
-		authorId,
-		categoryId: catId,
-		title: 'Solar Panel Setup',
-		goal: 'Install solar for school',
-		barrier: 'Need technician',
-		helpNeeded: 'Guidance',
-		state: 'published',
-	}).returning();
+	const [row] = await getDatabase()
+		.insert(requests)
+		.values({
+			authorId,
+			categoryId: catId,
+			title: 'Solar Panel Setup',
+			goal: 'Install solar for school',
+			barrier: 'Need technician',
+			helpNeeded: 'Guidance',
+			state: 'published',
+		})
+		.returning();
 	if (!row) throw new Error('Failed to create request');
 	return row.id;
 }
 
 async function createDraftRequest(authorId: string, catId: number): Promise<string> {
-	const [row] = await getDatabase().insert(requests).values({
-		authorId,
-		categoryId: catId,
-		title: 'Draft Request',
-		goal: 'Draft goal',
-		barrier: 'Draft barrier',
-		helpNeeded: 'Draft help',
-		state: 'draft',
-	}).returning();
+	const [row] = await getDatabase()
+		.insert(requests)
+		.values({
+			authorId,
+			categoryId: catId,
+			title: 'Draft Request',
+			goal: 'Draft goal',
+			barrier: 'Draft barrier',
+			helpNeeded: 'Draft help',
+			state: 'draft',
+		})
+		.returning();
 	if (!row) throw new Error('Failed to create request');
 	return row.id;
 }
 
 async function createClosedRequest(authorId: string, catId: number): Promise<string> {
-	const [row] = await getDatabase().insert(requests).values({
-		authorId,
-		categoryId: catId,
-		title: 'Closed Request',
-		goal: 'Closed goal',
-		barrier: 'Closed barrier',
-		helpNeeded: 'Closed help',
-		state: 'closed',
-	}).returning();
+	const [row] = await getDatabase()
+		.insert(requests)
+		.values({
+			authorId,
+			categoryId: catId,
+			title: 'Closed Request',
+			goal: 'Closed goal',
+			barrier: 'Closed barrier',
+			helpNeeded: 'Closed help',
+			state: 'closed',
+		})
+		.returning();
 	if (!row) throw new Error('Failed to create request');
 	return row.id;
 }
@@ -105,15 +120,18 @@ async function createRequestInState(
 	catId: number,
 	state: string,
 ): Promise<string> {
-	const [row] = await getDatabase().insert(requests).values({
-		authorId,
-		categoryId: catId,
-		title: `${state} Request`,
-		goal: 'Goal',
-		barrier: 'Barrier',
-		helpNeeded: 'Help',
-		state: state as any,
-	}).returning();
+	const [row] = await getDatabase()
+		.insert(requests)
+		.values({
+			authorId,
+			categoryId: catId,
+			title: `${state} Request`,
+			goal: 'Goal',
+			barrier: 'Barrier',
+			helpNeeded: 'Help',
+			state: state as any,
+		})
+		.returning();
 	if (!row) throw new Error('Failed to create request');
 	return row.id;
 }
@@ -142,7 +160,10 @@ describe('POST /requests/:id/vote', () => {
 		expect(body.hasVoted).toBe(true);
 
 		// Verify DB row
-		const [result] = await getDatabase().select({ count: count() }).from(votes).where(and(eq(votes.userId, voter.id), eq(votes.requestId, requestId)));
+		const [result] = await getDatabase()
+			.select({ count: count() })
+			.from(votes)
+			.where(and(eq(votes.userId, voter.id), eq(votes.requestId, requestId)));
 		expect(result?.count).toBe(1);
 	});
 
@@ -172,7 +193,10 @@ describe('POST /requests/:id/vote', () => {
 		expect(body.error).toBe('ALREADY_VOTED');
 
 		// Only one DB row
-		const [result] = await getDatabase().select({ count: count() }).from(votes).where(and(eq(votes.userId, voter.id), eq(votes.requestId, requestId)));
+		const [result] = await getDatabase()
+			.select({ count: count() })
+			.from(votes)
+			.where(and(eq(votes.userId, voter.id), eq(votes.requestId, requestId)));
 		expect(result?.count).toBe(1);
 	});
 
@@ -373,7 +397,10 @@ describe('DELETE /requests/:id/vote', () => {
 		expect(body.hasVoted).toBe(false);
 
 		// Verify DB row removed
-		const [result] = await getDatabase().select({ count: count() }).from(votes).where(and(eq(votes.userId, voter.id), eq(votes.requestId, requestId)));
+		const [result] = await getDatabase()
+			.select({ count: count() })
+			.from(votes)
+			.where(and(eq(votes.userId, voter.id), eq(votes.requestId, requestId)));
 		expect(result?.count).toBe(0);
 	});
 
@@ -546,28 +573,37 @@ describe('DB unique constraint', () => {
 		const voter = await createUser();
 		const author = await createUser();
 		const catId = await createCategory();
-		const [reqRow] = await getDatabase().insert(requests).values({
-			authorId: author.id,
-			categoryId: catId,
-			title: 'Test',
-			goal: 'Goal',
-			barrier: 'Barrier',
-			helpNeeded: 'Help',
-			state: 'published',
-		}).returning();
+		const [reqRow] = await getDatabase()
+			.insert(requests)
+			.values({
+				authorId: author.id,
+				categoryId: catId,
+				title: 'Test',
+				goal: 'Goal',
+				barrier: 'Barrier',
+				helpNeeded: 'Help',
+				state: 'published',
+			})
+			.returning();
 		if (!reqRow) throw new Error('Failed to create request');
 
 		await getDatabase().insert(votes).values({ userId: voter.id, requestId: reqRow.id });
 
 		let threw = false;
+		await getDatabase().execute(sql`SAVEPOINT vote_dup_test`);
 		try {
 			await getDatabase().insert(votes).values({ userId: voter.id, requestId: reqRow.id });
+			await getDatabase().execute(sql`RELEASE SAVEPOINT vote_dup_test`);
 		} catch {
+			await getDatabase().execute(sql`ROLLBACK TO SAVEPOINT vote_dup_test`);
 			threw = true;
 		}
 		expect(threw).toBe(true);
 
-		const [result] = await getDatabase().select({ count: count() }).from(votes).where(and(eq(votes.userId, voter.id), eq(votes.requestId, reqRow.id)));
+		const [result] = await getDatabase()
+			.select({ count: count() })
+			.from(votes)
+			.where(and(eq(votes.userId, voter.id), eq(votes.requestId, reqRow.id)));
 		expect(result?.count).toBe(1);
 	});
 });

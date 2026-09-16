@@ -17,9 +17,9 @@ export {
 	sql,
 } from 'drizzle-orm';
 export { drizzle } from 'drizzle-orm/node-postgres';
+export type { Pool, PoolClient } from 'pg';
 export type { Db } from './client';
 export { createDb, getDatabase, getPool, initDatabase, setDatabase } from './client';
-export type { Pool } from 'pg';
 export { migrate, migrationsDir } from './migrate';
 export * from './schema';
 export { CATEGORIES, seedCategories } from './seed';

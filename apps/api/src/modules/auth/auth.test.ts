@@ -6,8 +6,7 @@ import type { MockOtpSender } from './otp-sender';
 import type { AuthServices } from './services';
 
 const DB_URL =
-	process.env.TEST_DATABASE_URL ??
-	'postgresql://together:together@localhost:5433/together_test';
+	process.env.TEST_DATABASE_URL ?? 'postgresql://together:together@localhost:5433/together_test';
 const JWT_SECRET = 'test-secret';
 
 type App = ReturnType<typeof makeApp>;
@@ -159,11 +158,13 @@ describe('POST /auth/register', () => {
 		expect(body).toHaveProperty('phoneVerified', false);
 		expect(body).not.toHaveProperty('password_hash');
 
-		const rows = await getDatabase().select({
-			email: users.email,
-			passwordHash: users.passwordHash,
-			phone: users.phone,
-		}).from(users);
+		const rows = await getDatabase()
+			.select({
+				email: users.email,
+				passwordHash: users.passwordHash,
+				phone: users.phone,
+			})
+			.from(users);
 		expect(rows).toHaveLength(1);
 		expect(rows[0]?.email).toBe('ada@x.com');
 		expect(rows[0]?.phone).toBe('+2348012345678');
@@ -172,10 +173,12 @@ describe('POST /auth/register', () => {
 		const [profileCount] = await getDatabase().select({ count: count() }).from(profiles);
 		expect(profileCount?.count).toBe(0);
 
-		const otps = await getDatabase().select({
-			codeHash: otpTokens.codeHash,
-			context: otpTokens.context,
-		}).from(otpTokens);
+		const otps = await getDatabase()
+			.select({
+				codeHash: otpTokens.codeHash,
+				context: otpTokens.context,
+			})
+			.from(otpTokens);
 		expect(otps).toHaveLength(1);
 		expect(otps[0]?.codeHash).toStartWith('$argon2id$');
 		expect(otps[0]?.context).toBe('verify');
@@ -243,9 +246,12 @@ describe('OTP send and verify', () => {
 		expect(verifyRes.status).toBe(200);
 		expect(await readBody(verifyRes)).toEqual({ phoneVerified: true });
 
-		const [row] = await getDatabase().select({
-			phoneVerified: users.phoneVerified,
-		}).from(users).where(eq(users.email, 'user@x.com'));
+		const [row] = await getDatabase()
+			.select({
+				phoneVerified: users.phoneVerified,
+			})
+			.from(users)
+			.where(eq(users.email, 'user@x.com'));
 		expect(row?.phoneVerified).toBe(true);
 
 		const replay = await postJson(app, '/auth/verify-otp', { phone: body.phone, code: otpCode });
@@ -329,17 +335,21 @@ describe('OTP send and verify', () => {
 			phone,
 		});
 
-		const afterRegister = await getDatabase().select({
-			context: otpTokens.context,
-		}).from(otpTokens);
+		const afterRegister = await getDatabase()
+			.select({
+				context: otpTokens.context,
+			})
+			.from(otpTokens);
 		expect(afterRegister[0]?.context).toBe('verify');
 
 		await postJson(app, '/auth/verify-otp', { phone, code: otpCode });
 		await postJson(app, '/auth/otp/send', { phone });
 
-		const afterLogin = await getDatabase().select({
-			context: otpTokens.context,
-		}).from(otpTokens);
+		const afterLogin = await getDatabase()
+			.select({
+				context: otpTokens.context,
+			})
+			.from(otpTokens);
 		expect(afterLogin[0]?.context).toBe('login');
 	});
 });

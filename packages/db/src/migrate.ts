@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { Pool } from 'pg';
 import { env, loadEnv } from '@together/config';
+import { Pool } from 'pg';
 
 loadEnv();
 

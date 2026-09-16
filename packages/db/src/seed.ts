@@ -1,5 +1,5 @@
-import { Pool } from 'pg';
 import { env, loadEnv } from '@together/config';
+import { Pool } from 'pg';
 
 loadEnv();
 

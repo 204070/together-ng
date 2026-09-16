@@ -16,7 +16,7 @@ describe('database schema and migrations', () => {
 
 	test('applying migrations twice is idempotent', async () => {
 		await migrate(databaseUrl);
-		const result = await pool.query('SELECT file_name FROM public.drizzle_migrations');
+		const result = await pool.query('SELECT hash FROM drizzle.__drizzle_migrations');
 		expect(result.rows.length).toBeGreaterThan(0);
 	});
 

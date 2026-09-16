@@ -1,5 +1,5 @@
 import { env as configEnv } from '@together/config';
-import { createClient, createDb, type Db, type Sql } from '@together/db';
+import { createDb, type Db, type Sql } from '@together/db';
 import { FixedWindowRateLimiter } from '../../lib/rate-limit';
 import type { MatchingService } from '../../worker/matching';
 import { createOtpSender, type OtpSender } from './otp-sender';
@@ -24,7 +24,6 @@ export interface AppEnv {
 }
 
 export interface AuthServices {
-	sql: Sql;
 	db: Db;
 	store: AuthStore;
 	jwtSecret: string;
@@ -41,26 +40,30 @@ export interface AuthServices {
 
 export function createAuthServices(
 	env: AppEnv = {},
-	deps: { sql?: Sql; db?: Db } = {},
+	deps: { db?: Db; sql?: Sql } = {},
 ): AuthServices {
 	const databaseUrl = env.databaseUrl ?? configEnv.DATABASE_URL;
 	const jwtSecret = env.jwtSecret ?? configEnv.JWT_SECRET;
 	const isProduction = env.isProduction ?? configEnv.NODE_ENV === 'production';
 	const provider = env.otpProvider ?? configEnv.OTP_PROVIDER;
 	const now = env.now ?? (() => new Date());
-	const sql = (deps.sql ?? env.sql ?? createClient(databaseUrl)) as Sql;
-	const db = deps.db ?? env.db ?? createDb(databaseUrl);
+	const db =
+		deps.db ??
+		env.db ??
+		(deps.sql || env.sql ? createDb(deps.sql ?? env.sql) : createDb(databaseUrl));
 	const store = new AuthStore(db);
 	const otpSender = env.sql === undefined ? createOtpSender(provider) : ensureMockSender(provider);
 	return {
-		sql,
 		db,
 		store,
 		jwtSecret,
 		isProduction,
 		now,
 		otpSender,
-		close: () => (env.sql === undefined ? sql.end() : Promise.resolve()),
+		close: () =>
+			env.sql === undefined && env.db === undefined && deps.db === undefined
+				? db.$client.end()
+				: Promise.resolve(),
 		limiters: {
 			login: new FixedWindowRateLimiter(LOGIN_WINDOW_MS, LOGIN_MAX_HITS, {
 				now: () => now().getTime(),

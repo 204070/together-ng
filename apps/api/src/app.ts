@@ -1,5 +1,5 @@
 import { env as configEnv, loadEnv } from '@together/config';
-import { createClient, createDb, type Db, type Sql } from '@together/db';
+import { createDb, type Db } from '@together/db';
 import { Elysia } from 'elysia';
 import { ValidationError } from 'elysia/error';
 import { HttpError } from './lib/errors';
@@ -20,17 +20,14 @@ loadEnv();
 
 export function makeApp(env: AppEnv = {}) {
 	const databaseUrl = env.databaseUrl ?? configEnv.DATABASE_URL;
-	const sql = (env.sql ?? createClient(databaseUrl)) as Sql;
-	const db: Db = env.db ?? createDb(databaseUrl);
+	const db: Db = env.db ?? (env.sql ? createDb(env.sql) : createDb(databaseUrl));
 
-	const authServices = createAuthServices(env, { sql, db });
+	const authServices = createAuthServices(env, { db });
 	const profileServices = createProfileServices(env, {
-		sql,
 		db,
 		users: authServices.store,
 	});
 	const requestServices = createRequestServices(env, {
-		sql,
 		db,
 		authStore: authServices.store,
 		now: authServices.now,

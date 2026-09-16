@@ -1,4 +1,4 @@
-import { index, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { index, pgTable, text, timestamp, uniqueIndex, uuid, boolean } from 'drizzle-orm/pg-core';
 import { contributionStatus, outcomeResponse } from './enums';
 import { requestResponses, requests } from './requests';
 import { users } from './users';
@@ -40,7 +40,8 @@ export const outcomeConfirmations = pgTable(
 		recipientId: uuid('recipient_id')
 			.notNull()
 			.references(() => users.id, { onDelete: 'cascade' }),
-		response: outcomeResponse('response').notNull(),
+		received: boolean('received').notNull(),
+		response: outcomeResponse('response'),
 		explanation: text('explanation'),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 	},
@@ -50,7 +51,28 @@ export const outcomeConfirmations = pgTable(
 	],
 );
 
+export const contributorConfirmations = pgTable(
+	'contributor_confirmations',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		contributionId: uuid('contribution_id')
+			.notNull()
+			.references(() => contributions.id, { onDelete: 'cascade' }),
+		contributorId: uuid('contributor_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		completedAsAgreed: boolean('completed_as_agreed').notNull(),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+	},
+	(table) => [
+		uniqueIndex('contributor_confirmations_contribution_id_unique').on(table.contributionId),
+		index('contributor_confirmations_contributor_id_idx').on(table.contributorId),
+	],
+);
+
 export type Contribution = typeof contributions.$inferSelect;
 export type NewContribution = typeof contributions.$inferInsert;
 export type OutcomeConfirmation = typeof outcomeConfirmations.$inferSelect;
 export type NewOutcomeConfirmation = typeof outcomeConfirmations.$inferInsert;
+export type ContributorConfirmation = typeof contributorConfirmations.$inferSelect;
+export type NewContributorConfirmation = typeof contributorConfirmations.$inferInsert;

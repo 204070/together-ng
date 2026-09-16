@@ -45,6 +45,7 @@ export const requests = pgTable(
 		closedAt: timestamp('closed_at', { withTimezone: true }),
 		closedReason: text('closed_reason'),
 		underReview: boolean('under_review').notNull().default(false),
+		anonymousContributionsOk: boolean('anonymous_contributions_ok').notNull().default(false),
 		searchVector: tsvector('search_vector').generatedAlwaysAs(
 			(): SQL =>
 				sql`to_tsvector('simple', coalesce(${requests.title}, '') || ' ' || coalesce(${requests.goal}, '') || ' ' || coalesce(${requests.barrier}, '') || ' ' || coalesce(${requests.helpNeeded}, ''))`,
@@ -73,6 +74,7 @@ export const requestResponses = pgTable(
 			.notNull()
 			.references(() => users.id, { onDelete: 'cascade' }),
 		message: text('message').notNull(),
+		anonymous: boolean('anonymous').notNull().default(false),
 		modality: modality('modality'),
 		status: responseStatus('status').notNull().default('pending'),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

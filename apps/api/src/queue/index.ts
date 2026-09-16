@@ -152,6 +152,14 @@ export function createMatchingQueue(options: MatchingQueueOptions) {
 
 	return {
 		...queue,
+		start: async () => {
+			await queue.start();
+			await notificationQueue.start();
+		},
+		stop: async () => {
+			await queue.stop();
+			await notificationQueue.stop();
+		},
 		asService: (): MatchingService => service,
 		notificationQueue,
 	};

@@ -183,7 +183,6 @@ beforeAll(async () => {
 	db = drizzle(drizzleClient);
 	queue = createMatchingQueue({ connectionString: DB_URL, db });
 	await queue.start();
-	await queue.notificationQueue.start();
 });
 
 afterAll(async () => {

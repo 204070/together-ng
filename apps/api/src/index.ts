@@ -14,7 +14,6 @@ const matchingQueue = createMatchingQueue({
 });
 
 await matchingQueue.start();
-await matchingQueue.notificationQueue.start();
 
 const serverApp = makeApp({
 	db,

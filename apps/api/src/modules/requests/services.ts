@@ -1,5 +1,5 @@
 import { env as configEnv } from '@together/config';
-import { createClient, createDb, type Db, eq, type Sql, users } from '@together/db';
+import { createDb, type Db, eq, type Sql, users } from '@together/db';
 import {
 	FixedWindowRateLimiter,
 	type RateLimitDecision,
@@ -27,7 +27,6 @@ export interface AsyncRateLimiter {
 }
 
 export interface RequestServices {
-	sql: Sql;
 	db: Db;
 	store: RequestStore;
 	limiter: AsyncRateLimiter;
@@ -53,8 +52,10 @@ export function createRequestServices(
 	const databaseUrl = env.databaseUrl ?? configEnv.DATABASE_URL;
 	const jwtSecret = env.jwtSecret ?? configEnv.JWT_SECRET;
 	const now = deps.now ?? env.now ?? (() => new Date());
-	const sql = (deps.sql ?? env.sql ?? createClient(databaseUrl)) as Sql;
-	const db = deps.db ?? env.db ?? createDb(databaseUrl);
+	const db =
+		deps.db ??
+		env.db ??
+		(deps.sql || env.sql ? createDb(deps.sql ?? env.sql) : createDb(databaseUrl));
 	const store = new RequestStore(db);
 
 	let limiter: AsyncRateLimiter;
@@ -93,7 +94,6 @@ export function createRequestServices(
 	};
 
 	return {
-		sql,
 		db,
 		store,
 		limiter,
@@ -101,6 +101,12 @@ export function createRequestServices(
 		now,
 		matching: deps.matching,
 		findUserById,
-		close: () => (env.sql === undefined && deps.sql === undefined ? sql.end() : Promise.resolve()),
+		close: () =>
+			env.sql === undefined &&
+			deps.sql === undefined &&
+			env.db === undefined &&
+			deps.db === undefined
+				? db.$client.end()
+				: Promise.resolve(),
 	};
 }

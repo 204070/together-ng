@@ -1,5 +1,5 @@
 import { env, loadEnv } from '@together/config';
-import { createClient } from '@together/db';
+import { createDb } from '@together/db';
 import { makeApp } from './app';
 import { createMatchingQueue } from './queue';
 
@@ -7,16 +7,16 @@ loadEnv();
 
 const port = env.PORT;
 
-const sql = createClient(env.DATABASE_URL);
+const db = createDb(env.DATABASE_URL);
 const matchingQueue = createMatchingQueue({
 	connectionString: env.DATABASE_URL,
-	sql,
+	db,
 });
 
 await matchingQueue.start();
 
 const serverApp = makeApp({
-	sql,
+	db,
 	matching: matchingQueue.asService(),
 });
 

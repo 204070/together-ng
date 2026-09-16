@@ -5,7 +5,7 @@
 **Working domain:** together.ng  
 **Status:** Detailed product specification  
 **Scope:** Product behavior, workflows, business rules, functional requirements, acceptance criteria, technical architecture, technology stack, matching algorithm, and AI implementation approach  
-**Revision note:** This revision adds Section 65 (Technical Implementation Plan) and Section 66 (Low-Fidelity Wireframes). Sections 1–64 remain the product specification and are unchanged in substance.  
+**Revision note:** This revision adds shareable cards/social metadata requirements and the corresponding technical implementation guidance in Section 65.10. Sections 1–64 remain the product specification and are unchanged in substance.  
 **Companion file:** Wireframes and the system architecture diagram are in `together-wireframes.html` (see Section 66).
 
 ---
@@ -333,6 +333,50 @@ Exact addresses should never be publicly exposed for resource exchanges.
 
 Exact contact information should remain private unless users choose to share it through the appropriate interaction.
 
+## 8.4 Public contribution and request history
+
+A public profile should show meaningful history that helps people make informed decisions.
+
+A profile may display:
+
+- Together member since date
+- Number of requests made
+- Number of requests completed / cancelled
+- Number of contributions made
+- Number of contributions received
+- Public request history (titles and broad categories, not private details)
+- Public contribution history (what was contributed, whether it was completed)
+
+This history is factual and descriptive, not a popularity score. It answers:
+
+> "Has this person participated meaningfully in Together?"
+
+It does not answer:
+
+> "How popular is this person?"
+
+The goal is to provide enough history for people to make their own informed decisions, following the eBay principle of visible history of actual interactions without creating a reputation marketplace.
+
+## 8.5 Request anonymity preference
+
+A request can indicate whether anonymous contributions are acceptable:
+
+- **Anonymous contributions acceptable** — the contributor does not need to disclose their identity. The contributor can choose to help using their Together profile or anonymously.
+- **Contributor identity matters** — the requester wants to know who is providing help because the contributor's background, experience, or qualifications may be relevant.
+
+This is a request-level setting, not a user-level preference. The requester decides what disclosure is needed for each request.
+
+## 8.6 Contributor identity disclosure
+
+When making an offer, a contributor can choose how to appear:
+
+- **Using my Together profile** — the requester sees the contributor's public Together profile.
+- **Anonymously** — the requester does not see the contributor's identity beyond a Together pseudonym.
+
+If the requester has indicated that contributor identity matters, the contributor can still choose their disclosure level, but the requester may decline offers from anonymous contributors if knowing the contributor's background is important to them.
+
+Together should not present a contributor as "verified" unless Together has actually performed the relevant verification. Basic email/phone verification is for account security, not a public trust signal.
+
 ---
 
 # 9. Creating a Request for Help
@@ -541,9 +585,39 @@ Users should be able to share requests externally.
 
 The shared representation should contain enough context for someone to understand the need and return to Together.
 
+Every public, shareable request should have a dedicated shareable URL and a compelling, dynamically generated social preview card.
+
+The shareable card is not merely an SEO artifact. It is a portable representation of the request that should make the need understandable when it appears outside Together.
+
+A card should generally communicate:
+
+- What the person is trying to accomplish
+- The type of help needed
+- Relevant category or context
+- Location when relevant and safe to expose
+- Together branding
+- A clear visual indication that this is a request for productive help
+
+Cards should use concise text and should not attempt to reproduce the complete request.
+
+Sharing should work through:
+
+- Native browser/device sharing where available
+- Copying the canonical request URL
+- Platform link previews using the request's social metadata
+- A future option to share/download the card as an image where useful
+
+The card and metadata must respect the request's visibility, moderation, and privacy settings. Exact residential addresses, private contact information, sensitive identity information, verification information, and other private request details must never be exposed through a public card.
+
+Shareable cards should be generated from real request data rather than manually authored images.
+
 Sharing is another discovery mechanism.
 
 A person who cannot help may know someone who can.
+
+The intended discovery loop is:
+
+> **See a need → Share it → Someone else discovers it → Someone contributes**
 
 ---
 
@@ -603,15 +677,23 @@ A potential contributor selects:
 
 > **I can help**
 
-They should be able to explain how they can help.
+The offer should feel almost as lightweight as sending a message. The contributor can say something like:
 
-Example:
+> "I have a spare ThinkPad you can borrow."
 
-> “I can help you with the first three weeks of the course. I'm available online on Saturday afternoons.”
+or
 
-The contributor should not have to commit to the entire request.
+> "I don't have a computer, but I can give you access to our community lab."
 
-They may offer a narrower form of assistance.
+or
+
+> "I can mentor you instead."
+
+The contributor should not have to commit to the entire request. They may offer a narrower form of assistance.
+
+The request can optionally indicate whether anonymous contributions are acceptable (Section 8.5). If anonymous contributions are acceptable, the contributor can choose to offer help using their Together profile or anonymously.
+
+The offer is stored as a `contribution_offers` record with state `pending`. The requester can accept or decline.
 
 ---
 
@@ -650,32 +732,53 @@ Users should not be forced to publicly expose personal contact details.
 
 # 20. Completing a Contribution
 
-After the help takes place, the contribution should be marked as completed.
+When an offer is accepted, a `contributions` record is created linking the request, offer, contributor, and recipient.
 
-Either participant can initiate completion.
+The contribution has a simple lifecycle:
 
-The other participant can confirm.
+1. **Active** — the contribution is in progress or the parties are coordinating.
+2. **Completed** — the help was delivered.
+3. **Cancelled** — either party cancelled before completion.
+
+Either participant can mark the contribution as completed or cancelled.
 
 A completed contribution should record enough information to establish that the interaction occurred without unnecessarily exposing private conversation details.
+
+The contribution also records a generic **fulfillment method** indicating how help was delivered (e.g. mentoring, resource lending, digital delivery, introduction, off-platform coordination). This is a simple enum, not a provider-specific workflow — Together does not need to know the details of how external resources are provided.
 
 ---
 
 # 21. Outcome Confirmation
 
-The recipient should be asked:
+After a contribution is completed, both parties provide lightweight confirmation.
 
-> **Did this help you move forward?**
+## 21.1 Recipient confirmation
 
-Possible responses:
+The recipient is asked:
 
-- Yes, significantly
-- Yes, somewhat
-- Not yet
+> **Did you receive the help?**
+
+- Yes
 - No
 
-The recipient can optionally explain what happened.
+If yes:
 
-This feedback should be more important than simple likes.
+> **Did this contribution help you make progress toward your goal?**
+
+- Yes
+- Partially
+- Not yet
+
+## 21.2 Contributor confirmation
+
+The contributor is asked:
+
+> **Was the contribution completed as agreed?**
+
+- Yes
+- No
+
+These confirmations are the foundation for public contribution history (Section 8.4). They are evidence for future trust, but they do not automatically trigger disputes or require Together staff to determine who was right.
 
 The objective is to determine whether Together is actually helping people progress.
 
@@ -827,7 +930,7 @@ A user asks to borrow it and explains the intended use.
 
 ## Step 3 — Trust assessment
 
-Depending on resource value and risk, Together may require additional verification or an established history of successful participation.
+Depending on resource value and risk, Together may use lightweight account checks or require an established history of successful participation. Stronger identity checks should be reserved for genuinely high-risk or high-value cases because they create operational overhead.
 
 ## Step 4 — Agreement
 
@@ -886,20 +989,11 @@ The exact thresholds can be determined during implementation based on real-world
 
 # 30. Resource Damage or Loss
 
-If an item is returned damaged, lost, or not returned:
+If an item is returned damaged, lost, or not returned, the affected participant can report the issue and provide relevant information. Together should preserve the available records and may restrict an account where there is a clear platform-safety reason.
 
-1. The owner reports the issue.
-2. The borrower is notified.
-3. Both parties can provide relevant information.
-4. The existing condition and lending records are reviewed.
-5. The issue can enter a dispute process.
-6. Together may restrict one or both accounts while investigating.
-7. Serious violations can result in suspension or permanent removal.
-8. Where appropriate and legally necessary, relevant information can be provided to authorities.
+The MVP should not assume that Together has the operational capacity to arbitrate ordinary disputes. Participants should therefore agree on practical terms before a high-risk lending interaction, and Together should make the relevant history available to inform their decisions.
 
-Together should not automatically decide every dispute in favor of the owner or borrower.
-
-The objective is fair handling based on available evidence.
+Serious or clearly abusive behavior can result in suspension or permanent removal, with legal escalation only where appropriate and necessary.
 
 ---
 
@@ -1544,6 +1638,12 @@ The MVP should not be considered functionally complete until a user can perform 
 - Users can search requests.
 - Users can upvote requests.
 - Users can share requests.
+- Public requests have canonical shareable URLs.
+- Public requests expose appropriate social preview metadata.
+- Public requests have a generated 1200×630 shareable card.
+- Share cards contain only information permitted by the request's visibility and privacy settings.
+- A card can be regenerated when share-relevant request content changes.
+- Closed, removed, or restricted requests do not continue exposing private or inappropriate card content.
 
 ## Matching
 
@@ -1619,6 +1719,25 @@ Verify:
 - Users cannot artificially vote multiple times.
 - Closed requests are handled appropriately.
 
+### Shareable card tests
+
+Verify:
+
+- A published public request has a stable canonical share URL.
+- The canonical URL exposes the correct page metadata.
+- The social preview uses the generated request card.
+- The card renders correctly at the required dimensions.
+- Long request titles and other variable text are truncated or wrapped safely.
+- Missing optional fields do not break rendering.
+- Special characters and non-ASCII names/text render correctly.
+- Private fields are never included in the card.
+- A request that becomes restricted or moderated no longer exposes inappropriate card content.
+- Relevant request edits trigger card regeneration.
+- Unchanged requests do not cause unnecessary card regeneration.
+- Card URLs are cacheable and return the correct image.
+- Card generation failures do not prevent the request itself from being published or viewed.
+- A missing card can be regenerated without creating duplicate request records.
+
 ## 57.4 Matching tests
 
 Verify:
@@ -1664,7 +1783,7 @@ Verify:
 - Handoff can be confirmed.
 - Return can be confirmed.
 - Damage/loss can be reported.
-- Disputes can be escalated.
+- Serious issues can be reported.
 - High-value resources trigger appropriate safeguards.
 
 ## 57.8 Safety tests
@@ -1787,7 +1906,7 @@ The first version should focus on validating the central behavior.
 - Physical-resource lending
 - High-value resources
 - Identity verification
-- Complex disputes
+- Complex disputes / arbitration
 
 These should be implemented conservatively because they create significant trust and operational complexity.
 
@@ -1839,8 +1958,8 @@ Features:
 - Lending workflow
 - Condition records
 - Trust requirements
-- Identity verification
-- Dispute workflows
+- Lightweight account verification where justified
+- Basic issue-reporting; formal dispute/arbitration workflows are deferred
 - Lending history
 
 ## Phase 3 — Network expansion
@@ -1993,13 +2112,13 @@ Bun workspaces (or Turborepo on top of them) keep the three apps and shared pack
 
 | Entity                                                 | Purpose                                                                                                                | Notes                                                                                                                                                                |
 | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `users`, `profiles`                                    | Account + public profile (Sections 7–8)                                                                                | Private contact fields live in a separate table/column set that is never serialized in public API responses (Section 47).                                            |
+| `users`, `profiles`                                    | Account + public profile (Sections 7–8)                                                                                | Private contact fields live in a separate table/column set that is never serialized in public API responses (Section 47). Includes `anonymous_contributions_ok` boolean on requests (Section 8.5). |
 | `categories`, `skills`                                 | Evolving taxonomy (Sections 7.3, 51)                                                                                   | Soft-deletable (`retired_at`), never hard-deleted, so historical requests keep valid references (Section 51's "changes should avoid destroying historical records"). |
 | `contributor_capabilities`                             | Join of user ↔ skill/category ↔ availability preferences                                                               | Drives matching (Section 15).                                                                                                                                        |
-| `requests`                                             | The core object; goal/barrier/help-needed text, category, optional structured fields, `state` enum matching Section 11 | `search_vector` (`tsvector`) and `embedding` (`vector`) generated columns for search and semantic matching/duplicate detection.                                      |
-| `request_responses` (offers)                           | A contributor's "I can help" response (Section 17)                                                                     | Independent of full commitment — supports Section 18's multiple/partial offers.                                                                                      |
-| `contributions`                                        | An accepted, in-progress-or-completed unit of help                                                                     | Links a request, one or more responses, and completion/outcome data (Sections 20–22).                                                                                |
-| `outcome_confirmations`                                | Recipient's "did this help you move forward?" answer (Section 21)                                                      | Structured enum + optional free text.                                                                                                                                |
+| `requests`                                             | The core object; goal/barrier/help-needed text, category, optional structured fields, `state` enum matching Section 11, `anonymous_contributions_ok` flag | `search_vector` (`tsvector`) and `embedding` (`vector`) generated columns for search and semantic matching/duplicate detection.                                      |
+| `contribution_offers`                                  | A lightweight "I can help" offer from a contributor (Section 17.1)                                                     | Links to a request and a user. Contains a short message describing what the contributor can provide. State: `pending → accepted | declined | cancelled`. |
+| `contributions`                                        | An accepted, in-progress-or-completed unit of help (Section 20)                                                       | Created when an offer is accepted. Links to the offer, request, contributor, and recipient. State: `active → completed | cancelled`. Records fulfillment method (generic enum). |
+| `outcome_confirmations`                                | Lightweight reciprocal confirmation (Section 21.1)                                                                     | Both contributor and recipient confirm: recipient says "received? yes/no" and "helped? yes/partially/not yet"; contributor says "completed as agreed? yes/no". Structured enum + optional free text. |
 | `votes`                                                | Upvotes on requests (Section 13)                                                                                       | Unique constraint on `(user_id, request_id)`; rate-limited at the API layer.                                                                                         |
 | `resources`, `lending_agreements`, `condition_records` | Physical resource lending (Sections 27–30)                                                                             | `condition_records` reference object-storage photo keys, not raw files.                                                                                              |
 | `reports`, `moderation_actions`, `audit_log`           | Trust & safety (Sections 34–36, 49–50)                                                                                 | `audit_log` is append-only and covers every admin action, per Section 50's "administrative actions should be auditable."                                             |
@@ -2054,6 +2173,244 @@ Structured logging (pino) from the API and worker, error tracking (Sentry), and 
 
 ---
 
+## 65.10 Shareable cards and social metadata
+
+Shareability is a first-class product capability because external sharing is part of Together's discovery and contribution loop. Public requests should produce a useful representation when shared through messaging apps, social networks, search results, or copied links.
+
+### 65.10.1 Canonical shareable URLs
+
+Every public request should have a canonical, human-readable URL.
+
+The URL should resolve to the normal Together request page and should be suitable for:
+
+- Browser navigation
+- Copy/paste
+- Native device sharing
+- Social-network link previews
+- Search indexing where the request is eligible
+- Future QR-code or offline sharing experiences
+
+The canonical URL should not contain private identifiers or information that should not be public.
+
+The same pattern should be extensible to other public Together entities such as:
+
+- Contributor profiles
+- Public resource listings
+- Categories
+- Community knowledge pages
+
+### 65.10.2 Open Graph and social metadata
+
+Public shareable pages should provide server-rendered metadata including, where applicable:
+
+- `og:title`
+- `og:description`
+- `og:type`
+- `og:url`
+- `og:image`
+- `og:image:width`
+- `og:image:height`
+- `og:image:alt`
+- Appropriate `twitter:card` metadata for large image previews
+
+The default social-card image should be **1200×630 pixels**, which is the interoperability target for mainstream link-preview surfaces.
+
+Metadata must be generated from the same source of truth as the request page so that the title, description, visibility state, and card do not drift apart.
+
+### 65.10.3 Dynamic card generation
+
+Together should generate social cards from structured data rather than maintaining manually designed images for individual requests.
+
+The initial architecture should use a reusable card template system:
+
+**PostgreSQL request data**
+→ **publish/update event**
+→ **background job**
+→ **card renderer**
+→ **image stored in Cloudflare R2**
+→ **public `og:image` URL**
+
+A request should normally have its card generated asynchronously when it becomes public.
+
+Card generation should not be on the critical path for publishing a request unless a future product requirement demonstrates that synchronous generation is necessary.
+
+The renderer should be deterministic: the same request data, template version, and rendering configuration should produce the same visual output.
+
+### 65.10.4 Card templates
+
+The first card template should focus on requests/needs.
+
+A request card should have a consistent visual hierarchy containing some combination of:
+
+1. Together branding.
+2. A concise request title.
+3. A short contextual description or goal.
+4. Category/type of help.
+5. Location only where relevant and safe.
+6. A small status/context indicator where useful.
+7. Together URL or recognizable product identity.
+
+The design should communicate dignity and usefulness rather than charity, pity, urgency theater, or clickbait.
+
+Cards should not attempt to display every request field.
+
+The card renderer should have explicit rules for:
+
+- Maximum title length
+- Description truncation
+- Text wrapping
+- Missing fields
+- Long words/URLs
+- Special characters
+- Unicode
+- Unexpected user-generated content
+- Status changes
+- Template versioning
+
+### 65.10.5 Privacy and visibility
+
+The card renderer must operate on the request's effective public representation rather than the full private request object.
+
+Never render into a public card:
+
+- Exact residential addresses
+- Private phone numbers
+- Private email addresses
+- Sensitive identity information
+- Verification documents or their contents
+- Private conversation content
+- Internal moderation information
+- Internal trust/safety information
+- Any field marked private or restricted by product rules
+
+If a request changes from public to restricted, its previously generated card must not remain the authoritative current card.
+
+For content that is deleted, removed, or permanently restricted, the application should replace the card with an appropriate generic/removed representation or stop serving it, according to the content lifecycle policy.
+
+### 65.10.6 Card storage
+
+Generated cards should be stored in Cloudflare R2 rather than regenerated on every social crawler request.
+
+Suggested object structure:
+
+- `social/requests/{request_id}/{version}.png`
+- `social/profiles/{profile_id}/{version}.png`
+- `social/resources/{resource_id}/{version}.png`
+
+The exact object naming convention may change, but generated objects should be addressable independently and should not require the application database to serve image bytes.
+
+Public social-card objects need to be fetchable by external crawlers. Private or user-only media must not be made public merely to support sharing.
+
+### 65.10.7 Versioning and cache invalidation
+
+Social crawlers can cache images for long periods. Therefore, replacing the contents of a single permanent image URL is not sufficient to guarantee that external platforms will immediately see an updated card.
+
+When share-relevant content changes, Together should generate a new card version and update the page's `og:image` URL.
+
+A practical pattern is:
+
+`/social/requests/{request_id}/{version}.png`
+
+The version can be based on a monotonically increasing representation version or a content/template hash.
+
+Card regeneration should occur only when share-relevant information changes, such as:
+
+- Request title
+- Public description/goal
+- Category
+- Public location
+- Public status where displayed
+- Card template
+- Brand assets
+- Other fields explicitly included in the card
+
+Changes to private or unrelated fields should not trigger regeneration.
+
+### 65.10.8 Rendering implementation
+
+The renderer should be isolated behind a small application interface so that the rendering technology can change without changing the request domain model.
+
+A React/HTML-like template rendered through a deterministic SVG/image pipeline is a suitable implementation direction. Satori plus an SVG-to-image renderer is one candidate approach, but the implementation should be validated against the selected Bun runtime and deployment environment before being treated as a hard dependency.
+
+Fonts and other rendering assets should be bundled or otherwise made reliably available to the renderer. The renderer should not depend on fetching arbitrary remote fonts or assets at render time.
+
+The renderer should support broad Unicode text so user-generated names and request content do not produce broken glyphs.
+
+### 65.10.9 Background jobs and failure handling
+
+Card generation should run through the existing background-job infrastructure.
+
+A card-generation job should include enough information to identify:
+
+- Entity type
+- Entity ID
+- Representation version
+- Template version
+- Required output format
+
+Jobs should be idempotent.
+
+If generation fails:
+
+- The request should remain usable.
+- The failure should be observable.
+- The job should be retryable.
+- Repeated failures should not create an uncontrolled queue.
+- A generic fallback card may be used where appropriate.
+
+The system should record the current card-generation status so administrators and operations tooling can distinguish:
+
+- Not generated
+- Queued
+- Generating
+- Generated
+- Failed
+- Superseded
+
+### 65.10.10 Share action
+
+The request detail page should expose a clear **Share** action.
+
+The first implementation should support:
+
+1. Native Web Share API where available.
+2. Copy canonical URL as a fallback.
+3. Link previews through the page's social metadata.
+
+A future enhancement may allow the user to download or directly share the generated card image, particularly for platforms where ordinary link previews are less reliable.
+
+### 65.10.11 Extensibility
+
+The card system should not be designed solely around requests.
+
+It should eventually support reusable templates for:
+
+- Requests / needs
+- Contributor profiles
+- Public resource listings
+- Categories
+- Community knowledge pages
+- Other public Together entities
+
+The renderer should therefore have a small template registry rather than hard-coding a single request-specific image implementation.
+
+### 65.10.12 Operational requirements
+
+Track at least:
+
+- Card generation success/failure rate
+- Generation latency
+- Queue depth
+- Retry count
+- Cards generated per entity type
+- Storage usage
+- Missing-card rate for public entities
+- Percentage of shareable pages with valid metadata
+
+Social-card generation should be treated as product infrastructure: if public requests are shareable but their previews are broken, the discovery loop is degraded.
+
+---
+
 # 66. Low-Fidelity Wireframes
 
 Low-fidelity wireframes for the core web-application screens (Home/Discovery Feed, Create Request wizard, Request Detail, Contributor Profile) and the Admin Dashboard, plus the system architecture diagram, are maintained separately in **`together-wireframes.html`** so they can be updated, viewed, and printed independently of this document. They illustrate structure and information hierarchy only — spacing, copy, and visual design are intentionally left unresolved — and map directly to the workflows defined in Sections 9–23 and 50.
@@ -2071,3 +2428,559 @@ If the team wants a build order that matches the Phase 1–4 roadmap in Section 
 5. **Later, gated on demand seen in the data**: resource lending workflow (Sections 27–30), embedding-assisted matching and duplicate detection, LLM-assisted request guidance and moderation triage.
 
 Building AI-assisted matching or LLM request guidance before the deterministic version of the same loop exists and works would be solving a problem the team doesn't yet have data on.
+
+---
+
+# Addendum A — Further Discussion: Accounts, Trust, Contributions, and Coordination
+
+> **Status: Partially promoted to MVP, partially grooming backlog**
+>
+> This addendum captures product and architectural ideas discussed after the main PRD was written. Several concepts have been promoted into the main PRD (Sections 8.4–8.6, 17.1, 20, 21.1–21.2, and the data model in 65.4). The remaining sections are grooming backlog — they should not be treated as MVP implementation requirements unless explicitly promoted.
+
+## A.1 Account and authorization model — Promoted (simplified)
+
+The simplified account model for MVP includes: human accounts, Active/Suspended/Banned status, and basic roles/permissions. The full verification/trust-level hierarchy and fine-grained permission system described here are post-MVP.
+
+Together should avoid modelling all possible user states as a single `user_type` or enum such as `USER | ADMIN | BANNED | AI_AGENT`. These are different dimensions of an account and should remain independently modelled.
+
+The proposed conceptual dimensions are:
+
+### Account type
+
+- Human user
+
+AI agents are not a separate account type at this stage.
+
+### Account status
+
+- Active
+- Suspended
+- Banned
+- Other restricted states as needed
+
+A banned or suspended account remains the same underlying account. `banned` and `suspended` should be account-status states, not roles.
+
+### Verification / trust level
+
+Potential levels include:
+
+- Unverified
+- Email verified
+- Phone verified
+- Identity verified
+- Trusted / established contributor
+
+Verification should be independent from public identity disclosure. A person may be identity-verified by Together while choosing to appear anonymously to another participant.
+
+### Roles
+
+Potential roles include:
+
+- Member
+- Moderator
+- Admin
+- Super Admin
+- Future specialised administrative roles
+
+Roles should grant permissions, while account status and other policies can restrict whether a permission may actually be exercised.
+
+### Permissions
+
+Authorization should eventually be expressed in terms of fine-grained actions rather than only roles. Examples:
+
+- Create request
+- Respond to request
+- Offer contribution
+- Accept contribution
+- Complete contribution
+- Vote for request
+- Report request
+- Moderate request
+- Manage users
+- Manage verification
+- Manage disputes
+- Manage categories
+- Manage system configuration
+
+The implementation should leave room for policy checks in addition to RBAC. For example, permission to lend a high-value physical resource may require an active account, an appropriate role, identity verification, and sufficient contribution history.
+
+### AI agents and account access
+
+AI agents are not considered a separate account type for Together at this stage. A person who wants to use an AI agent can give the agent access to their existing Together account, subject to the account's normal permissions and security controls.
+
+If an AI agent uses an account to violate Together's rules, the account remains accountable for those actions and can be temporarily suspended or permanently banned.
+
+Agent-specific account types, permissions, or trust models should only be introduced later if real product usage demonstrates a need for them.
+
+## A.2 Contribution as a first-class domain object — Promoted
+
+The contribution-as-first-class-object concept is promoted to MVP. See Sections 20, 21, and the data model (65.4) for the simplified lifecycle: Offer → Accepted → Completed/Cancelled.
+
+The discussion suggests that the central unit of trust and coordination should be the **Contribution**, rather than simply a request response or message.
+
+The broader lifecycle is:
+
+**Need → Contribution → Coordination → Fulfillment → Outcome → Contribution History**
+
+A conceptual contribution lifecycle could include:
+
+- Proposed
+- Accepted
+- Coordinating
+- Fulfillment pending
+- Fulfilled
+- Recipient confirmed
+- Disputed
+- Cancelled
+- Expired
+
+A contribution should link the original request, contributor, recipient, coordination method, fulfillment method, relevant events, and outcome.
+
+This provides a common abstraction across very different forms of help:
+
+- Digital resources
+- Physical resources
+- Mentorship
+- Knowledge
+- Professional assistance
+- Introductions / access
+- Software testing or technical assistance
+- Other forms of productive help
+
+The actual mechanism by which help is delivered should be represented separately from the contribution itself.
+
+## A.3 Coordination should not require disclosure of personal contact details — Promoted (minimal)
+
+Minimal coordination is promoted to MVP: simple Together messaging/contact exchange. The contribution workspace/data room concept is post-MVP.
+
+A contributor should be able to offer help without immediately giving the recipient their phone number, email address, or other personal contact information.
+
+After a contribution is initiated, Together should provide several possible coordination modes.
+
+### Direct / off-platform coordination
+
+The parties may mutually choose to exchange contact information and continue through channels such as:
+
+- Phone
+- WhatsApp
+- Email
+- X / Twitter
+- LinkedIn
+- Other mutually preferred channels
+
+Together does not need to mediate every interaction. The initial platform should provide lightweight coordination and communication tools while leaving the actual contribution to the participants. Detailed mediation, arbitration, or operational intervention should remain minimal and can be introduced later if the network demonstrates a clear need.
+
+### Together chat
+
+A private conversation associated with the contribution could allow both parties to coordinate without exposing personal contact information.
+
+The chat should be scoped to the contribution rather than turning Together into a general-purpose social network by default.
+
+### Contribution workspace / data room
+
+For more complex contributions, a private contribution workspace may be more useful than chat alone. It could contain:
+
+- Conversation
+- Files and attachments
+- Requirements
+- Instructions
+- Relevant account/access information
+- Tasks or handoff steps
+- Contribution activity/history
+- Agreements or acknowledgements
+- Fulfillment information
+
+The data room should be visible only to the participants. Together may retain appropriate platform records for security, abuse prevention, and account enforcement, but the initial product should not assume that staff will routinely participate in or mediate contributions.
+
+Chat can be one component of a broader contribution workspace rather than the entire coordination primitive.
+
+## A.4 Identity disclosure and anonymity preferences — Promoted (simplified)
+
+The simplified identity disclosure model is promoted to MVP. See Sections 8.5 and 8.6: requesters indicate whether anonymous contributions are acceptable; contributors choose disclosure level.
+
+Identity verification, identity disclosure, and contact disclosure should be treated as separate concepts.
+
+A contributor may be verified by Together without revealing their real identity to the recipient. A contributor may also choose to communicate only through Together.
+
+### Requester preference
+
+A request should allow the requester to indicate whether an anonymous contribution is acceptable.
+
+The purpose is not to let a requester prefer anonymity. Rather, it tells potential contributors whether they need to disclose their identity in order for the contribution to be useful.
+
+For example:
+
+- **Anonymous contribution is acceptable** — the requester is comfortable receiving the contribution without knowing who provided it. This may work well for things such as digital resources, tokens, access, books, or other contributions where the contributor's background is not important.
+- **Contributor identity matters** — the requester wants to know who is providing the help because their background, experience, qualifications, or credibility may be relevant to the contribution. For example, someone asking for a tutorial or mentorship may want to understand the contributor's relevant experience.
+
+The requester should make the contribution as easy as possible for the contributor to provide, including providing relevant instructions, links, requirements, or acceptable ways to fulfil the request where useful.
+
+Together does not initially need to verify identities for ordinary contributions. Basic account verification such as email or phone verification may be used as a platform account requirement, while stronger identity checks can be introduced for higher-value or higher-risk requests when operational capacity allows.
+
+Identity disclosure, verification, and contact information remain separate concepts:
+
+- **Identity disclosure** — what the contributor chooses to reveal to the requester.
+- **Verification** — what Together has independently established about the account, if anything.
+- **Contact** — whether and how the parties communicate outside Together.
+
+A contributor may therefore remain anonymous to the requester while still operating through an accountable Together account.
+
+### Contributor preference
+
+A contributor may independently choose how much identity information to disclose for a particular contribution, subject to basic platform safety requirements.
+
+Possible levels may include:
+
+- Anonymous to the requester
+- Together profile
+- Direct identity disclosure
+
+The contributor's choice should be compatible with the requester's stated preference. If anonymous contribution is acceptable, the contributor does not need to disclose their identity merely to make the contribution. If the requester considers the contributor's identity or background important, the contributor can decide whether to provide enough information for the requester to make an informed decision.
+
+Together should not present a contributor as "verified" unless Together has actually performed the relevant verification.
+
+## A.5 Request history and trust signals — Promoted
+
+Public request and contribution history is promoted to MVP. See Section 8.4: factual history (requests made, contributions completed, member since) rather than a popularity score.
+
+Before a person accepts a contribution involving a resource, the potential contributor should have access to meaningful, public trust information about the requester.
+
+The goal is not to produce a single universal reputation score. The goal is to provide enough history for people to make their own informed decisions.
+
+A public requester profile or request trust panel may eventually show:
+
+- Account age / member since
+- Number of previous requests
+- Number of successfully fulfilled requests
+- Number of expired or cancelled requests
+- Number of contributions received
+- Number of contributions made
+- Successful contribution history
+- Unresolved contributions or disputes
+- Relevant verification status
+- Relevant badges or trust signals
+- Previous requests in the same resource/category where useful
+- Patterns of repeated or highly similar requests where appropriate
+
+The presentation should emphasise factual history rather than a popularity score.
+
+### Public versus private history
+
+The following may be appropriate for public trust information:
+
+- Request titles and broad categories
+- Request status and outcome
+- Contribution counts
+- Successful / unsuccessful outcome counts
+- Relevant verification status
+- Relevant public contribution history
+- Public warnings or restrictions where policy requires them
+
+The following should remain private unless there is a specific legitimate reason to disclose them:
+
+- Phone numbers
+- Email addresses
+- Exact residential addresses
+- Private conversations
+- Identity documents
+- Sensitive verification information
+- Private coordination information
+- Other sensitive personal details
+
+The exact public-history policy requires further privacy and safety grooming.
+
+## A.6 Similar-request and abuse signals — Post-MVP (grooming backlog)
+
+Instrument the data now; build detection and warnings later.
+
+Together should eventually detect and surface suspicious patterns without assuming that repetition automatically means fraud.
+
+Examples include:
+
+- Multiple highly similar requests for the same resource
+- A request for a resource shortly after receiving the same or similar resource
+- Repeated requests that expire without meaningful progress
+- Unusual contribution or fulfillment patterns
+- Requests that appear inconsistent with previous stated outcomes
+
+A potential UI pattern is an informational warning such as:
+
+> **Similar previous request**
+>
+> This member previously received help with a similar request.
+
+The system should generally surface relevant evidence rather than automatically accusing the requester of fraud. Automated restrictions can be considered later based on stronger evidence and established policy.
+
+## A.7 Resource lifecycle and fulfilment — Promoted (generic concept)
+
+Generic fulfillment method is promoted to MVP: record how help will happen as a simple enum (mentoring, resource lending, digital delivery, etc.), but do not implement provider-specific workflows. See Section 20.
+
+Together should not assume that every contribution is a simple transfer of an object from one person to another.
+
+A contribution should specify a **fulfillment method** appropriate to the resource or help being provided.
+
+Potential methods include:
+
+- External gift / redemption link
+- Direct purchase by contributor
+- Digital resource delivery
+- Account or access provisioning
+- Physical handoff
+- Loan and return
+- Mentorship session
+- Professional service / assistance
+- Introduction or connection
+- Other
+
+The platform should coordinate the contribution without pretending to control an external resource it cannot actually transfer.
+
+For example, if a third-party provider offers a gift or redemption mechanism for a digital service, the requester should provide whatever information or instructions make it straightforward for the contributor to complete the contribution. The contributor can then use the provider's normal process to fulfil it. Together does not need to operate or mediate the provider-specific process, and should never require the contributor to provide third-party account credentials.
+
+## A.7.1 Operating principle: facilitate, do not mediate
+
+Together's initial operational model should be intentionally lightweight:
+
+> **Make it easy for the right people to connect and help each other; do not make Together responsible for every detail of the exchange.**
+
+The requester should do as much as reasonably possible to make their request easy to fulfil. Contributors should be able to choose whether to coordinate through Together or move the interaction to another channel by mutual agreement.
+
+Together should provide enough structure to create useful history and basic safety controls, but should not require staff involvement for normal contributions. Mediation, arbitration, insurance, provider-specific fulfillment support, and other operationally intensive services should be introduced only if real usage demonstrates a need and Together has the capacity to support them.
+
+## A.8 Example: contribution of AI service access — Not promoted
+
+Keep as an example, not product functionality.
+
+Consider a request such as:
+
+> **I need GPT-6 Astra access to test an application I'm building for free legal education.**
+
+The request may specify:
+
+- What access is needed
+- Why it is needed
+- Expected duration or amount
+- Intended productive use
+- Expected outcome
+- Acceptable fulfillment methods
+- Contributor identity preference
+
+A contributor could then follow a flow such as:
+
+1. Discover the request.
+2. Review the requester's public contribution/request history and relevant trust signals.
+3. Select **I can help**.
+4. Agree with the requester on how the help can be provided.
+5. Coordinate through Together or mutually exchange external contact details if useful.
+6. Complete the actual contribution using the agreed method.
+7. Recipient can confirm receipt and, where appropriate, whether the contribution enabled progress.
+8. The contribution can be recorded in the participants' contribution histories.
+
+The exact mechanics depend on what the external provider supports at the time. Together should therefore model this as an **external resource fulfilment** rather than as a provider-specific transfer system.
+
+## A.9 Secure handling of external access information — Post-MVP (minimal)
+
+Don't build sophisticated secure data rooms yet; avoid credentials in chat.
+
+Where a contribution requires a sensitive link, access code, account identifier, or other information that could itself transfer control of a resource, the information should not be placed in a public request or ordinary public comment.
+
+Potential mechanisms include:
+
+- Private contribution chat
+- Encrypted contribution workspace/data room
+- One-time or restricted-access handoff
+- Explicit recipient acknowledgement
+- Access to sensitive information limited to the participants and authorised staff
+
+The specific security model should be separately groomed before implementation.
+
+## A.10 Learning from peer-to-peer marketplaces — Promoted (principles only)
+
+The eBay/Facebook Marketplace lessons are promoted as design principles (low-friction coordination + visible history of actual interactions), not as marketplace machinery to build.
+
+Together is not an e-commerce marketplace, but established peer-to-peer marketplaces provide useful patterns for trust, discovery, and low-friction coordination. Two particularly useful reference models are **eBay** and **Facebook Marketplace**, although Together should adapt rather than copy either model.
+
+### eBay — memory and transaction context
+
+Useful patterns to study include:
+
+- Contribution/transaction history
+- Feedback tied to completed interactions
+- Structured outcome confirmation
+- Evidence and activity records
+- Clear state transitions
+- Protection against repeated abuse
+- Account restrictions
+- Separation of public trust signals from private information
+
+The important lesson for Together is that trust can come from **visible history of actual interactions**, rather than from a single opaque reputation score.
+
+### Facebook Marketplace — low-friction peer coordination
+
+Marketplace is useful as a reference for the opposite side of the problem: the platform does not need to orchestrate every detail of a peer-to-peer exchange for people to use it.
+
+Patterns worth adopting include:
+
+- Simple listings/requests that lead naturally to direct conversations
+- A lightweight **I can help / contact** interaction rather than a heavy transaction workflow
+- Clear local-versus-remote context where it matters
+- Enough profile and listing context for people to make their own decisions
+- The ability for participants to arrange the actual exchange themselves
+- Low friction between discovery and communication
+
+Together should preserve this looseness while adding better memory around productive contributions.
+
+### Together's adaptation
+
+Together should combine:
+
+> **Marketplace's low-friction coordination + eBay's useful historical memory**
+
+The analogue to an e-commerce transaction is a **contribution**, but not every contribution needs to become a formal transaction. A contribution may simply be an offer of help followed by a conversation and an outcome.
+
+Together should therefore avoid:
+
+- Mandatory platform-mediated fulfillment
+- Mandatory arbitration for ordinary disagreements
+- Heavy transaction workflows for simple contributions
+- Monetary transaction mechanics
+- Star-rating or popularity competitions
+
+The product should provide just enough structure to make contributions discoverable, make coordination easy, and create useful history over time.
+
+## A.11 Contribution outcome and lightweight feedback — Promoted
+
+Simple outcome confirmation is promoted to MVP. See Section 21.1–21.2: "Did you receive the help?" + "Did it help?" + "Was it completed as agreed?"
+
+A contribution can eventually support lightweight confirmation by both parties, without requiring Together to arbitrate whether a contribution was successful.
+
+For example:
+
+### Recipient
+
+> **Did you receive the help?**
+>
+> - Yes
+> - Not yet
+> - There is a problem
+
+If received:
+
+> **Did this contribution help you make progress toward your goal?**
+>
+> - Yes
+> - Partially
+> - Not yet
+
+### Contributor
+
+> **Was the contribution completed as agreed?**
+>
+> - Yes
+> - No
+> - There is a problem
+
+These confirmations are useful evidence for future trust history, but they should not automatically trigger a dispute or require Together staff to determine who was right.
+
+## A.12 Trust should be contextual rather than one universal score — Post-MVP (partial)
+
+Store the underlying facts (contribution history, verification level, resource-specific history); don't build a trust engine yet.
+
+A person with many successful low-risk contributions should not automatically be treated as trusted for every high-risk resource.
+
+Trust may eventually be considered across dimensions such as:
+
+- General contribution history
+- Resource-specific contribution history
+- Verification level
+- Account age
+- Recent activity
+- Successful outcomes
+- Unresolved disputes
+- Relevant restrictions
+
+For example, successful history with books or mentoring does not by itself establish sufficient trust for a high-value laptop loan.
+
+Resource-specific requirements should therefore be possible without creating a single global reputation score.
+
+## A.13 Progressive trust and access — Post-MVP (grooming backlog)
+
+Only basic account restrictions initially. The full progressive trust hierarchy is for later.
+
+Together may eventually use progressive trust requirements for different classes of activity.
+
+A conceptual progression is:
+
+```text
+Basic account
+    ↓
+Low-risk participation
+    ↓
+Successful contribution history
+    ↓
+Additional verification
+    ↓
+Higher-trust activities
+    ↓
+High-value / higher-risk resource participation
+```
+
+This should reduce the incentive and opportunity for someone to create a new account and immediately obtain high-value resources.
+
+The exact verification thresholds, restrictions, and risk categories should be separately groomed.
+
+## A.14 No automatic assumption that the recipient is fraudulent — Promoted (principle)
+
+Don't accuse/score; basic reporting and moderation. This principle is already embedded in Sections 34–35.
+
+Repeated requests, anonymity, lack of contribution history, or a compelling story should not independently be treated as proof of fraud.
+
+Together should expose relevant information and apply established rules consistently. Where automated systems identify potentially suspicious activity, the initial response may be an informational warning, additional verification, review, or temporary restriction depending on the severity and confidence of the signal.
+
+This keeps trust decisions evidence-based and avoids publicly shaming users.
+
+## A.15 Potential contribution workspace model — Post-MVP (grooming backlog)
+
+Too much product for MVP. Start with simple contribution → conversation/contact exchange. Build workspace only if users demonstrate need.
+
+A future contribution workspace could provide a lightweight place for:
+
+```text
+Contribution
+├── Request
+├── Participants
+├── Identity visibility
+├── Coordination method
+├── Conversation
+├── Fulfillment method
+├── Files / attachments
+├── Handoff information
+├── Activity history
+├── Outcome confirmation
+└── Issue reports, where necessary
+```
+
+The workspace should feel closer to a lightweight coordination thread than an e-commerce order-management system. Simple contributions should remain simple, and participants should be free to move off-platform whenever they prefer.
+
+This could become a useful coordination object through which Together records the existence and basic state of real-world help. It should not imply that Together staff are expected to supervise every contribution or resolve every disagreement.
+
+## A.16 Implementation-grooming questions — Post-MVP (grooming backlog)
+
+These are design questions, not features. Resolve before promoting any remaining addendum concepts.
+
+Before promoting this addendum into implementation requirements, the following questions should be resolved separately:
+
+1. What exact account/role/permission model is appropriate for the MVP?
+2. Which verification levels are actually needed at launch?
+3. Which information about request and contribution history should be public, and for how long?
+4. What constitutes a successful contribution?
+5. Which contribution states are required for the first release?
+6. Which coordination methods belong in MVP: off-platform contact exchange, Together chat, data room, or a smaller subset?
+7. How should anonymous contributors be represented and protected?
+8. Which fulfillment methods should be supported explicitly versus handled as generic coordination?
+9. How should sensitive access links, codes, or credentials be exchanged securely?
+10. What signals should trigger warnings, verification, manual review, restrictions, or suspension?
+11. Which eBay-style trust/history patterns and Facebook Marketplace-style low-friction coordination patterns are appropriate for Together, and which would create unwanted marketplace dynamics?
+12. How should resource-specific trust requirements interact with general contribution history?
+13. If AI agents become common, are any additional account-security controls actually needed beyond the normal account model?
+
+These questions should be groomed independently before the associated concepts are promoted into the main implementation specification.

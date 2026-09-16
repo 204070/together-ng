@@ -1,5 +1,5 @@
 import { env as configEnv } from '@together/config';
-import { createDb, type Db, eq, type Sql, users } from '@together/db';
+import { createDb, getPool, type Db, eq, users } from '@together/db';
 import {
 	FixedWindowRateLimiter,
 	type RateLimitDecision,
@@ -16,7 +16,6 @@ export const REQUEST_MAX_HITS = 20;
 export interface RequestEnv {
 	databaseUrl?: string;
 	jwtSecret?: string;
-	sql?: Sql;
 	db?: Db;
 	now?: () => Date;
 	redisUrl?: string;
@@ -40,7 +39,6 @@ export interface RequestServices {
 export function createRequestServices(
 	env: RequestEnv = {},
 	deps: {
-		sql?: Sql;
 		db?: Db;
 		authStore?: AuthStore;
 		now?: () => Date;
@@ -52,10 +50,7 @@ export function createRequestServices(
 	const databaseUrl = env.databaseUrl ?? configEnv.DATABASE_URL;
 	const jwtSecret = env.jwtSecret ?? configEnv.JWT_SECRET;
 	const now = deps.now ?? env.now ?? (() => new Date());
-	const db =
-		deps.db ??
-		env.db ??
-		(deps.sql || env.sql ? createDb(deps.sql ?? env.sql) : createDb(databaseUrl));
+	const db = deps.db ?? env.db ?? createDb(databaseUrl);
 	const store = new RequestStore(db);
 
 	let limiter: AsyncRateLimiter;
@@ -101,12 +96,6 @@ export function createRequestServices(
 		now,
 		matching: deps.matching,
 		findUserById,
-		close: () =>
-			env.sql === undefined &&
-			deps.sql === undefined &&
-			env.db === undefined &&
-			deps.db === undefined
-				? db.$client.end()
-				: Promise.resolve(),
+		close: () => (env.db === undefined && deps.db === undefined ? getPool().end() : Promise.resolve()),
 	};
 }

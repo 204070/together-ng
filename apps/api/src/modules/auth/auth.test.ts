@@ -1,15 +1,14 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
-import { createClient, type Sql } from '@together/db';
+import { beforeAll, describe, expect, test } from 'bun:test';
+import { count, eq, getDatabase, migrate } from '@together/db';
+import { otpTokens, profiles, sessions, users } from '@together/db/schema';
 import { makeApp } from '../../app';
 import type { MockOtpSender } from './otp-sender';
 import type { AuthServices } from './services';
 
 const DB_URL =
 	process.env.TEST_DATABASE_URL ??
-	'postgresql://together:together@localhost:5433/together_wt4_test';
+	'postgresql://together:together@localhost:5433/together_test';
 const JWT_SECRET = 'test-secret';
-
-let sql: Sql;
 
 type App = ReturnType<typeof makeApp>;
 
@@ -24,7 +23,7 @@ function senderOf(app: App): MockOtpSender {
 function mkApp(now?: () => Date): App {
 	return makeApp({
 		databaseUrl: DB_URL,
-		sql,
+		db: getDatabase(),
 		otpProvider: 'mock',
 		isProduction: false,
 		jwtSecret: JWT_SECRET,
@@ -97,15 +96,7 @@ async function signExpiredToken(secret: string, sub: string, sid: string): Promi
 }
 
 beforeAll(async () => {
-	sql = createClient(DB_URL);
-});
-
-afterAll(async () => {
-	await sql.end();
-});
-
-beforeEach(async () => {
-	await sql`TRUNCATE otp_tokens, sessions, users CASCADE`;
+	await migrate(DB_URL);
 });
 
 describe('GET /health', () => {
@@ -168,22 +159,25 @@ describe('POST /auth/register', () => {
 		expect(body).toHaveProperty('phoneVerified', false);
 		expect(body).not.toHaveProperty('password_hash');
 
-		const users = await sql<
-			{ email: string; password_hash: string; phone: string }[]
-		>`SELECT email, password_hash, phone FROM users`;
-		expect(users).toHaveLength(1);
-		expect(users[0]?.email).toBe('ada@x.com');
-		expect(users[0]?.phone).toBe('+2348012345678');
-		expect(users[0]?.password_hash).toStartWith('$argon2id$');
+		const rows = await getDatabase().select({
+			email: users.email,
+			passwordHash: users.passwordHash,
+			phone: users.phone,
+		}).from(users);
+		expect(rows).toHaveLength(1);
+		expect(rows[0]?.email).toBe('ada@x.com');
+		expect(rows[0]?.phone).toBe('+2348012345678');
+		expect(rows[0]?.passwordHash).toStartWith('$argon2id$');
 
-		const profiles = await sql`SELECT count(*)::int AS count FROM profiles`;
-		expect(profiles[0]?.count).toBe(0);
+		const [profileCount] = await getDatabase().select({ count: count() }).from(profiles);
+		expect(profileCount?.count).toBe(0);
 
-		const otps = await sql<
-			{ code_hash: string; context: string }[]
-		>`SELECT code_hash, context FROM otp_tokens`;
+		const otps = await getDatabase().select({
+			codeHash: otpTokens.codeHash,
+			context: otpTokens.context,
+		}).from(otpTokens);
 		expect(otps).toHaveLength(1);
-		expect(otps[0]?.code_hash).toStartWith('$argon2id$');
+		expect(otps[0]?.codeHash).toStartWith('$argon2id$');
 		expect(otps[0]?.context).toBe('verify');
 		expect(otpCode).toMatch(/^\d{6}$/);
 	});
@@ -192,8 +186,8 @@ describe('POST /auth/register', () => {
 		const app = mkApp();
 		const { status } = await register(app, { email: 'no.phone@x.com', password: 'password123' });
 		expect(status).toBe(201);
-		const otps = await sql`SELECT count(*)::int AS count FROM otp_tokens`;
-		expect(otps[0]?.count).toBe(0);
+		const [otpCount] = await getDatabase().select({ count: count() }).from(otpTokens);
+		expect(otpCount?.count).toBe(0);
 	});
 
 	test('duplicate email in any casing/whitespace returns 409 EMAIL_TAKEN and keeps user count at 1', async () => {
@@ -208,8 +202,8 @@ describe('POST /auth/register', () => {
 			expect(json.error).toBe('EMAIL_TAKEN');
 		}
 
-		const count = await sql`SELECT count(*)::int AS count FROM users`;
-		expect(count[0]?.count).toBe(1);
+		const [userCount] = await getDatabase().select({ count: count() }).from(users);
+		expect(userCount?.count).toBe(1);
 	});
 
 	test('duplicate phone returns 409 PHONE_TAKEN', async () => {
@@ -231,8 +225,8 @@ describe('POST /auth/register', () => {
 		expect(json.error).toBe('PHONE_TAKEN');
 		expect(json.fields).toEqual({ phone: 'taken' });
 
-		const count = await sql`SELECT count(*)::int AS count FROM users`;
-		expect(count[0]?.count).toBe(1);
+		const [userCount] = await getDatabase().select({ count: count() }).from(users);
+		expect(userCount?.count).toBe(1);
 	});
 });
 
@@ -249,8 +243,10 @@ describe('OTP send and verify', () => {
 		expect(verifyRes.status).toBe(200);
 		expect(await readBody(verifyRes)).toEqual({ phoneVerified: true });
 
-		const rows = await sql`SELECT phone_verified FROM users WHERE email = 'user@x.com'`;
-		expect(rows[0]?.phone_verified).toBe(true);
+		const [row] = await getDatabase().select({
+			phoneVerified: users.phoneVerified,
+		}).from(users).where(eq(users.email, 'user@x.com'));
+		expect(row?.phoneVerified).toBe(true);
 
 		const replay = await postJson(app, '/auth/verify-otp', { phone: body.phone, code: otpCode });
 		expect(replay.status).toBe(400);
@@ -333,13 +329,17 @@ describe('OTP send and verify', () => {
 			phone,
 		});
 
-		const afterRegister = await sql<{ context: string }[]>`SELECT context FROM otp_tokens`;
+		const afterRegister = await getDatabase().select({
+			context: otpTokens.context,
+		}).from(otpTokens);
 		expect(afterRegister[0]?.context).toBe('verify');
 
 		await postJson(app, '/auth/verify-otp', { phone, code: otpCode });
 		await postJson(app, '/auth/otp/send', { phone });
 
-		const afterLogin = await sql<{ context: string }[]>`SELECT context FROM otp_tokens`;
+		const afterLogin = await getDatabase().select({
+			context: otpTokens.context,
+		}).from(otpTokens);
 		expect(afterLogin[0]?.context).toBe('login');
 	});
 });
@@ -390,7 +390,7 @@ describe('POST /auth/login', () => {
 	test('refresh cookie is Secure in production', async () => {
 		const app = makeApp({
 			databaseUrl: DB_URL,
-			sql,
+			db: getDatabase(),
 			otpProvider: 'mock',
 			isProduction: true,
 			jwtSecret: JWT_SECRET,
@@ -583,8 +583,8 @@ describe('POST /auth/refresh and logout', () => {
 		const newRefresh = refreshTokenOf(first);
 		expect(newRefresh).not.toBe(refresh);
 
-		const sessions = await sql`SELECT count(*)::int AS count FROM sessions`;
-		expect(sessions[0]?.count).toBe(1);
+		const [sessionCount] = await getDatabase().select({ count: count() }).from(sessions);
+		expect(sessionCount?.count).toBe(1);
 
 		const oldRefresh = await postJson(app, '/auth/refresh', undefined, {
 			cookie: `refresh=${refresh}`,
@@ -607,8 +607,8 @@ describe('POST /auth/refresh and logout', () => {
 		expect(logout.status).toBe(204);
 		expect(logout.headers.get('set-cookie') ?? '').toContain('Path=/auth');
 
-		const sessions = await sql`SELECT count(*)::int AS count FROM sessions`;
-		expect(sessions[0]?.count).toBe(0);
+		const [sessionCount] = await getDatabase().select({ count: count() }).from(sessions);
+		expect(sessionCount?.count).toBe(0);
 
 		const after = await postJson(app, '/auth/refresh', undefined, { cookie: `refresh=${refresh}` });
 		expect(after.status).toBe(401);

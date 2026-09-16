@@ -4,7 +4,6 @@ import {
 	asc,
 	contributions,
 	contributorCapabilities,
-	createDb,
 	type Db,
 	desc,
 	eq,
@@ -19,7 +18,6 @@ import {
 	profiles,
 	requestMatches,
 	requests,
-	type Sql,
 	skills,
 	sql,
 	users,
@@ -87,12 +85,7 @@ export interface MatchingService {
 	recompute(requestId: string): Promise<void>;
 }
 
-function resolveDb(dbOrSql: Db | Sql): Db {
-	return 'select' in dbOrSql ? dbOrSql : createDb(dbOrSql);
-}
-
-export function createInlineMatchingService(dbOrSql: Db | Sql, now?: () => Date): MatchingService {
-	const db = resolveDb(dbOrSql);
+export function createInlineMatchingService(db: Db, now?: () => Date): MatchingService {
 	return {
 		recompute: (requestId: string) => recomputeMatches(db, requestId, { now }).then(() => {}),
 	};
@@ -287,11 +280,10 @@ export function totalScore(breakdown: FactorBreakdown): number {
 export const MAX_CANDIDATES = 200;
 
 export async function recomputeMatches(
-	dbOrSql: Db | Sql,
+	db: Db,
 	requestId: string,
 	options: { now?: () => Date } = {},
 ): Promise<MatchResult[]> {
-	const db = resolveDb(dbOrSql);
 	const now = options.now?.() ?? new Date();
 
 	const requestRows = await db
@@ -548,8 +540,7 @@ export async function recomputeMatches(
 }
 
 /** Read stored matches back under the issue's `total_score`/`rank`/`factor_breakdown` names. */
-export async function readMatches(dbOrSql: Db | Sql, requestId: string): Promise<MatchResult[]> {
-	const db = resolveDb(dbOrSql);
+export async function readMatches(db: Db, requestId: string): Promise<MatchResult[]> {
 	const rows = await db
 		.select({
 			contributorId: requestMatches.contributorId,
@@ -592,10 +583,9 @@ export interface InternalMatchingRouterOptions {
 
 /** Internal read model for the notification dispatcher (#13) and debugging. */
 export function createInternalMatchingRouter(
-	dbOrSql: Db | Sql,
+	db: Db,
 	options: InternalMatchingRouterOptions,
 ) {
-	const db = resolveDb(dbOrSql);
 	if (options.findUserById && !options.jwtSecret) {
 		throw new Error('jwtSecret is required when auth is enabled in createInternalMatchingRouter');
 	}

@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { Pool } from 'pg';
 import { env, loadEnv } from '@together/config';
-import postgres from 'postgres';
 
 loadEnv();
 
@@ -16,22 +16,22 @@ function splitStatements(content: string): string[] {
 }
 
 export async function migrate(databaseUrl: string = env.DATABASE_URL): Promise<void> {
-	const sql = postgres(databaseUrl, { max: 1, onnotice: () => {} });
+	const pool = new Pool({ connectionString: databaseUrl, max: 1 });
+	const client = await pool.connect();
 	try {
-		await sql`CREATE TABLE IF NOT EXISTS public.drizzle_migrations (
-			id bigint generated always as identity primary key,
-			file_name text not null unique,
-			hash text not null,
-			applied_at timestamptz not null default now()
-		)`;
+		await client.query(`
+			CREATE TABLE IF NOT EXISTS public.drizzle_migrations (
+				id bigint generated always as identity primary key,
+				file_name text not null unique,
+				hash text not null,
+				applied_at timestamptz not null default now()
+			)
+		`);
 
-		const applied = new Set(
-			(
-				await sql<{ file_name: string }[]>`
-					SELECT file_name FROM public.drizzle_migrations
-				`
-			).map((row) => row.file_name),
+		const result = await client.query<{ file_name: string }>(
+			'SELECT file_name FROM public.drizzle_migrations',
 		);
+		const applied = new Set(result.rows.map((row) => row.file_name));
 
 		const files = readdirSync(migrationsDir)
 			.filter((file) => file.endsWith('.sql'))
@@ -42,18 +42,27 @@ export async function migrate(databaseUrl: string = env.DATABASE_URL): Promise<v
 			if (applied.has(file)) continue;
 			const content = readFileSync(resolve(migrationsDir, file), 'utf8');
 			const hash = createHash('sha256').update(content).digest('hex');
-			await sql.begin(async (tx) => {
+			await client.query('BEGIN');
+			try {
 				for (const statement of splitStatements(content)) {
-					await tx.unsafe(statement);
+					await client.query(statement);
 				}
-				await tx`INSERT INTO public.drizzle_migrations (file_name, hash) VALUES (${file}, ${hash})`;
-			});
+				await client.query(
+					'INSERT INTO public.drizzle_migrations (file_name, hash) VALUES ($1, $2)',
+					[file, hash],
+				);
+				await client.query('COMMIT');
+			} catch (err) {
+				await client.query('ROLLBACK');
+				throw err;
+			}
 			appliedCount += 1;
 			console.log(`applied migration ${file}`);
 		}
 		console.log(`drizzle_migrations applied: ${appliedCount + applied.size}, new: ${appliedCount}`);
 	} finally {
-		await sql.end();
+		client.release();
+		await pool.end();
 	}
 }
 

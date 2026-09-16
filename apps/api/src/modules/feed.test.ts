@@ -1,19 +1,18 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
-import { createClient, type Sql } from '@together/db';
+import { getDatabase, getPool, migrate } from '@together/db';
+import { requests, users } from '@together/db/schema';
 import { makeApp } from '../app';
 
 const DB_URL =
 	process.env.TEST_DATABASE_URL ??
 	'postgresql://together:together@localhost:5433/together_wt7_test';
 
-let sql: Sql;
-
 type App = ReturnType<typeof makeApp>;
 
 function mkApp(): App {
 	return makeApp({
 		databaseUrl: DB_URL,
-		sql,
+		db: getDatabase(),
 		otpProvider: 'mock',
 		isProduction: false,
 		jwtSecret: 'test-secret',
@@ -21,27 +20,39 @@ function mkApp(): App {
 }
 
 async function seedRequest(state: 'draft' | 'published', title: string): Promise<string> {
-	const users = await sql<{ id: string }[]>`
-		INSERT INTO users (email, password_hash) VALUES (${`feed-${title}@example.com`}, 'x')
-		RETURNING id`;
-	const authorId = (users[0] as { id: string }).id;
-	const rows = await sql<{ id: string }[]>`
-		INSERT INTO requests (author_id, title, goal, barrier, help_needed, state)
-		VALUES (${authorId}, ${title}, 'goal', 'barrier', 'help', ${state})
-		RETURNING id`;
-	return (rows[0] as { id: string }).id;
+	const db = getDatabase();
+	const [user] = await db
+		.insert(users)
+		.values({
+			email: `feed-${title}@example.com`,
+			passwordHash: 'x',
+		})
+		.returning();
+	if (!user) throw new Error('Failed to create user');
+	const [row] = await db
+		.insert(requests)
+		.values({
+			authorId: user.id,
+			title,
+			goal: 'goal',
+			barrier: 'barrier',
+			helpNeeded: 'help',
+			state: state as 'draft' | 'published',
+		})
+		.returning();
+	return row!.id;
 }
 
 beforeAll(async () => {
-	sql = createClient(DB_URL);
+	await migrate(DB_URL);
 });
 
 afterAll(async () => {
-	await sql.end();
+	await getPool().end();
 });
 
 beforeEach(async () => {
-	await sql`TRUNCATE otp_tokens, sessions, users, requests CASCADE`;
+	await getPool().query('TRUNCATE otp_tokens, sessions, users, requests CASCADE');
 });
 
 describe('GET /requests/featured', () => {

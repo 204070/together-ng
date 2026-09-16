@@ -1,5 +1,5 @@
+import { Pool } from 'pg';
 import { env, loadEnv } from '@together/config';
-import postgres from 'postgres';
 
 loadEnv();
 
@@ -24,24 +24,29 @@ export const CATEGORIES: { name: string; slug: string }[] = [
 ];
 
 export async function seedCategories(databaseUrl: string = env.DATABASE_URL): Promise<number> {
-	const sql = postgres(databaseUrl, { max: 1, onnotice: () => {} });
+	const pool = new Pool({ connectionString: databaseUrl, max: 1 });
+	const client = await pool.connect();
 	try {
 		let inserted = 0;
-		await sql.begin(async (tx) => {
+		await client.query('BEGIN');
+		try {
 			for (const category of CATEGORIES) {
-				const result = await tx`
-					INSERT INTO public.categories (name, slug)
-					VALUES (${category.name}, ${category.slug})
-					ON CONFLICT (slug) DO NOTHING
-					RETURNING id
-				`;
-				inserted += result.length;
+				const result = await client.query(
+					'INSERT INTO public.categories (name, slug) VALUES ($1, $2) ON CONFLICT (slug) DO NOTHING RETURNING id',
+					[category.name, category.slug],
+				);
+				inserted += result.rowCount ?? 0;
 			}
-		});
+			await client.query('COMMIT');
+		} catch (err) {
+			await client.query('ROLLBACK');
+			throw err;
+		}
 		console.log(`categories in catalog: ${CATEGORIES.length}, inserted now: ${inserted}`);
 		return inserted;
 	} finally {
-		await sql.end();
+		client.release();
+		await pool.end();
 	}
 }
 

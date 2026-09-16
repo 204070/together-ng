@@ -20,10 +20,11 @@
 	"dependencies": {
 		"@together/config": "workspace:*",
 		"drizzle-orm": "^0.45.2",
-		"postgres": "^3.4.9"
+		"pg": "^8.16.0"
 	},
 	"devDependencies": {
 		"@types/node": "^22.20.2",
+		"@types/pg": "^8.15.4",
 		"drizzle-kit": "^0.31.10"
 	}
 }

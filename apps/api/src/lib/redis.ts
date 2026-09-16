@@ -28,54 +28,48 @@ export async function createRedisConnection(redisUrl: string): Promise<RedisConn
 	const pending = new Map<number, { resolve: (v: string) => void; reject: (e: Error) => void }>();
 	let readBuffer = Buffer.alloc(0);
 
-	function connect() {
-		return new Promise<void>((resolve, reject) => {
-			socket = Bun.connect({
-				hostname: host,
-				port,
-				socket: {
-					data(_socket, data) {
-						readBuffer = Buffer.concat([readBuffer, data]);
-						while (true) {
-							const result = tryParseResp(readBuffer);
-							if (result === null) break;
-							const { value, consumed } = result;
-							readBuffer = readBuffer.subarray(consumed);
-							const entry = pending.values().next().value;
-							if (entry) {
-								const firstKey = pending.keys().next().value;
-								if (firstKey !== undefined) pending.delete(firstKey);
-								entry.resolve(value);
-							}
+	async function connect() {
+		socket = await Bun.connect({
+			hostname: host,
+			port,
+			socket: {
+				data(_socket, data) {
+					readBuffer = Buffer.concat([readBuffer, data]);
+					while (true) {
+						const result = tryParseResp(readBuffer);
+						if (result === null) break;
+						const { value, consumed } = result;
+						readBuffer = readBuffer.subarray(consumed);
+						const entry = pending.values().next().value;
+						if (entry) {
+							const firstKey = pending.keys().next().value;
+							if (firstKey !== undefined) pending.delete(firstKey);
+							entry.resolve(value);
 						}
-					},
-					open(_socket) {
-						connected = true;
-						if (password) {
-							sendRawInternal(`AUTH ${password}`)
-								.then(() => resolve())
-								.catch(reject);
-						} else {
-							resolve();
-						}
-					},
-					error(_socket, err) {
-						connected = false;
-						for (const entry of pending.values()) {
-							entry.reject(new Error(String(err)));
-						}
-						pending.clear();
-					},
-					close() {
-						connected = false;
-						for (const entry of pending.values()) {
-							entry.reject(new Error('Connection closed'));
-						}
-						pending.clear();
-					},
+					}
 				},
-			});
+				open(_socket) {
+					connected = true;
+				},
+				error(_socket, err) {
+					connected = false;
+					for (const entry of pending.values()) {
+						entry.reject(new Error(String(err)));
+					}
+					pending.clear();
+				},
+				close() {
+					connected = false;
+					for (const entry of pending.values()) {
+						entry.reject(new Error('Connection closed'));
+					}
+					pending.clear();
+				},
+			},
 		});
+		if (password) {
+			await sendRawInternal(`AUTH ${password}`);
+		}
 	}
 
 	function tryParseResp(buf: Buffer): { value: string; consumed: number } | null {

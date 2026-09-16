@@ -1,26 +1,25 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
-import { createClient, migrate, type Sql } from '@together/db';
+import { and, count, eq, getDatabase, getPool, migrate } from '@together/db';
+import { users, categories, requests, votes } from '@together/db/schema';
 import { makeApp } from '../../app';
 
 const DB_URL =
 	process.env.TEST_DATABASE_URL ??
 	'postgresql://together:together@localhost:5433/together_wt11_test';
 
-let sql: Sql;
 let app: ReturnType<typeof makeApp>;
 
 beforeAll(async () => {
-	sql = createClient(DB_URL);
 	await migrate(DB_URL);
-	app = makeApp({ databaseUrl: DB_URL, sql, otpProvider: 'mock', isProduction: false });
+	app = makeApp({ databaseUrl: DB_URL, db: getDatabase(), otpProvider: 'mock', isProduction: false });
 });
 
 afterAll(async () => {
-	await sql.end();
+	await getPool().end();
 });
 
 beforeEach(async () => {
-	await sql`TRUNCATE users, categories, requests, votes RESTART IDENTITY CASCADE`;
+	await getPool().query('TRUNCATE users, categories, requests, votes RESTART IDENTITY CASCADE');
 });
 
 let userSeq = 0;
@@ -28,11 +27,11 @@ async function createUser(): Promise<{ id: string; email: string }> {
 	userSeq += 1;
 	const email = `vote-user-${Date.now()}-${userSeq}@example.com`;
 	const hash = await Bun.password.hash('password123', { algorithm: 'argon2id' });
-	const [row] = await sql<{ id: string }[]>`
-		INSERT INTO users (email, password_hash, phone_verified)
-		VALUES (${email}, ${hash}, true)
-		RETURNING id
-	`;
+	const [row] = await getDatabase().insert(users).values({
+		email,
+		passwordHash: hash,
+		phoneVerified: true,
+	}).returning();
 	if (!row) throw new Error('Failed to create user');
 	return { id: row.id, email };
 }
@@ -50,41 +49,53 @@ async function loginToken(email: string): Promise<string> {
 }
 
 async function createCategory(): Promise<number> {
-	const [row] = await sql<{ id: number }[]>`
-		INSERT INTO categories (name, slug)
-		VALUES ('Test Cat', ${`cat-${Date.now()}-${Math.random()}`})
-		RETURNING id
-	`;
+	const slug = `cat-${Date.now()}-${Math.random()}`;
+	const [row] = await getDatabase().insert(categories).values({
+		name: 'Test Cat',
+		slug,
+	}).returning();
 	if (!row) throw new Error('Failed to create category');
 	return row.id;
 }
 
 async function createPublishedRequest(authorId: string, catId: number): Promise<string> {
-	const [row] = await sql<{ id: string }[]>`
-		INSERT INTO requests (author_id, category_id, title, goal, barrier, help_needed, state)
-		VALUES (${authorId}, ${catId}, 'Solar Panel Setup', 'Install solar for school', 'Need technician', 'Guidance', 'published')
-		RETURNING id
-	`;
+	const [row] = await getDatabase().insert(requests).values({
+		authorId,
+		categoryId: catId,
+		title: 'Solar Panel Setup',
+		goal: 'Install solar for school',
+		barrier: 'Need technician',
+		helpNeeded: 'Guidance',
+		state: 'published',
+	}).returning();
 	if (!row) throw new Error('Failed to create request');
 	return row.id;
 }
 
 async function createDraftRequest(authorId: string, catId: number): Promise<string> {
-	const [row] = await sql<{ id: string }[]>`
-		INSERT INTO requests (author_id, category_id, title, goal, barrier, help_needed, state)
-		VALUES (${authorId}, ${catId}, 'Draft Request', 'Draft goal', 'Draft barrier', 'Draft help', 'draft')
-		RETURNING id
-	`;
+	const [row] = await getDatabase().insert(requests).values({
+		authorId,
+		categoryId: catId,
+		title: 'Draft Request',
+		goal: 'Draft goal',
+		barrier: 'Draft barrier',
+		helpNeeded: 'Draft help',
+		state: 'draft',
+	}).returning();
 	if (!row) throw new Error('Failed to create request');
 	return row.id;
 }
 
 async function createClosedRequest(authorId: string, catId: number): Promise<string> {
-	const [row] = await sql<{ id: string }[]>`
-		INSERT INTO requests (author_id, category_id, title, goal, barrier, help_needed, state)
-		VALUES (${authorId}, ${catId}, 'Closed Request', 'Closed goal', 'Closed barrier', 'Closed help', 'closed')
-		RETURNING id
-	`;
+	const [row] = await getDatabase().insert(requests).values({
+		authorId,
+		categoryId: catId,
+		title: 'Closed Request',
+		goal: 'Closed goal',
+		barrier: 'Closed barrier',
+		helpNeeded: 'Closed help',
+		state: 'closed',
+	}).returning();
 	if (!row) throw new Error('Failed to create request');
 	return row.id;
 }
@@ -94,11 +105,15 @@ async function createRequestInState(
 	catId: number,
 	state: string,
 ): Promise<string> {
-	const [row] = await sql<{ id: string }[]>`
-		INSERT INTO requests (author_id, category_id, title, goal, barrier, help_needed, state)
-		VALUES (${authorId}, ${catId}, ${`${state} Request`}, 'Goal', 'Barrier', 'Help', ${state})
-		RETURNING id
-	`;
+	const [row] = await getDatabase().insert(requests).values({
+		authorId,
+		categoryId: catId,
+		title: `${state} Request`,
+		goal: 'Goal',
+		barrier: 'Barrier',
+		helpNeeded: 'Help',
+		state: state as any,
+	}).returning();
 	if (!row) throw new Error('Failed to create request');
 	return row.id;
 }
@@ -127,9 +142,8 @@ describe('POST /requests/:id/vote', () => {
 		expect(body.hasVoted).toBe(true);
 
 		// Verify DB row
-		const votes =
-			await sql`SELECT count(*)::int AS count FROM votes WHERE user_id = ${voter.id} AND request_id = ${requestId}`;
-		expect(votes[0]?.count).toBe(1);
+		const [result] = await getDatabase().select({ count: count() }).from(votes).where(and(eq(votes.userId, voter.id), eq(votes.requestId, requestId)));
+		expect(result?.count).toBe(1);
 	});
 
 	test('duplicate POST returns 409 and voteCount unchanged', async () => {
@@ -158,9 +172,8 @@ describe('POST /requests/:id/vote', () => {
 		expect(body.error).toBe('ALREADY_VOTED');
 
 		// Only one DB row
-		const votes =
-			await sql`SELECT count(*)::int AS count FROM votes WHERE user_id = ${voter.id} AND request_id = ${requestId}`;
-		expect(votes[0]?.count).toBe(1);
+		const [result] = await getDatabase().select({ count: count() }).from(votes).where(and(eq(votes.userId, voter.id), eq(votes.requestId, requestId)));
+		expect(result?.count).toBe(1);
 	});
 
 	test('unauthenticated POST returns 401', async () => {
@@ -319,7 +332,7 @@ describe('POST /requests/:id/vote', () => {
 		const requestId = await createPublishedRequest(author.id, catId);
 
 		// Suspend the user
-		await sql`UPDATE users SET status = 'suspended' WHERE id = ${voter.id}`;
+		await getDatabase().update(users).set({ status: 'suspended' }).where(eq(users.id, voter.id));
 
 		const res = await app.handle(
 			new Request(`http://localhost/requests/${requestId}/vote`, {
@@ -360,9 +373,8 @@ describe('DELETE /requests/:id/vote', () => {
 		expect(body.hasVoted).toBe(false);
 
 		// Verify DB row removed
-		const votes =
-			await sql`SELECT count(*)::int AS count FROM votes WHERE user_id = ${voter.id} AND request_id = ${requestId}`;
-		expect(votes[0]?.count).toBe(0);
+		const [result] = await getDatabase().select({ count: count() }).from(votes).where(and(eq(votes.userId, voter.id), eq(votes.requestId, requestId)));
+		expect(result?.count).toBe(0);
 	});
 
 	test('DELETE when no vote exists returns 404', async () => {
@@ -534,25 +546,28 @@ describe('DB unique constraint', () => {
 		const voter = await createUser();
 		const author = await createUser();
 		const catId = await createCategory();
-		const [reqRow] = await sql<{ id: string }[]>`
-			INSERT INTO requests (author_id, category_id, title, goal, barrier, help_needed, state)
-			VALUES (${author.id}, ${catId}, 'Test', 'Goal', 'Barrier', 'Help', 'published')
-			RETURNING id
-		`;
+		const [reqRow] = await getDatabase().insert(requests).values({
+			authorId: author.id,
+			categoryId: catId,
+			title: 'Test',
+			goal: 'Goal',
+			barrier: 'Barrier',
+			helpNeeded: 'Help',
+			state: 'published',
+		}).returning();
 		if (!reqRow) throw new Error('Failed to create request');
 
-		await sql`INSERT INTO votes (user_id, request_id) VALUES (${voter.id}, ${reqRow.id})`;
+		await getDatabase().insert(votes).values({ userId: voter.id, requestId: reqRow.id });
 
 		let threw = false;
 		try {
-			await sql`INSERT INTO votes (user_id, request_id) VALUES (${voter.id}, ${reqRow.id})`;
+			await getDatabase().insert(votes).values({ userId: voter.id, requestId: reqRow.id });
 		} catch {
 			threw = true;
 		}
 		expect(threw).toBe(true);
 
-		const count =
-			await sql`SELECT count(*)::int AS count FROM votes WHERE user_id = ${voter.id} AND request_id = ${reqRow.id}`;
-		expect(count[0]?.count).toBe(1);
+		const [result] = await getDatabase().select({ count: count() }).from(votes).where(and(eq(votes.userId, voter.id), eq(votes.requestId, reqRow.id)));
+		expect(result?.count).toBe(1);
 	});
 });

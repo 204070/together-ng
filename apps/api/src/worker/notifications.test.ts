@@ -1,5 +1,16 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
-import { createClient, type Db, drizzle, type Sql } from '@together/db';
+import { type Db, desc, eq, getDatabase, getPool, migrate } from '@together/db';
+import {
+	users,
+	categories,
+	skills,
+	contributorCapabilities,
+	notificationPreferences,
+	requests,
+	requestMatches,
+	notifications,
+	notificationDispatchLog,
+} from '@together/db/schema';
 import { makeApp } from '../app';
 import { createMatchingQueue } from '../queue';
 import { recomputeMatches } from './matching';
@@ -10,7 +21,6 @@ const DB_URL =
 	'postgresql://together:together@localhost:5433/together_wt13_test';
 const JWT_SECRET = 'test-secret';
 
-let sql: Sql;
 let db: Db;
 let queue: ReturnType<typeof createMatchingQueue>;
 
@@ -40,10 +50,13 @@ function unique(prefix: string): string {
 async function createUser(email?: string, isAdmin = false): Promise<{ id: string; email: string }> {
 	const address = email ?? `${unique('m')}@example.com`;
 	const hash = await Bun.password.hash('password123', { algorithm: 'argon2id' });
-	const rows = await sql<{ id: string }[]>`
-		INSERT INTO users (email, password_hash, phone_verified, is_admin) VALUES (${address}, ${hash}, true, ${isAdmin}) RETURNING id
-	`;
-	return { id: rows[0]?.id as string, email: address };
+	const [row] = await getDatabase().insert(users).values({
+		email: address,
+		passwordHash: hash,
+		phoneVerified: true,
+		isAdmin,
+	}).returning();
+	return { id: row!.id, email: address };
 }
 
 async function loginToken(app: App, email: string): Promise<string> {
@@ -59,18 +72,14 @@ async function loginToken(app: App, email: string): Promise<string> {
 
 async function createCategory(slug?: string): Promise<number> {
 	const s = slug ?? unique('cat');
-	const rows = await sql<{ id: number }[]>`
-		INSERT INTO categories (name, slug) VALUES (${s}, ${s}) RETURNING id
-	`;
-	return rows[0]?.id as number;
+	const [row] = await getDatabase().insert(categories).values({ name: s, slug: s }).returning();
+	return row!.id;
 }
 
 async function createSkill(categoryId: number, slug?: string): Promise<number> {
 	const s = slug ?? unique('skill');
-	const rows = await sql<{ id: number }[]>`
-		INSERT INTO skills (category_id, name, slug) VALUES (${categoryId}, ${s}, ${s}) RETURNING id
-	`;
-	return rows[0]?.id as number;
+	const [row] = await getDatabase().insert(skills).values({ categoryId, name: s, slug: s }).returning();
+	return row!.id;
 }
 
 async function addCapability(input: {
@@ -80,10 +89,13 @@ async function addCapability(input: {
 	modality?: string;
 	location?: string | null;
 }): Promise<void> {
-	await sql`
-		INSERT INTO contributor_capabilities (user_id, category_id, skill_id, modality, location)
-		VALUES (${input.userId}, ${input.categoryId ?? null}, ${input.skillId ?? null}, ${input.modality ?? 'both'}, ${input.location ?? null})
-	`;
+	await getDatabase().insert(contributorCapabilities).values({
+		userId: input.userId,
+		categoryId: input.categoryId ?? null,
+		skillId: input.skillId ?? null,
+		modality: (input.modality as 'online' | 'in_person' | 'both') ?? 'both',
+		location: input.location ?? null,
+	});
 }
 
 async function setPrefs(userId: string, patch: Record<string, unknown>): Promise<void> {
@@ -96,18 +108,25 @@ async function setPrefs(userId: string, patch: Record<string, unknown>): Promise
 		in_app_enabled: true,
 		...patch,
 	};
-	await sql`
-		INSERT INTO notification_preferences
-			(user_id, in_app_enabled, notify_new_matches, notify_remote, notify_local, notify_resource_lending, notify_mentorship)
-		VALUES (${userId}, ${defaults.in_app_enabled}, ${defaults.notify_new_matches}, ${defaults.notify_remote}, ${defaults.notify_local}, ${defaults.notify_resource_lending}, ${defaults.notify_mentorship})
-		ON CONFLICT (user_id) DO UPDATE SET
-			in_app_enabled = EXCLUDED.in_app_enabled,
-			notify_new_matches = EXCLUDED.notify_new_matches,
-			notify_remote = EXCLUDED.notify_remote,
-			notify_local = EXCLUDED.notify_local,
-			notify_resource_lending = EXCLUDED.notify_resource_lending,
-			notify_mentorship = EXCLUDED.notify_mentorship
-	`;
+	await getDatabase().insert(notificationPreferences).values({
+		userId,
+		inAppEnabled: defaults.in_app_enabled as boolean,
+		notifyNewMatches: defaults.notify_new_matches as boolean,
+		notifyRemote: defaults.notify_remote as boolean,
+		notifyLocal: defaults.notify_local as boolean,
+		notifyResourceLending: defaults.notify_resource_lending as boolean,
+		notifyMentorship: defaults.notify_mentorship as boolean,
+	}).onConflictDoUpdate({
+		target: [notificationPreferences.userId],
+		set: {
+			inAppEnabled: defaults.in_app_enabled as boolean,
+			notifyNewMatches: defaults.notify_new_matches as boolean,
+			notifyRemote: defaults.notify_remote as boolean,
+			notifyLocal: defaults.notify_local as boolean,
+			notifyResourceLending: defaults.notify_resource_lending as boolean,
+			notifyMentorship: defaults.notify_mentorship as boolean,
+		},
+	});
 }
 
 async function createRequestRow(
@@ -120,78 +139,74 @@ async function createRequestRow(
 		state?: string;
 	},
 ): Promise<string> {
-	const rows = await sql<{ id: string }[]>`
-		INSERT INTO requests (author_id, category_id, title, goal, barrier, help_needed, state, modality, help_type, location)
-		VALUES (${authorId}, ${fields.categoryId}, 'Help with soldering', 'Learn to solder a simple circuit for a school project', 'No tools and no guidance from anyone nearby', 'Someone patient who can show me the basics', ${fields.state ?? 'published'}, ${fields.modality ?? 'both'}, ${fields.helpType ?? null}, ${fields.location ?? null})
-		RETURNING id
-	`;
-	return rows[0]?.id as string;
+	const [row] = await getDatabase().insert(requests).values({
+		authorId,
+		categoryId: fields.categoryId,
+		title: 'Help with soldering',
+		goal: 'Learn to solder a simple circuit for a school project',
+		barrier: 'No tools and no guidance from anyone nearby',
+		helpNeeded: 'Someone patient who can show me the basics',
+		state: (fields.state as 'draft' | 'published' | 'closed') ?? 'published',
+		modality: (fields.modality as 'online' | 'in_person' | 'both') ?? 'both',
+		helpType: (fields.helpType as 'borrow' | 'learn' | null) ?? null,
+		location: fields.location ?? null,
+	}).returning();
+	return row!.id;
 }
 
 async function waitForMatchRows(requestId: string, timeoutMs = 5000) {
 	const deadline = Date.now() + timeoutMs;
 	while (Date.now() < deadline) {
-		const rows = await sql<{ contributor_id: string }[]>`
-			SELECT contributor_id FROM request_matches WHERE request_id = ${requestId}
-		`;
+		const rows = await getDatabase().select({
+			contributor_id: requestMatches.contributorId,
+		}).from(requestMatches).where(eq(requestMatches.requestId, requestId));
 		if (rows.length > 0) return rows;
 		await new Promise((r) => setTimeout(r, 50));
 	}
-	return sql<{ contributor_id: string }[]>`
-		SELECT contributor_id FROM request_matches WHERE request_id = ${requestId}
-	`;
+	return getDatabase().select({
+		contributor_id: requestMatches.contributorId,
+	}).from(requestMatches).where(eq(requestMatches.requestId, requestId));
 }
 
 async function notificationRows(userId: string) {
-	return sql<
-		{
-			id: string;
-			user_id: string;
-			request_id: string | null;
-			type: string;
-			title: string;
-			body: string | null;
-			read_at: Date | null;
-		}[]
-	>`
-		SELECT id, user_id, request_id, type, title, body, read_at
-		FROM notifications
-		WHERE user_id = ${userId}
-		ORDER BY created_at DESC
-	`;
+	return getDatabase().select({
+		id: notifications.id,
+		user_id: notifications.userId,
+		request_id: notifications.requestId,
+		type: notifications.type,
+		title: notifications.title,
+		body: notifications.body,
+		read_at: notifications.readAt,
+	}).from(notifications)
+	.where(eq(notifications.userId, userId))
+	.orderBy(desc(notifications.createdAt));
 }
 
 async function dispatchLogRows(requestId: string) {
-	return sql<
-		{
-			user_id: string;
-			decision: string;
-			reason: string | null;
-			caps_evaluated: unknown;
-			cap_window: string | null;
-		}[]
-	>`
-		SELECT user_id, decision, reason, caps_evaluated, cap_window
-		FROM notification_dispatch_log
-		WHERE request_id = ${requestId}
-	`;
+	return getDatabase().select({
+		user_id: notificationDispatchLog.userId,
+		decision: notificationDispatchLog.decision,
+		reason: notificationDispatchLog.reason,
+		caps_evaluated: notificationDispatchLog.capsEvaluated,
+		cap_window: notificationDispatchLog.capWindow,
+	}).from(notificationDispatchLog)
+	.where(eq(notificationDispatchLog.requestId, requestId));
 }
 
 beforeAll(async () => {
-	sql = createClient(DB_URL);
-	const drizzleClient = createClient(DB_URL);
-	db = drizzle(drizzleClient);
+	await migrate(DB_URL);
+	db = getDatabase();
 	queue = createMatchingQueue({ connectionString: DB_URL, db });
 	await queue.start();
 });
 
 afterAll(async () => {
 	await queue.stop();
-	await sql.end();
+	await getPool().end();
 });
 
 beforeEach(async () => {
-	await sql`TRUNCATE users, categories, skills RESTART IDENTITY CASCADE`;
+	await getPool().query('TRUNCATE users, categories, skills RESTART IDENTITY CASCADE');
 });
 
 describe('notification dispatch worker', () => {
@@ -308,11 +323,12 @@ describe('notification dispatch worker', () => {
 		const rows = await notificationRows(contributor.id);
 		expect(rows.length).toBe(3);
 
-		const allLogRows = await sql<{ user_id: string; decision: string; reason: string | null }[]>`
-			SELECT user_id, decision, reason
-			FROM notification_dispatch_log
-			WHERE user_id = ${contributor.id}
-		`;
+		const allLogRows = await getDatabase().select({
+			user_id: notificationDispatchLog.userId,
+			decision: notificationDispatchLog.decision,
+			reason: notificationDispatchLog.reason,
+		}).from(notificationDispatchLog)
+		.where(eq(notificationDispatchLog.userId, contributor.id));
 		const suppressed = allLogRows.filter((r) => r.decision === 'suppressed');
 		expect(suppressed.length).toBe(1);
 		expect(suppressed[0]?.reason).toBe('frequency_cap_exceeded');

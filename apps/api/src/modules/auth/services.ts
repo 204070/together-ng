@@ -1,5 +1,5 @@
 import { env as configEnv } from '@together/config';
-import { createDb, type Db, type Sql } from '@together/db';
+import { createDb, getPool, type Db } from '@together/db';
 import { FixedWindowRateLimiter } from '../../lib/rate-limit';
 import type { MatchingService } from '../../worker/matching';
 import { createOtpSender, type OtpSender } from './otp-sender';
@@ -18,7 +18,6 @@ export interface AppEnv {
 	otpProvider?: 'mock' | 'termii';
 	isProduction?: boolean;
 	now?: () => Date;
-	sql?: Sql;
 	db?: Db;
 	matching?: MatchingService;
 }
@@ -38,21 +37,15 @@ export interface AuthServices {
 	};
 }
 
-export function createAuthServices(
-	env: AppEnv = {},
-	deps: { db?: Db; sql?: Sql } = {},
-): AuthServices {
+export function createAuthServices(env: AppEnv = {}, deps: { db?: Db } = {}): AuthServices {
 	const databaseUrl = env.databaseUrl ?? configEnv.DATABASE_URL;
 	const jwtSecret = env.jwtSecret ?? configEnv.JWT_SECRET;
 	const isProduction = env.isProduction ?? configEnv.NODE_ENV === 'production';
 	const provider = env.otpProvider ?? configEnv.OTP_PROVIDER;
 	const now = env.now ?? (() => new Date());
-	const db =
-		deps.db ??
-		env.db ??
-		(deps.sql || env.sql ? createDb(deps.sql ?? env.sql) : createDb(databaseUrl));
+	const db = deps.db ?? env.db ?? createDb(databaseUrl);
 	const store = new AuthStore(db);
-	const otpSender = env.sql === undefined ? createOtpSender(provider) : ensureMockSender(provider);
+	const otpSender = createOtpSender(provider);
 	return {
 		db,
 		store,
@@ -60,10 +53,7 @@ export function createAuthServices(
 		isProduction,
 		now,
 		otpSender,
-		close: () =>
-			env.sql === undefined && env.db === undefined && deps.db === undefined
-				? db.$client.end()
-				: Promise.resolve(),
+		close: () => (env.db === undefined && deps.db === undefined ? getPool().end() : Promise.resolve()),
 		limiters: {
 			login: new FixedWindowRateLimiter(LOGIN_WINDOW_MS, LOGIN_MAX_HITS, {
 				now: () => now().getTime(),
@@ -76,11 +66,4 @@ export function createAuthServices(
 			}),
 		},
 	};
-}
-
-function ensureMockSender(provider: string): OtpSender {
-	if (provider === 'termii') {
-		throw new Error('termii provider is not allowed when a test SQL client is injected');
-	}
-	return createOtpSender('mock');
 }

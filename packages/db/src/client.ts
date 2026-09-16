@@ -1,33 +1,35 @@
+import { Pool } from 'pg';
+import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { env, loadEnv } from '@together/config';
-import { drizzle } from 'drizzle-orm/postgres-js';
-import postgres from 'postgres';
 import * as schema from './schema';
 
 loadEnv();
 
-export function createClient(databaseUrl: string = env.DATABASE_URL) {
-	return postgres(databaseUrl, { max: 10, onnotice: () => {} });
+let pool: Pool;
+let db: NodePgDatabase<typeof schema>;
+
+export function initDatabase(databaseUrl: string = env.DATABASE_URL) {
+	pool = new Pool({ connectionString: databaseUrl, max: 10 });
+	db = drizzle(pool, { schema });
+	return db;
 }
 
-export type Sql = ReturnType<typeof createClient>;
-
-export function createDb(clientOrUrl: Sql | string = env.DATABASE_URL) {
-	if (typeof clientOrUrl === 'string') {
-		return drizzle(createClient(clientOrUrl), { schema });
-	}
-	const pass = clientOrUrl.options.pass;
-	const client = postgres({
-		host: clientOrUrl.options.host?.[0],
-		port: clientOrUrl.options.port?.[0],
-		path: clientOrUrl.options.path,
-		database: clientOrUrl.options.database,
-		username: clientOrUrl.options.user,
-		...(pass !== null && pass !== undefined ? { password: pass } : {}),
-		ssl: clientOrUrl.options.ssl,
-		max: 10,
-		onnotice: () => {},
-	});
-	return drizzle(client, { schema });
+export function getDatabase() {
+	if (!db) throw new Error('Database not initialized');
+	return db;
 }
 
-export type Db = ReturnType<typeof createDb>;
+export function getPool() {
+	if (!pool) throw new Error('Database not initialized');
+	return pool;
+}
+
+export function setDatabase(newDb: NodePgDatabase<typeof schema>) {
+	db = newDb;
+}
+
+export function createDb(databaseUrl: string = env.DATABASE_URL) {
+	return initDatabase(databaseUrl);
+}
+
+export type Db = NodePgDatabase<typeof schema>;

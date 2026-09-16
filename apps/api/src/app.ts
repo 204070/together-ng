@@ -21,7 +21,7 @@ loadEnv();
 
 export function makeApp(env: AppEnv = {}) {
 	const databaseUrl = env.databaseUrl ?? configEnv.DATABASE_URL;
-	const db: Db = env.db ?? (env.sql ? createDb(env.sql) : createDb(databaseUrl));
+	const db: Db = env.db ?? createDb(databaseUrl);
 
 	const authServices = createAuthServices(env, { db });
 	const profileServices = createProfileServices(env, {

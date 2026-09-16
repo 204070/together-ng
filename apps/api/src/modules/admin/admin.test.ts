@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
-import { createClient, type Sql } from '@together/db';
+import { eq, getDatabase, getPool, migrate } from '@together/db';
+import { users } from '@together/db/schema';
 import { makeApp } from '../../app';
 import type { MockOtpSender } from '../auth/otp-sender';
 import type { AuthServices } from '../auth/services';
@@ -8,8 +9,6 @@ const DB_URL =
 	process.env.TEST_DATABASE_URL ??
 	'postgresql://together:together@localhost:5433/together_wt18_test';
 const JWT_SECRET = 'test-secret';
-
-let sql: Sql;
 
 type App = ReturnType<typeof makeApp>;
 
@@ -24,7 +23,7 @@ function senderOf(app: App): MockOtpSender {
 function mkApp(): App {
 	return makeApp({
 		databaseUrl: DB_URL,
-		sql,
+		db: getDatabase(),
 		otpProvider: 'mock',
 		isProduction: false,
 		jwtSecret: JWT_SECRET,
@@ -85,21 +84,21 @@ async function verifiedToken(
 	const verify = await postJson(app, '/auth/verify-otp', { phone: input.phone, code });
 	expect(verify.status).toBe(200);
 	if (input.admin) {
-		await sql`UPDATE users SET is_admin = true WHERE email = ${input.email.toLowerCase()}`;
+		await getDatabase().update(users).set({ isAdmin: true }).where(eq(users.email, input.email.toLowerCase()));
 	}
 	return loginToken(app, input.email, password);
 }
 
 beforeAll(async () => {
-	sql = createClient(DB_URL);
+	await migrate(DB_URL);
 });
 
 afterAll(async () => {
-	await sql.end();
+	await getPool().end();
 });
 
 beforeEach(async () => {
-	await sql`TRUNCATE otp_tokens, sessions, users CASCADE`;
+	await getPool().query('TRUNCATE otp_tokens, sessions, users CASCADE');
 });
 
 describe('GET /admin/reports', () => {
@@ -151,7 +150,7 @@ describe('GET /admin/reports', () => {
 			admin: false,
 		});
 		expect((await get(app, '/admin/reports', token)).status).toBe(403);
-		await sql`UPDATE users SET is_admin = true WHERE email = 'user@x.com'`;
+		await getDatabase().update(users).set({ isAdmin: true }).where(eq(users.email, 'user@x.com'));
 		const res = await get(app, '/admin/reports', token);
 		expect(res.status).toBe(200);
 	});
@@ -163,7 +162,7 @@ describe('GET /admin/reports', () => {
 			phone: '+2348012345678',
 			admin: true,
 		});
-		await sql`UPDATE users SET status = 'suspended' WHERE email = 'admin@x.com'`;
+		await getDatabase().update(users).set({ status: 'suspended' }).where(eq(users.email, 'admin@x.com'));
 		const res = await get(app, '/admin/reports', token);
 		expect(res.status).toBe(401);
 	});

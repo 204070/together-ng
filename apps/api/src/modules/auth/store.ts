@@ -1,70 +1,31 @@
-import type { Sql } from '@together/db';
-
-export interface UserRow {
-	id: string;
-	email: string;
-	email_verified: boolean;
-	phone: string | null;
-	phone_verified: boolean;
-	password_hash: string;
-	is_admin: boolean;
-	status: string;
-	last_login_at: Date | null;
-	created_at: Date;
-	updated_at: Date;
-	deleted_at: Date | null;
-}
-
-export interface OtpRow {
-	id: string;
-	user_id: string;
-	phone: string;
-	context: 'verify' | 'login';
-	code_hash: string;
-	expires_at: Date;
-	attempts: number;
-	used_at: Date | null;
-	created_at: Date;
-}
-
-export interface SessionRow {
-	id: string;
-	user_id: string;
-	refresh_hash: string;
-	created_at: Date;
-	expires_at: Date;
-}
+import {
+	type Db,
+	desc,
+	eq,
+	type OtpToken,
+	otpTokens,
+	type Session,
+	sessions,
+	sql,
+	type User,
+	users,
+} from '@together/db';
 
 export class AuthStore {
-	constructor(private readonly sql: Sql) {}
+	constructor(private readonly db: Db) {}
 
-	async findUserByEmail(email: string): Promise<UserRow | undefined> {
-		const rows = await this.sql<UserRow[]>`
-			SELECT id, email, email_verified, phone, phone_verified, password_hash, is_admin, status,
-				last_login_at, created_at, updated_at, deleted_at
-			FROM users
-			WHERE email = ${email}
-		`;
+	async findUserByEmail(email: string): Promise<User | undefined> {
+		const rows = await this.db.select().from(users).where(eq(users.email, email)).limit(1);
 		return rows[0];
 	}
 
-	async findUserByPhone(phone: string): Promise<UserRow | undefined> {
-		const rows = await this.sql<UserRow[]>`
-			SELECT id, email, email_verified, phone, phone_verified, password_hash, is_admin, status,
-				last_login_at, created_at, updated_at, deleted_at
-			FROM users
-			WHERE phone = ${phone}
-		`;
+	async findUserByPhone(phone: string): Promise<User | undefined> {
+		const rows = await this.db.select().from(users).where(eq(users.phone, phone)).limit(1);
 		return rows[0];
 	}
 
-	async findUserById(id: string): Promise<UserRow | undefined> {
-		const rows = await this.sql<UserRow[]>`
-			SELECT id, email, email_verified, phone, phone_verified, password_hash, is_admin, status,
-				last_login_at, created_at, updated_at, deleted_at
-			FROM users
-			WHERE id = ${id}
-		`;
+	async findUserById(id: string): Promise<User | undefined> {
+		const rows = await this.db.select().from(users).where(eq(users.id, id)).limit(1);
 		return rows[0];
 	}
 
@@ -72,26 +33,36 @@ export class AuthStore {
 		email: string;
 		passwordHash: string;
 		phone: string | null;
-	}): Promise<UserRow> {
-		const rows = await this.sql<UserRow[]>`
-			INSERT INTO users (email, password_hash, phone)
-			VALUES (${input.email}, ${input.passwordHash}, ${input.phone})
-			RETURNING id, email, email_verified, phone, phone_verified, password_hash, is_admin, status,
-				last_login_at, created_at, updated_at, deleted_at
-		`;
-		return rows[0] as UserRow;
+	}): Promise<User> {
+		const rows = await this.db
+			.insert(users)
+			.values({
+				email: input.email,
+				passwordHash: input.passwordHash,
+				phone: input.phone,
+			})
+			.returning();
+		const row = rows[0];
+		if (!row) throw new Error('Failed to insert user');
+		return row;
 	}
 
 	async setPhoneVerified(userId: string): Promise<void> {
-		await this.sql`UPDATE users SET phone_verified = true, updated_at = now() WHERE id = ${userId}`;
+		await this.db
+			.update(users)
+			.set({ phoneVerified: true, updatedAt: new Date() })
+			.where(eq(users.id, userId));
 	}
 
 	async touchLastLogin(userId: string): Promise<void> {
-		await this.sql`UPDATE users SET last_login_at = now(), updated_at = now() WHERE id = ${userId}`;
+		await this.db
+			.update(users)
+			.set({ lastLoginAt: new Date(), updatedAt: new Date() })
+			.where(eq(users.id, userId));
 	}
 
 	async deleteOtpsForPhone(phone: string): Promise<void> {
-		await this.sql`DELETE FROM otp_tokens WHERE phone = ${phone}`;
+		await this.db.delete(otpTokens).where(eq(otpTokens.phone, phone));
 	}
 
 	async insertOtp(input: {
@@ -100,61 +71,79 @@ export class AuthStore {
 		context: 'verify' | 'login';
 		codeHash: string;
 		expiresAt: Date;
-	}): Promise<OtpRow> {
-		const rows = await this.sql<OtpRow[]>`
-			INSERT INTO otp_tokens (user_id, phone, context, code_hash, expires_at)
-			VALUES (${input.userId}, ${input.phone}, ${input.context}, ${input.codeHash}, ${input.expiresAt})
-			RETURNING id, user_id, phone, context, code_hash, expires_at, attempts, used_at, created_at
-		`;
-		return rows[0] as OtpRow;
+	}): Promise<OtpToken> {
+		const rows = await this.db
+			.insert(otpTokens)
+			.values({
+				userId: input.userId,
+				phone: input.phone,
+				context: input.context,
+				codeHash: input.codeHash,
+				expiresAt: input.expiresAt,
+			})
+			.returning();
+		const row = rows[0];
+		if (!row) throw new Error('Failed to insert OTP');
+		return row;
 	}
 
-	async findOtpForPhone(phone: string): Promise<OtpRow | undefined> {
-		const rows = await this.sql<OtpRow[]>`
-			SELECT id, user_id, phone, context, code_hash, expires_at, attempts, used_at, created_at
-			FROM otp_tokens
-			WHERE phone = ${phone}
-			ORDER BY created_at DESC
-			LIMIT 1
-		`;
+	async findOtpForPhone(phone: string): Promise<OtpToken | undefined> {
+		const rows = await this.db
+			.select()
+			.from(otpTokens)
+			.where(eq(otpTokens.phone, phone))
+			.orderBy(desc(otpTokens.createdAt))
+			.limit(1);
 		return rows[0];
 	}
 
 	async incrementOtpAttempts(id: string): Promise<void> {
-		await this.sql`UPDATE otp_tokens SET attempts = attempts + 1 WHERE id = ${id}`;
+		await this.db
+			.update(otpTokens)
+			.set({ attempts: sql`attempts + 1` })
+			.where(eq(otpTokens.id, id));
 	}
 
 	async markOtpUsed(id: string): Promise<void> {
-		await this.sql`UPDATE otp_tokens SET used_at = now() WHERE id = ${id}`;
+		await this.db.update(otpTokens).set({ usedAt: new Date() }).where(eq(otpTokens.id, id));
 	}
 
 	async insertSession(input: {
 		userId: string;
 		refreshHash: string;
 		expiresAt: Date;
-	}): Promise<SessionRow> {
-		const rows = await this.sql<SessionRow[]>`
-			INSERT INTO sessions (user_id, refresh_hash, expires_at)
-			VALUES (${input.userId}, ${input.refreshHash}, ${input.expiresAt})
-			RETURNING id, user_id, refresh_hash, created_at, expires_at
-		`;
-		return rows[0] as SessionRow;
+	}): Promise<Session> {
+		const rows = await this.db
+			.insert(sessions)
+			.values({
+				userId: input.userId,
+				refreshHash: input.refreshHash,
+				expiresAt: input.expiresAt,
+			})
+			.returning();
+		const row = rows[0];
+		if (!row) throw new Error('Failed to insert session');
+		return row;
 	}
 
-	async findSessionByRefreshHash(refreshHash: string): Promise<SessionRow | undefined> {
-		const rows = await this.sql<SessionRow[]>`
-			SELECT id, user_id, refresh_hash, created_at, expires_at
-			FROM sessions
-			WHERE refresh_hash = ${refreshHash}
-		`;
+	async findSessionByRefreshHash(refreshHash: string): Promise<Session | undefined> {
+		const rows = await this.db
+			.select()
+			.from(sessions)
+			.where(eq(sessions.refreshHash, refreshHash))
+			.limit(1);
 		return rows[0];
 	}
 
 	async deleteSessionById(id: string): Promise<void> {
-		await this.sql`DELETE FROM sessions WHERE id = ${id}`;
+		await this.db.delete(sessions).where(eq(sessions.id, id));
 	}
 
 	async deleteSessionByRefreshHash(refreshHash: string): Promise<void> {
-		await this.sql`DELETE FROM sessions WHERE refresh_hash = ${refreshHash}`;
+		await this.db.delete(sessions).where(eq(sessions.refreshHash, refreshHash));
 	}
 }
+
+export type UserRow = User;
+export type OtpRow = OtpToken;
+export type SessionRow = Session;

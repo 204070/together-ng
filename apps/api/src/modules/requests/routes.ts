@@ -88,10 +88,10 @@ export function createRequestRouter(services: RequestServices) {
 				if (!row) throw notFound();
 				// Draft requests are private to author; published/public requests are visible to all
 				if (row.state === 'draft') {
-					if (!actorUserId || row.author_id !== actorUserId) throw notFound();
+					if (!actorUserId || row.authorId !== actorUserId) throw notFound();
 				}
 				const base = toResponse(row);
-				const isAuthor = actorUserId && row.author_id === actorUserId;
+				const isAuthor = actorUserId && row.authorId === actorUserId;
 				const hints = isAuthor
 					? qualityHints({
 							title: row.title,
@@ -135,7 +135,7 @@ export function createRequestRouter(services: RequestServices) {
 					if (b.categoryId !== undefined) {
 						const cat = await store.findCategoryById(b.categoryId as number);
 						if (!cat) throw categoryNotFound();
-						if (cat.retired_at !== null) throw categoryRetired();
+						if (cat.retiredAt !== null) throw categoryRetired();
 					}
 					const row = await store.createRequest(userId, b);
 					const base = toResponse(row);
@@ -157,7 +157,7 @@ export function createRequestRouter(services: RequestServices) {
 								'Too many requests',
 							);
 						const row = await store.findRequestById(params.id);
-						if (!row || row.author_id !== userId) throw notFound();
+						if (!row || row.authorId !== userId) throw notFound();
 						if (row.state !== 'draft') throw invalidState();
 						const b = (body ?? {}) as Record<string, unknown>;
 						if (!Value.Check(RequestPatch, b)) {
@@ -167,7 +167,7 @@ export function createRequestRouter(services: RequestServices) {
 						if (b.categoryId !== undefined) {
 							const cat = await store.findCategoryById(b.categoryId as number);
 							if (!cat) throw categoryNotFound();
-							if (cat.retired_at !== null) throw categoryRetired();
+							if (cat.retiredAt !== null) throw categoryRetired();
 						}
 						const updated = await store.updateRequest(params.id, b);
 						if (!updated) throw notFound();
@@ -180,7 +180,7 @@ export function createRequestRouter(services: RequestServices) {
 							title: updated.title,
 							goal: updated.goal,
 							barrier: updated.barrier,
-							helpNeeded: updated.help_needed,
+							helpNeeded: updated.helpNeeded,
 						} as never);
 						return { ...base, qualityHints: hints };
 					},
@@ -191,20 +191,20 @@ export function createRequestRouter(services: RequestServices) {
 					async ({ params, actor }) => {
 						const userId = actor.userId;
 						const row = await store.findRequestById(params.id);
-						if (!row || row.author_id !== userId) throw notFound();
+						if (!row || row.authorId !== userId) throw notFound();
 						const base = toResponse(row);
 						const missing = missingFields({
 							title: row.title,
 							goal: row.goal,
 							barrier: row.barrier,
-							helpNeeded: row.help_needed,
-							categoryId: row.category_id,
+							helpNeeded: row.helpNeeded,
+							categoryId: row.categoryId,
 						});
 						const hints = qualityHints({
 							title: row.title,
 							goal: row.goal,
 							barrier: row.barrier,
-							helpNeeded: row.help_needed,
+							helpNeeded: row.helpNeeded,
 						} as never);
 						return { request: base, missingFields: missing, qualityHints: hints };
 					},
@@ -215,9 +215,9 @@ export function createRequestRouter(services: RequestServices) {
 					async ({ params, actor }) => {
 						const userId = actor.userId;
 						const row = await store.findRequestById(params.id);
-						if (!row || row.author_id !== userId) throw notFound();
+						if (!row || row.authorId !== userId) throw notFound();
 						if (!canTransition(row.state, 'published')) throw invalidState();
-						if (row.category_id === null)
+						if (row.categoryId === null)
 							throw new HttpError(
 								422,
 								'VALIDATION',
@@ -225,9 +225,9 @@ export function createRequestRouter(services: RequestServices) {
 								undefined,
 								'Missing required fields',
 							);
-						const cat = await store.findCategoryById(row.category_id);
+						const cat = await store.findCategoryById(row.categoryId);
 						if (!cat) throw categoryNotFound();
-						if (cat.retired_at !== null) throw categoryRetired();
+						if (cat.retiredAt !== null) throw categoryRetired();
 						const fields: Record<string, string> = {};
 						if (!row.title || row.title.trim() === '' || row.title.length > 200)
 							fields.title = 'required';
@@ -235,7 +235,7 @@ export function createRequestRouter(services: RequestServices) {
 							fields.goal = 'required';
 						if (!row.barrier || row.barrier.trim() === '' || row.barrier.length > 2000)
 							fields.barrier = 'required';
-						if (!row.help_needed || row.help_needed.trim() === '' || row.help_needed.length > 2000)
+						if (!row.helpNeeded || row.helpNeeded.trim() === '' || row.helpNeeded.length > 2000)
 							fields.helpNeeded = 'required';
 						if (Object.keys(fields).length > 0)
 							throw new HttpError(422, 'VALIDATION', fields, undefined, 'Missing required fields');
@@ -247,7 +247,7 @@ export function createRequestRouter(services: RequestServices) {
 							title: published.title,
 							goal: published.goal,
 							barrier: published.barrier,
-							helpNeeded: published.help_needed,
+							helpNeeded: published.helpNeeded,
 						} as never);
 						return { ...base, qualityHints: hints };
 					},

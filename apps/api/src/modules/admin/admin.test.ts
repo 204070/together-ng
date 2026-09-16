@@ -23,7 +23,7 @@ function senderOf(app: App): MockOtpSender {
 
 function mkApp(): App {
 	return makeApp({
-		databaseUrl: '',
+		databaseUrl: DB_URL,
 		sql,
 		otpProvider: 'mock',
 		isProduction: false,

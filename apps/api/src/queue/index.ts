@@ -1,4 +1,4 @@
-import type { Sql } from '@together/db';
+import { createDb, type Db, type Sql } from '@together/db';
 import { PgBoss } from 'pg-boss';
 import { type MatchingService, recomputeMatches } from '../worker/matching';
 
@@ -103,7 +103,8 @@ export function createJobQueue<TData extends object>(
 
 export interface MatchingQueueOptions {
 	connectionString: string;
-	sql: Sql;
+	db?: Db;
+	sql?: Sql;
 	now?: () => Date;
 	pollingIntervalSeconds?: number;
 	awaitTimeoutMs?: number;
@@ -118,6 +119,7 @@ function isMatchingJobData(data: unknown): data is MatchingJobData {
 }
 
 export function createMatchingQueue(options: MatchingQueueOptions) {
+	const db = options.db ?? createDb(options.sql ?? options.connectionString);
 	const now = options.now ?? (() => new Date());
 	const queue = createJobQueue<MatchingJobData>({
 		connectionString: options.connectionString,
@@ -126,7 +128,7 @@ export function createMatchingQueue(options: MatchingQueueOptions) {
 		awaitTimeoutMs: options.awaitTimeoutMs,
 		handler: async (data) => {
 			if (!isMatchingJobData(data)) return;
-			await recomputeMatches(options.sql, data.requestId, { now });
+			await recomputeMatches(db, data.requestId, { now });
 		},
 	});
 

@@ -12,7 +12,7 @@ let app: ReturnType<typeof makeApp>;
 beforeAll(async () => {
 	sql = createClient(DB_URL);
 	await migrate(DB_URL);
-	app = makeApp({ databaseUrl: '', sql, otpProvider: 'mock', isProduction: false });
+	app = makeApp({ databaseUrl: DB_URL, sql, otpProvider: 'mock', isProduction: false });
 });
 
 afterAll(async () => {

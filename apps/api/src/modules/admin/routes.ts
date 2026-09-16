@@ -21,7 +21,7 @@ export async function requireAdmin(
 	store: { findUserById(id: string): Promise<UserRow | undefined> },
 ): Promise<UserRow> {
 	const { user } = await requireActiveUser(headers, verifier, store);
-	if (user.is_admin !== true) throw forbiddenError();
+	if (user.isAdmin !== true) throw forbiddenError();
 	return user;
 }
 

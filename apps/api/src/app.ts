@@ -1,4 +1,5 @@
-import { loadEnv } from '@together/config';
+import { env as configEnv, loadEnv } from '@together/config';
+import { createClient, createDb, type Db, type Sql } from '@together/db';
 import { Elysia } from 'elysia';
 import { ValidationError } from 'elysia/error';
 import { HttpError } from './lib/errors';
@@ -18,13 +19,19 @@ import { createInternalMatchingRouter } from './worker/matching';
 loadEnv();
 
 export function makeApp(env: AppEnv = {}) {
-	const authServices = createAuthServices(env);
+	const databaseUrl = env.databaseUrl ?? configEnv.DATABASE_URL;
+	const sql = (env.sql ?? createClient(databaseUrl)) as Sql;
+	const db: Db = env.db ?? createDb(databaseUrl);
+
+	const authServices = createAuthServices(env, { sql, db });
 	const profileServices = createProfileServices(env, {
-		sql: authServices.sql,
+		sql,
+		db,
 		users: authServices.store,
 	});
 	const requestServices = createRequestServices(env, {
-		sql: authServices.sql,
+		sql,
+		db,
 		authStore: authServices.store,
 		now: authServices.now,
 		matching: env.matching,
@@ -64,7 +71,7 @@ export function makeApp(env: AppEnv = {}) {
 		.use(createVoteRouter(requestServices))
 		.use(createVoteWsRouter())
 		.use(
-			createInternalMatchingRouter(authServices.sql, {
+			createInternalMatchingRouter(db, {
 				findUserById: (id: string) => authServices.store.findUserById(id),
 				jwtSecret: authServices.jwtSecret,
 			}),

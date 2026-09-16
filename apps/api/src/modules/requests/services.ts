@@ -1,5 +1,5 @@
 import { env as configEnv } from '@together/config';
-import { createClient, type Sql } from '@together/db';
+import { createClient, createDb, type Db, eq, type Sql, users } from '@together/db';
 import {
 	FixedWindowRateLimiter,
 	type RateLimitDecision,
@@ -17,6 +17,7 @@ export interface RequestEnv {
 	databaseUrl?: string;
 	jwtSecret?: string;
 	sql?: Sql;
+	db?: Db;
 	now?: () => Date;
 	redisUrl?: string;
 }
@@ -27,12 +28,13 @@ export interface AsyncRateLimiter {
 
 export interface RequestServices {
 	sql: Sql;
+	db: Db;
 	store: RequestStore;
 	limiter: AsyncRateLimiter;
 	jwtSecret: string;
 	now: () => Date;
 	matching: MatchingService | undefined;
-	findUserById: (id: string) => Promise<{ status: string; deleted_at: Date | null } | undefined>;
+	findUserById: (id: string) => Promise<{ status: string; deletedAt: Date | null } | undefined>;
 	close: () => Promise<void>;
 }
 
@@ -40,6 +42,7 @@ export function createRequestServices(
 	env: RequestEnv = {},
 	deps: {
 		sql?: Sql;
+		db?: Db;
 		authStore?: AuthStore;
 		now?: () => Date;
 		limiter?: AsyncRateLimiter;
@@ -51,7 +54,8 @@ export function createRequestServices(
 	const jwtSecret = env.jwtSecret ?? configEnv.JWT_SECRET;
 	const now = deps.now ?? env.now ?? (() => new Date());
 	const sql = (deps.sql ?? env.sql ?? createClient(databaseUrl)) as Sql;
-	const store = new RequestStore(sql);
+	const db = deps.db ?? env.db ?? createDb(databaseUrl);
+	const store = new RequestStore(db);
 
 	let limiter: AsyncRateLimiter;
 	if (deps.limiter) {
@@ -80,14 +84,17 @@ export function createRequestServices(
 		if (deps.authStore) {
 			return deps.authStore.findUserById(id);
 		}
-		const rows = await sql<{ status: string; deleted_at: Date | null }[]>`
-			SELECT status, deleted_at FROM users WHERE id = ${id}
-		`;
+		const rows = await db
+			.select({ status: users.status, deletedAt: users.deletedAt })
+			.from(users)
+			.where(eq(users.id, id))
+			.limit(1);
 		return rows[0];
 	};
 
 	return {
 		sql,
+		db,
 		store,
 		limiter,
 		jwtSecret,

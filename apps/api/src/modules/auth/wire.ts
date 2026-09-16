@@ -5,13 +5,13 @@ export function toUserPrivate(user: UserRow): UserPrivateType {
 	return {
 		id: user.id,
 		status: user.status as UserPrivateType['status'],
-		createdAt: user.created_at.toISOString(),
-		updatedAt: user.updated_at.toISOString(),
+		createdAt: user.createdAt.toISOString(),
+		updatedAt: user.updatedAt.toISOString(),
 		email: user.email,
-		emailVerified: user.email_verified,
+		emailVerified: user.emailVerified,
 		phone: user.phone,
-		phoneVerified: user.phone_verified,
-		lastLoginAt: user.last_login_at ? user.last_login_at.toISOString() : null,
-		deletedAt: user.deleted_at ? user.deleted_at.toISOString() : null,
+		phoneVerified: user.phoneVerified,
+		lastLoginAt: user.lastLoginAt ? user.lastLoginAt.toISOString() : null,
+		deletedAt: user.deletedAt ? user.deletedAt.toISOString() : null,
 	};
 }

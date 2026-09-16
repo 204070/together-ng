@@ -22,7 +22,7 @@ type App = ReturnType<typeof makeApp>;
 
 function mkApp(): App {
 	return makeApp({
-		databaseUrl: '',
+		databaseUrl: DB_URL,
 		sql,
 		otpProvider: 'mock',
 		isProduction: false,

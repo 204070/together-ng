@@ -1,54 +1,49 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { createClient, type Db, drizzle, migrate, type Sql } from '@together/db';
-import { makeApp } from '../app';
+import {
+	and,
+	asc,
+	contributions,
+	type Db,
+	desc,
+	eq,
+	getDatabase,
+	getPool,
+	outcomeConfirmations,
+	requestMatches,
+	sql,
+} from '@together/db';
+import type { makeApp } from '../app';
 import { createMatchingQueue, MATCHING_QUEUE } from '../queue';
+import {
+	addCapability,
+	createCategoryId as createCategory,
+	createRequest as createRequestRow,
+	createSkillId as createSkill,
+	createUser,
+	loginToken,
+	makeTestApp,
+	setPrefs,
+	TEST_DATABASE_URL,
+} from '../testing/helpers';
 import {
 	createInlineMatchingService,
 	createInternalMatchingRouter,
 	recomputeMatches,
 } from './matching';
 
-const DB_URL =
-	process.env.TEST_DATABASE_URL ??
-	'postgresql://together:together@localhost:5433/together_wt12_test';
-const JWT_SECRET = 'test-secret';
-
-let sql: Sql;
 let db: Db;
 let queue: ReturnType<typeof createMatchingQueue>;
 
 type App = ReturnType<typeof makeApp>;
 
 function mkApp(): App {
-	return makeApp({
-		databaseUrl: DB_URL,
-		sql,
-		otpProvider: 'mock',
-		isProduction: false,
-		jwtSecret: JWT_SECRET,
-		matching: queue.asService(),
-	});
+	return makeTestApp({ matching: queue.asService() });
 }
 
 function req(app: App, path: string, init: RequestInit = {}): Promise<Response> {
-	return app.handle(new Request(`http://localhost:4012${path}`, init));
-}
-
-let seq = 0;
-function unique(prefix: string): string {
-	seq += 1;
-	return `${prefix}-${Date.now()}-${seq}`;
-}
-
-async function createUser(email?: string, isAdmin = false): Promise<{ id: string; email: string }> {
-	const address = email ?? `${unique('m')}@example.com`;
-	const hash = await Bun.password.hash('password123', { algorithm: 'argon2id' });
-	const rows = await sql<{ id: string }[]>`
-		INSERT INTO users (email, password_hash, phone_verified, is_admin) VALUES (${address}, ${hash}, true, ${isAdmin}) RETURNING id
-	`;
-	return { id: rows[0]?.id as string, email: address };
+	return app.handle(new Request(`http://localhost${path}`, init));
 }
 
 async function waitForMatchRows(requestId: string, timeoutMs = 5000) {
@@ -64,94 +59,15 @@ async function waitForMatchRows(requestId: string, timeoutMs = 5000) {
 async function waitForCompletedJob(queueName: string, timeoutMs = 5000): Promise<number> {
 	const deadline = Date.now() + timeoutMs;
 	while (Date.now() < deadline) {
-		const jobs = await sql<{ count: number }[]>`
-			SELECT count(*)::int AS count FROM pgboss.job
-			WHERE name = ${queueName} AND state = 'completed'
-		`;
-		const count = jobs[0]?.count ?? 0;
+		const { rows } = await getPool().query<{ count: number }>(
+			"SELECT count(*)::int AS count FROM pgboss.job WHERE name = $1 AND state = 'completed'",
+			[queueName],
+		);
+		const count = rows[0]?.count ?? 0;
 		if (count > 0) return count;
 		await new Promise((r) => setTimeout(r, 50));
 	}
 	return 0;
-}
-
-async function loginToken(app: App, email: string): Promise<string> {
-	const res = await req(app, '/auth/login', {
-		method: 'POST',
-		headers: { 'content-type': 'application/json' },
-		body: JSON.stringify({ email, password: 'password123' }),
-	});
-	expect(res.status).toBe(200);
-	const body = (await res.json()) as { token: string };
-	return body.token;
-}
-
-async function createCategory(slug?: string): Promise<number> {
-	const s = slug ?? unique('cat');
-	const rows = await sql<{ id: number }[]>`
-		INSERT INTO categories (name, slug) VALUES (${s}, ${s}) RETURNING id
-	`;
-	return rows[0]?.id as number;
-}
-
-async function createSkill(categoryId: number, slug?: string): Promise<number> {
-	const s = slug ?? unique('skill');
-	const rows = await sql<{ id: number }[]>`
-		INSERT INTO skills (category_id, name, slug) VALUES (${categoryId}, ${s}, ${s}) RETURNING id
-	`;
-	return rows[0]?.id as number;
-}
-
-async function addCapability(input: {
-	userId: string;
-	categoryId?: number | null;
-	skillId?: number | null;
-	modality?: string;
-	location?: string | null;
-}): Promise<void> {
-	await sql`
-		INSERT INTO contributor_capabilities (user_id, category_id, skill_id, modality, location)
-		VALUES (${input.userId}, ${input.categoryId ?? null}, ${input.skillId ?? null}, ${input.modality ?? 'both'}, ${input.location ?? null})
-	`;
-}
-
-async function setPrefs(userId: string, patch: Record<string, boolean>): Promise<void> {
-	const defaults = {
-		notify_new_matches: true,
-		notify_remote: true,
-		notify_local: true,
-		notify_resource_lending: true,
-		notify_mentorship: true,
-		...patch,
-	};
-	await sql`
-		INSERT INTO notification_preferences
-			(user_id, notify_new_matches, notify_remote, notify_local, notify_resource_lending, notify_mentorship)
-		VALUES (${userId}, ${defaults.notify_new_matches}, ${defaults.notify_remote}, ${defaults.notify_local}, ${defaults.notify_resource_lending}, ${defaults.notify_mentorship})
-		ON CONFLICT (user_id) DO UPDATE SET
-			notify_new_matches = EXCLUDED.notify_new_matches,
-			notify_remote = EXCLUDED.notify_remote,
-			notify_local = EXCLUDED.notify_local,
-			notify_resource_lending = EXCLUDED.notify_resource_lending,
-			notify_mentorship = EXCLUDED.notify_mentorship
-	`;
-}
-
-async function createRequestRow(
-	authorId: string,
-	fields: {
-		categoryId: number | null;
-		modality?: string | null;
-		helpType?: string | null;
-		location?: string | null;
-	},
-): Promise<string> {
-	const rows = await sql<{ id: string }[]>`
-		INSERT INTO requests (author_id, category_id, title, goal, barrier, help_needed, state, modality, help_type, location)
-		VALUES (${authorId}, ${fields.categoryId}, 'Help with soldering', 'Learn to solder a simple circuit for a school project', 'No tools and no guidance from anyone nearby', 'Someone patient who can show me the basics', 'published', ${fields.modality ?? 'both'}, ${fields.helpType ?? null}, ${fields.location ?? null})
-		RETURNING id
-	`;
-	return rows[0]?.id as string;
 }
 
 async function addCompletedContribution(
@@ -160,15 +76,22 @@ async function addCompletedContribution(
 	helpful: boolean | null,
 	recipientId: string,
 ): Promise<void> {
-	const rows = await sql<{ id: string }[]>`
-		INSERT INTO contributions (request_id, contributor_id, status, completed_at)
-		VALUES (${requestId}, ${contributorId}, 'completed', now()) RETURNING id
-	`;
-	if (helpful !== null) {
-		await sql`
-			INSERT INTO outcome_confirmations (contribution_id, recipient_id, response)
-			VALUES (${rows[0]?.id as string}, ${recipientId}, ${helpful ? 'yes_significantly' : 'no'})
-		`;
+	const db = getDatabase();
+	const [row] = await db
+		.insert(contributions)
+		.values({
+			requestId,
+			contributorId,
+			status: 'completed',
+			completedAt: new Date(),
+		})
+		.returning();
+	if (helpful !== null && row) {
+		await db.insert(outcomeConfirmations).values({
+			contributionId: row.id,
+			recipientId,
+			response: helpful ? 'yes_significantly' : 'no',
+		});
 	}
 }
 
@@ -201,29 +124,32 @@ async function publishViaHttp(
 }
 
 async function matchRows(requestId: string) {
-	return sql<{ contributor_id: string; score: string; reasons: unknown }[]>`
-		SELECT contributor_id, score::text AS score, reasons
-		FROM request_matches WHERE request_id = ${requestId}
-		ORDER BY score DESC, contributor_id ASC
-	`;
+	return getDatabase()
+		.select({
+			contributor_id: requestMatches.contributorId,
+			score: sql<string>`score::text`,
+			reasons: requestMatches.reasons,
+		})
+		.from(requestMatches)
+		.where(eq(requestMatches.requestId, requestId))
+		.orderBy(desc(requestMatches.score), asc(requestMatches.contributorId));
 }
 
 beforeAll(async () => {
-	sql = createClient(DB_URL);
-	const drizzleClient = createClient(DB_URL);
-	db = drizzle(drizzleClient);
-	await migrate(DB_URL);
-	queue = createMatchingQueue({ connectionString: DB_URL, db });
+	(globalThis as Record<string, unknown>).__SKIP_TX_ISOLATION__ = true;
+	db = getDatabase();
+	queue = createMatchingQueue({ connectionString: TEST_DATABASE_URL, db });
 	await queue.start();
 });
 
 afterAll(async () => {
 	await queue.stop();
-	await sql.end();
+	delete (globalThis as Record<string, unknown>).__SKIP_TX_ISOLATION__;
 });
 
 beforeEach(async () => {
-	await sql`TRUNCATE users, categories, skills RESTART IDENTITY CASCADE`;
+	await getPool().query('TRUNCATE users, categories, skills RESTART IDENTITY CASCADE');
+	db = getDatabase();
 });
 
 describe('matching queue (Postgres-backed)', () => {
@@ -299,7 +225,7 @@ describe('matching queue (Postgres-backed)', () => {
 
 		// createInternalMatchingRouter throws if auth enabled without jwtSecret
 		expect(() =>
-			createInternalMatchingRouter(sql, {
+			createInternalMatchingRouter(db, {
 				findUserById: async () => undefined,
 			} as never),
 		).toThrow('jwtSecret is required when auth is enabled');
@@ -331,12 +257,12 @@ describe('candidate set', () => {
 		await addCapability({ userId: outsider.id, categoryId: otherCategoryId });
 		const requestId = await createRequestRow(author.id, { categoryId });
 
-		await recomputeMatches(sql, requestId);
+		await recomputeMatches(db, requestId);
 
-		const expected = await sql<{ user_id: string }[]>`
-			SELECT DISTINCT cc.user_id FROM contributor_capabilities cc
-			WHERE cc.category_id = ${categoryId} OR cc.skill_id = ${skillId}
-		`;
+		const { rows: expected } = await getPool().query<{ user_id: string }>(
+			'SELECT DISTINCT cc.user_id FROM contributor_capabilities cc WHERE cc.category_id = $1 OR cc.skill_id = $2',
+			[categoryId, skillId],
+		);
 		const rows = await matchRows(requestId);
 		expect(new Set(rows.map((row) => row.contributor_id))).toEqual(
 			new Set(expected.map((row) => row.user_id)),
@@ -349,7 +275,7 @@ describe('candidate set', () => {
 		await addCapability({ userId: author.id, categoryId });
 		const requestId = await createRequestRow(author.id, { categoryId });
 
-		await recomputeMatches(sql, requestId);
+		await recomputeMatches(db, requestId);
 
 		expect([...(await matchRows(requestId))]).toEqual([]);
 	});
@@ -366,7 +292,7 @@ describe('factor breakdown storage', () => {
 		await addCapability({ userId: second.id, categoryId });
 		const requestId = await createRequestRow(author.id, { categoryId });
 
-		const ranked = await recomputeMatches(sql, requestId);
+		const ranked = await recomputeMatches(db, requestId);
 
 		expect(ranked.length).toBe(2);
 		expect(ranked[0]?.rank).toBe(1);
@@ -407,7 +333,7 @@ describe('capability weight', () => {
 		await addCapability({ userId: categoryContributor.id, categoryId });
 		const requestId = await createRequestRow(author.id, { categoryId });
 
-		const ranked = await recomputeMatches(sql, requestId);
+		const ranked = await recomputeMatches(db, requestId);
 
 		const byId = new Map(ranked.map((row) => [row.contributorId, row]));
 		expect(byId.get(skillContributor.id)?.factorBreakdown.capability_match).toBe(1);
@@ -430,7 +356,7 @@ describe('modality fit', () => {
 		await addCapability({ userId: inPerson.id, categoryId, modality: 'in_person' });
 		const requestId = await createRequestRow(author.id, { categoryId, modality: 'online' });
 
-		const ranked = await recomputeMatches(sql, requestId);
+		const ranked = await recomputeMatches(db, requestId);
 
 		const byId = new Map(ranked.map((row) => [row.contributorId, row]));
 		expect(byId.get(remote.id)?.factorBreakdown.modality_fit).toBe(1);
@@ -455,7 +381,7 @@ describe('location proximity', () => {
 		await addCapability({ userId: far.id, categoryId, location: 'Abuja' });
 		const requestId = await createRequestRow(author.id, { categoryId, modality: 'online' });
 
-		const ranked = await recomputeMatches(sql, requestId);
+		const ranked = await recomputeMatches(db, requestId);
 
 		expect(ranked.length).toBe(2);
 		for (const row of ranked) {
@@ -478,7 +404,7 @@ describe('location proximity', () => {
 			location: 'Lagos',
 		});
 
-		const ranked = await recomputeMatches(sql, requestId);
+		const ranked = await recomputeMatches(db, requestId);
 
 		const byId = new Map(ranked.map((row) => [row.contributorId, row]));
 		expect(byId.get(exact.id)?.factorBreakdown.location_proximity).toBe(1);
@@ -499,7 +425,7 @@ describe('availability and notification preferences gate', () => {
 		await setPrefs(optedOut.id, { notify_new_matches: false });
 		const requestId = await createRequestRow(author.id, { categoryId });
 
-		await recomputeMatches(sql, requestId);
+		await recomputeMatches(db, requestId);
 
 		const rows = await matchRows(requestId);
 		expect(rows.map((row) => row.contributor_id)).toEqual([optedIn.id]);
@@ -513,7 +439,7 @@ describe('availability and notification preferences gate', () => {
 		await setPrefs(contributor.id, { notify_remote: false });
 
 		const remoteId = await createRequestRow(author.id, { categoryId, modality: 'online' });
-		await recomputeMatches(sql, remoteId);
+		await recomputeMatches(db, remoteId);
 		expect([...(await matchRows(remoteId))]).toEqual([]);
 
 		const localId = await createRequestRow(author.id, {
@@ -521,7 +447,7 @@ describe('availability and notification preferences gate', () => {
 			modality: 'in_person',
 			location: 'Lagos',
 		});
-		await recomputeMatches(sql, localId);
+		await recomputeMatches(db, localId);
 		expect((await matchRows(localId)).map((row) => row.contributor_id)).toEqual([contributor.id]);
 	});
 
@@ -537,7 +463,7 @@ describe('availability and notification preferences gate', () => {
 			location: 'Lagos',
 		});
 
-		await recomputeMatches(sql, requestId);
+		await recomputeMatches(db, requestId);
 
 		expect([...(await matchRows(requestId))]).toEqual([]);
 	});
@@ -557,7 +483,7 @@ describe('reliability', () => {
 		}
 		const requestId = await createRequestRow(author.id, { categoryId });
 
-		const ranked = await recomputeMatches(sql, requestId);
+		const ranked = await recomputeMatches(db, requestId);
 
 		const byId = new Map(ranked.map((row) => [row.contributorId, row]));
 		expect(byId.get(veteran.id)?.factorBreakdown.reliability).toBeGreaterThan(
@@ -580,7 +506,7 @@ describe('fatigue dampening', () => {
 		let lastId = '';
 		for (let i = 0; i < 4; i += 1) {
 			const requestId = await createRequestRow(author.id, { categoryId });
-			const ranked = await recomputeMatches(sql, requestId);
+			const ranked = await recomputeMatches(db, requestId);
 			firstScores.push(ranked[0]?.totalScore as number);
 			lastId = requestId;
 		}
@@ -589,7 +515,7 @@ describe('fatigue dampening', () => {
 		const fresh = await createUser();
 		await addCapability({ userId: fresh.id, categoryId });
 		const finalId = await createRequestRow(author.id, { categoryId });
-		const ranked = await recomputeMatches(sql, finalId);
+		const ranked = await recomputeMatches(db, finalId);
 
 		const byId = new Map(ranked.map((row) => [row.contributorId, row]));
 		expect(byId.get(regular.id)?.factorBreakdown.fatigue_dampening).toBeLessThan(1);
@@ -611,8 +537,8 @@ describe('determinism and edge cases', () => {
 		await addCapability({ userId: second.id, categoryId });
 		const requestId = await createRequestRow(author.id, { categoryId });
 
-		const firstRun = await recomputeMatches(sql, requestId);
-		const secondRun = await recomputeMatches(sql, requestId);
+		const firstRun = await recomputeMatches(db, requestId);
+		const secondRun = await recomputeMatches(db, requestId);
 
 		expect(secondRun).toEqual(firstRun);
 		const rows = await matchRows(requestId);
@@ -644,24 +570,34 @@ describe('determinism and edge cases', () => {
 		await addCapability({ userId: contributor.id, categoryId });
 		const requestId = await createRequestRow(author.id, { categoryId });
 
-		await recomputeMatches(sql, requestId);
+		await recomputeMatches(db, requestId);
 		// Simulate contributor being notified
 		const notifiedDate = new Date('2026-09-15T12:00:00Z');
-		await sql`
-			UPDATE request_matches
-			SET notified_at = ${notifiedDate}
-			WHERE request_id = ${requestId} AND contributor_id = ${contributor.id}
-		`;
+		await getDatabase()
+			.update(requestMatches)
+			.set({ notifiedAt: notifiedDate })
+			.where(
+				and(
+					eq(requestMatches.requestId, requestId),
+					eq(requestMatches.contributorId, contributor.id),
+				),
+			);
 
 		// Recompute matches again
-		await recomputeMatches(sql, requestId);
+		await recomputeMatches(db, requestId);
 
 		const rows = await matchRows(requestId);
 		expect(rows.length).toBe(1);
-		const notified = await sql<{ notified_at: Date | null }[]>`
-			SELECT notified_at FROM request_matches WHERE request_id = ${requestId} AND contributor_id = ${contributor.id}
-		`;
-		expect(notified[0]?.notified_at).toEqual(notifiedDate);
+		const [notified] = await getDatabase()
+			.select({ notifiedAt: requestMatches.notifiedAt })
+			.from(requestMatches)
+			.where(
+				and(
+					eq(requestMatches.requestId, requestId),
+					eq(requestMatches.contributorId, contributor.id),
+				),
+			);
+		expect(notified?.notifiedAt).toEqual(notifiedDate);
 	});
 
 	test('draft edits do not recompute matching', async () => {
@@ -702,7 +638,7 @@ describe('determinism and edge cases', () => {
 			expect(source).not.toMatch(/claude/i);
 			expect(source).not.toMatch(/openai/i);
 		}
-		const inline = createInlineMatchingService(sql);
+		const inline = createInlineMatchingService(db);
 		expect(typeof inline.recompute).toBe('function');
 	});
 });

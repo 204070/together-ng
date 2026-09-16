@@ -84,7 +84,8 @@ describe('RedisRateLimiter', () => {
 				return '0';
 			},
 			async sendRaw(line: string) {
-				return this.send(...line.split(' ').filter(Boolean));
+				const parts = line.split(' ').filter(Boolean);
+				return this.send(parts[0] ?? '', ...parts.slice(1));
 			},
 		};
 	}

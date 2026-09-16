@@ -38,17 +38,28 @@ export function clientIpFrom(request: Request): string {
 
 export function uniqueViolationCode(error: unknown): string | undefined {
 	if (typeof error !== 'object' || error === null) return undefined;
-	const candidate = error as { code?: unknown; constraint_name?: unknown; cause?: unknown };
+	const candidate = error as {
+		code?: unknown;
+		constraint_name?: unknown;
+		constraint?: unknown;
+		cause?: unknown;
+	};
 	let target = candidate;
 	if (
 		candidate.code === undefined &&
 		typeof candidate.cause === 'object' &&
 		candidate.cause !== null
 	) {
-		target = candidate.cause as { code?: unknown; constraint_name?: unknown };
+		target = candidate.cause as { code?: unknown; constraint_name?: unknown; constraint?: unknown };
 	}
 	if (target.code !== '23505') return undefined;
-	return typeof target.constraint_name === 'string' ? target.constraint_name : undefined;
+	const name =
+		typeof target.constraint_name === 'string'
+			? target.constraint_name
+			: typeof target.constraint === 'string'
+				? target.constraint
+				: undefined;
+	return name;
 }
 
 let dummyPasswordHashPromise: Promise<string> | undefined;
@@ -104,6 +115,15 @@ export async function registerUser(
 	else delete value.email;
 	const issues = checkRegisterRequest(value);
 	if (Object.keys(issues).length > 0) throw validationError(issues);
+
+	if (typeof email === 'string' && email !== '') {
+		const existingEmail = await services.store.findUserByEmail(email);
+		if (existingEmail !== undefined) throw emailTakenError();
+	}
+	if (phone !== undefined) {
+		const existingPhone = await services.store.findUserByPhone(phone);
+		if (existingPhone !== undefined) throw phoneTakenError();
+	}
 
 	const passwordHash = await Bun.password.hash(String(input.password), { algorithm: 'argon2id' });
 	const effectiveEmail =

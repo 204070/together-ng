@@ -1,157 +1,31 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
+import { beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { and, count, eq, getDatabase, migrate, sql } from '@together/db';
-import { categories, requests, users, votes } from '@together/db/schema';
-import { makeApp } from '../../app';
+import { votes } from '@together/db/schema';
+import { createRequestFixture, createUser, makeTestApp, userAuth } from '../../testing/helpers';
 
 const DB_URL =
 	process.env.TEST_DATABASE_URL ??
 	'postgresql://together:together@localhost:5433/together_wt11_test';
 
-let app: ReturnType<typeof makeApp>;
+let app: ReturnType<typeof makeTestApp>;
 
 beforeAll(async () => {
 	await migrate(DB_URL);
 });
 
 beforeEach(() => {
-	app = makeApp({
-		databaseUrl: DB_URL,
-		db: getDatabase(),
-		otpProvider: 'mock',
-		isProduction: false,
-	});
+	app = makeTestApp();
 });
-
-let userSeq = 0;
-async function createUser(): Promise<{ id: string; email: string }> {
-	userSeq += 1;
-	const email = `vote-user-${Date.now()}-${userSeq}@example.com`;
-	const hash = await Bun.password.hash('password123', { algorithm: 'argon2id' });
-	const [row] = await getDatabase()
-		.insert(users)
-		.values({
-			email,
-			passwordHash: hash,
-			phoneVerified: true,
-		})
-		.returning();
-	if (!row) throw new Error('Failed to create user');
-	return { id: row.id, email };
-}
-
-async function loginToken(email: string): Promise<string> {
-	const res = await app.handle(
-		new Request('http://localhost/auth/login', {
-			method: 'POST',
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ email, password: 'password123' }),
-		}),
-	);
-	const body = (await res.json()) as { token: string };
-	return body.token;
-}
-
-async function createCategory(): Promise<number> {
-	const slug = `cat-${Date.now()}-${Math.random()}`;
-	const [row] = await getDatabase()
-		.insert(categories)
-		.values({
-			name: 'Test Cat',
-			slug,
-		})
-		.returning();
-	if (!row) throw new Error('Failed to create category');
-	return row.id;
-}
-
-async function createPublishedRequest(authorId: string, catId: number): Promise<string> {
-	const [row] = await getDatabase()
-		.insert(requests)
-		.values({
-			authorId,
-			categoryId: catId,
-			title: 'Solar Panel Setup',
-			goal: 'Install solar for school',
-			barrier: 'Need technician',
-			helpNeeded: 'Guidance',
-			state: 'published',
-		})
-		.returning();
-	if (!row) throw new Error('Failed to create request');
-	return row.id;
-}
-
-async function createDraftRequest(authorId: string, catId: number): Promise<string> {
-	const [row] = await getDatabase()
-		.insert(requests)
-		.values({
-			authorId,
-			categoryId: catId,
-			title: 'Draft Request',
-			goal: 'Draft goal',
-			barrier: 'Draft barrier',
-			helpNeeded: 'Draft help',
-			state: 'draft',
-		})
-		.returning();
-	if (!row) throw new Error('Failed to create request');
-	return row.id;
-}
-
-async function createClosedRequest(authorId: string, catId: number): Promise<string> {
-	const [row] = await getDatabase()
-		.insert(requests)
-		.values({
-			authorId,
-			categoryId: catId,
-			title: 'Closed Request',
-			goal: 'Closed goal',
-			barrier: 'Closed barrier',
-			helpNeeded: 'Closed help',
-			state: 'closed',
-		})
-		.returning();
-	if (!row) throw new Error('Failed to create request');
-	return row.id;
-}
-
-async function createRequestInState(
-	authorId: string,
-	catId: number,
-	state: string,
-): Promise<string> {
-	const [row] = await getDatabase()
-		.insert(requests)
-		.values({
-			authorId,
-			categoryId: catId,
-			title: `${state} Request`,
-			goal: 'Goal',
-			barrier: 'Barrier',
-			helpNeeded: 'Help',
-			state: state as any,
-		})
-		.returning();
-	if (!row) throw new Error('Failed to create request');
-	return row.id;
-}
-
-function authHeaders(token: string): Record<string, string> {
-	return { authorization: `Bearer ${token}` };
-}
 
 describe('POST /requests/:id/vote', () => {
 	test('authenticated user can upvote a published request', async () => {
-		const voter = await createUser();
-		const author = await createUser();
-		const token = await loginToken(voter.email);
-		const catId = await createCategory();
-		const requestId = await createPublishedRequest(author.id, catId);
+		const { id: requestId } = await createRequestFixture({ state: 'published' });
+		const { user: voter, headers } = await userAuth();
 
 		const res = await app.handle(
 			new Request(`http://localhost/requests/${requestId}/vote`, {
 				method: 'POST',
-				headers: { 'content-type': 'application/json', ...authHeaders(token) },
+				headers: { 'content-type': 'application/json', ...headers },
 			}),
 		);
 		expect(res.status).toBe(201);
@@ -168,16 +42,13 @@ describe('POST /requests/:id/vote', () => {
 	});
 
 	test('duplicate POST returns 409 and voteCount unchanged', async () => {
-		const voter = await createUser();
-		const author = await createUser();
-		const token = await loginToken(voter.email);
-		const catId = await createCategory();
-		const requestId = await createPublishedRequest(author.id, catId);
+		const { id: requestId } = await createRequestFixture({ state: 'published' });
+		const { user: voter, headers } = await userAuth();
 
 		const first = await app.handle(
 			new Request(`http://localhost/requests/${requestId}/vote`, {
 				method: 'POST',
-				headers: { 'content-type': 'application/json', ...authHeaders(token) },
+				headers: { 'content-type': 'application/json', ...headers },
 			}),
 		);
 		expect(first.status).toBe(201);
@@ -185,7 +56,7 @@ describe('POST /requests/:id/vote', () => {
 		const second = await app.handle(
 			new Request(`http://localhost/requests/${requestId}/vote`, {
 				method: 'POST',
-				headers: { 'content-type': 'application/json', ...authHeaders(token) },
+				headers: { 'content-type': 'application/json', ...headers },
 			}),
 		);
 		expect(second.status).toBe(409);
@@ -201,9 +72,7 @@ describe('POST /requests/:id/vote', () => {
 	});
 
 	test('unauthenticated POST returns 401', async () => {
-		const author = await createUser();
-		const catId = await createCategory();
-		const requestId = await createPublishedRequest(author.id, catId);
+		const { id: requestId } = await createRequestFixture({ state: 'published' });
 
 		const res = await app.handle(
 			new Request(`http://localhost/requests/${requestId}/vote`, {
@@ -215,15 +84,12 @@ describe('POST /requests/:id/vote', () => {
 	});
 
 	test('POST on own request returns 403', async () => {
-		const author = await createUser();
-		const token = await loginToken(author.email);
-		const catId = await createCategory();
-		const requestId = await createPublishedRequest(author.id, catId);
+		const { id: requestId, authorAuth } = await createRequestFixture({ state: 'published' });
 
 		const res = await app.handle(
 			new Request(`http://localhost/requests/${requestId}/vote`, {
 				method: 'POST',
-				headers: { 'content-type': 'application/json', ...authHeaders(token) },
+				headers: { 'content-type': 'application/json', ...authorAuth.headers },
 			}),
 		);
 		expect(res.status).toBe(403);
@@ -232,13 +98,12 @@ describe('POST /requests/:id/vote', () => {
 	});
 
 	test('POST on non-existent request returns 404', async () => {
-		const voter = await createUser();
-		const token = await loginToken(voter.email);
+		const { headers } = await userAuth();
 
 		const res = await app.handle(
 			new Request('http://localhost/requests/a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d/vote', {
 				method: 'POST',
-				headers: { 'content-type': 'application/json', ...authHeaders(token) },
+				headers: { 'content-type': 'application/json', ...headers },
 			}),
 		);
 		expect(res.status).toBe(404);
@@ -247,13 +112,12 @@ describe('POST /requests/:id/vote', () => {
 	});
 
 	test('POST with malformed UUID returns 400/422', async () => {
-		const voter = await createUser();
-		const token = await loginToken(voter.email);
+		const { headers } = await userAuth();
 
 		const res = await app.handle(
 			new Request('http://localhost/requests/not-a-uuid/vote', {
 				method: 'POST',
-				headers: { 'content-type': 'application/json', ...authHeaders(token) },
+				headers: { 'content-type': 'application/json', ...headers },
 			}),
 		);
 		expect(res.status).toBeGreaterThanOrEqual(400);
@@ -261,16 +125,13 @@ describe('POST /requests/:id/vote', () => {
 	});
 
 	test('POST on draft request returns 422', async () => {
-		const voter = await createUser();
-		const author = await createUser();
-		const token = await loginToken(voter.email);
-		const catId = await createCategory();
-		const requestId = await createDraftRequest(author.id, catId);
+		const { id: requestId } = await createRequestFixture({ state: 'draft' });
+		const { headers } = await userAuth();
 
 		const res = await app.handle(
 			new Request(`http://localhost/requests/${requestId}/vote`, {
 				method: 'POST',
-				headers: { 'content-type': 'application/json', ...authHeaders(token) },
+				headers: { 'content-type': 'application/json', ...headers },
 			}),
 		);
 		expect(res.status).toBe(422);
@@ -279,32 +140,26 @@ describe('POST /requests/:id/vote', () => {
 	});
 
 	test('POST on closed request returns 422', async () => {
-		const voter = await createUser();
-		const author = await createUser();
-		const token = await loginToken(voter.email);
-		const catId = await createCategory();
-		const requestId = await createClosedRequest(author.id, catId);
+		const { id: requestId } = await createRequestFixture({ state: 'closed' });
+		const { headers } = await userAuth();
 
 		const res = await app.handle(
 			new Request(`http://localhost/requests/${requestId}/vote`, {
 				method: 'POST',
-				headers: { 'content-type': 'application/json', ...authHeaders(token) },
+				headers: { 'content-type': 'application/json', ...headers },
 			}),
 		);
 		expect(res.status).toBe(422);
 	});
 
 	test('POST on archived request returns 422', async () => {
-		const voter = await createUser();
-		const author = await createUser();
-		const token = await loginToken(voter.email);
-		const catId = await createCategory();
-		const requestId = await createRequestInState(author.id, catId, 'archived');
+		const { id: requestId } = await createRequestFixture({ state: 'archived' });
+		const { headers } = await userAuth();
 
 		const res = await app.handle(
 			new Request(`http://localhost/requests/${requestId}/vote`, {
 				method: 'POST',
-				headers: { 'content-type': 'application/json', ...authHeaders(token) },
+				headers: { 'content-type': 'application/json', ...headers },
 			}),
 		);
 		expect(res.status).toBe(422);
@@ -313,16 +168,13 @@ describe('POST /requests/:id/vote', () => {
 	});
 
 	test('POST on cancelled request returns 422', async () => {
-		const voter = await createUser();
-		const author = await createUser();
-		const token = await loginToken(voter.email);
-		const catId = await createCategory();
-		const requestId = await createRequestInState(author.id, catId, 'cancelled');
+		const { id: requestId } = await createRequestFixture({ state: 'cancelled' });
+		const { headers } = await userAuth();
 
 		const res = await app.handle(
 			new Request(`http://localhost/requests/${requestId}/vote`, {
 				method: 'POST',
-				headers: { 'content-type': 'application/json', ...authHeaders(token) },
+				headers: { 'content-type': 'application/json', ...headers },
 			}),
 		);
 		expect(res.status).toBe(422);
@@ -331,16 +183,13 @@ describe('POST /requests/:id/vote', () => {
 	});
 
 	test('POST on under_review request returns 422', async () => {
-		const voter = await createUser();
-		const author = await createUser();
-		const token = await loginToken(voter.email);
-		const catId = await createCategory();
-		const requestId = await createRequestInState(author.id, catId, 'under_review');
+		const { id: requestId } = await createRequestFixture({ state: 'under_review' });
+		const { headers } = await userAuth();
 
 		const res = await app.handle(
 			new Request(`http://localhost/requests/${requestId}/vote`, {
 				method: 'POST',
-				headers: { 'content-type': 'application/json', ...authHeaders(token) },
+				headers: { 'content-type': 'application/json', ...headers },
 			}),
 		);
 		expect(res.status).toBe(422);
@@ -349,19 +198,13 @@ describe('POST /requests/:id/vote', () => {
 	});
 
 	test('deleted/suspended user voting returns 401', async () => {
-		const voter = await createUser();
-		const author = await createUser();
-		const token = await loginToken(voter.email);
-		const catId = await createCategory();
-		const requestId = await createPublishedRequest(author.id, catId);
-
-		// Suspend the user
-		await getDatabase().update(users).set({ status: 'suspended' }).where(eq(users.id, voter.id));
+		const { id: requestId } = await createRequestFixture({ state: 'published' });
+		const { headers } = await userAuth({ status: 'suspended' });
 
 		const res = await app.handle(
 			new Request(`http://localhost/requests/${requestId}/vote`, {
 				method: 'POST',
-				headers: { 'content-type': 'application/json', ...authHeaders(token) },
+				headers: { 'content-type': 'application/json', ...headers },
 			}),
 		);
 		expect(res.status).toBe(401);
@@ -370,17 +213,14 @@ describe('POST /requests/:id/vote', () => {
 
 describe('DELETE /requests/:id/vote', () => {
 	test('authenticated user can remove their vote', async () => {
-		const voter = await createUser();
-		const author = await createUser();
-		const token = await loginToken(voter.email);
-		const catId = await createCategory();
-		const requestId = await createPublishedRequest(author.id, catId);
+		const { id: requestId } = await createRequestFixture({ state: 'published' });
+		const { user: voter, headers } = await userAuth();
 
 		// First vote
 		await app.handle(
 			new Request(`http://localhost/requests/${requestId}/vote`, {
 				method: 'POST',
-				headers: { 'content-type': 'application/json', ...authHeaders(token) },
+				headers: { 'content-type': 'application/json', ...headers },
 			}),
 		);
 
@@ -388,7 +228,7 @@ describe('DELETE /requests/:id/vote', () => {
 		const res = await app.handle(
 			new Request(`http://localhost/requests/${requestId}/vote`, {
 				method: 'DELETE',
-				headers: authHeaders(token),
+				headers,
 			}),
 		);
 		expect(res.status).toBe(200);
@@ -405,16 +245,13 @@ describe('DELETE /requests/:id/vote', () => {
 	});
 
 	test('DELETE when no vote exists returns 404', async () => {
-		const voter = await createUser();
-		const author = await createUser();
-		const token = await loginToken(voter.email);
-		const catId = await createCategory();
-		const requestId = await createPublishedRequest(author.id, catId);
+		const { id: requestId } = await createRequestFixture({ state: 'published' });
+		const { headers } = await userAuth();
 
 		const res = await app.handle(
 			new Request(`http://localhost/requests/${requestId}/vote`, {
 				method: 'DELETE',
-				headers: authHeaders(token),
+				headers,
 			}),
 		);
 		expect(res.status).toBe(404);
@@ -423,9 +260,7 @@ describe('DELETE /requests/:id/vote', () => {
 	});
 
 	test('unauthenticated DELETE returns 401', async () => {
-		const author = await createUser();
-		const catId = await createCategory();
-		const requestId = await createPublishedRequest(author.id, catId);
+		const { id: requestId } = await createRequestFixture({ state: 'published' });
 
 		const res = await app.handle(
 			new Request(`http://localhost/requests/${requestId}/vote`, {
@@ -436,18 +271,17 @@ describe('DELETE /requests/:id/vote', () => {
 	});
 
 	test('vote count is accurate after multiple users vote', async () => {
-		const author = await createUser();
-		const catId = await createCategory();
-		const requestId = await createPublishedRequest(author.id, catId);
-
-		const voters = await Promise.all([createUser(), createUser(), createUser()]);
+		const { id: requestId } = await createRequestFixture({ state: 'published' });
+		const voters = [];
+		for (let i = 0; i < 3; i++) {
+			voters.push(await userAuth());
+		}
 
 		for (const voter of voters) {
-			const token = await loginToken(voter.email);
 			await app.handle(
 				new Request(`http://localhost/requests/${requestId}/vote`, {
 					method: 'POST',
-					headers: { 'content-type': 'application/json', ...authHeaders(token) },
+					headers: { 'content-type': 'application/json', ...voter.headers },
 				}),
 			);
 		}
@@ -459,17 +293,14 @@ describe('DELETE /requests/:id/vote', () => {
 	});
 
 	test('vote and unvote cycle returns to original state', async () => {
-		const voter = await createUser();
-		const author = await createUser();
-		const token = await loginToken(voter.email);
-		const catId = await createCategory();
-		const requestId = await createPublishedRequest(author.id, catId);
+		const { id: requestId } = await createRequestFixture({ state: 'published' });
+		const { headers } = await userAuth();
 
 		// Vote
 		await app.handle(
 			new Request(`http://localhost/requests/${requestId}/vote`, {
 				method: 'POST',
-				headers: { 'content-type': 'application/json', ...authHeaders(token) },
+				headers: { 'content-type': 'application/json', ...headers },
 			}),
 		);
 
@@ -477,7 +308,7 @@ describe('DELETE /requests/:id/vote', () => {
 		await app.handle(
 			new Request(`http://localhost/requests/${requestId}/vote`, {
 				method: 'DELETE',
-				headers: authHeaders(token),
+				headers,
 			}),
 		);
 
@@ -485,7 +316,7 @@ describe('DELETE /requests/:id/vote', () => {
 		const res = await app.handle(
 			new Request(`http://localhost/requests/${requestId}/vote`, {
 				method: 'POST',
-				headers: { 'content-type': 'application/json', ...authHeaders(token) },
+				headers: { 'content-type': 'application/json', ...headers },
 			}),
 		);
 		expect(res.status).toBe(201);
@@ -497,23 +328,20 @@ describe('DELETE /requests/:id/vote', () => {
 
 describe('GET /requests/:id vote data', () => {
 	test('returns voteCount and hasVoted for authenticated user', async () => {
-		const voter = await createUser();
-		const author = await createUser();
-		const token = await loginToken(voter.email);
-		const catId = await createCategory();
-		const requestId = await createPublishedRequest(author.id, catId);
+		const { id: requestId } = await createRequestFixture({ state: 'published' });
+		const { headers } = await userAuth();
 
 		// Vote first
 		await app.handle(
 			new Request(`http://localhost/requests/${requestId}/vote`, {
 				method: 'POST',
-				headers: { 'content-type': 'application/json', ...authHeaders(token) },
+				headers: { 'content-type': 'application/json', ...headers },
 			}),
 		);
 
 		const res = await app.handle(
 			new Request(`http://localhost/requests/${requestId}`, {
-				headers: authHeaders(token),
+				headers,
 			}),
 		);
 		expect(res.status).toBe(200);
@@ -523,17 +351,14 @@ describe('GET /requests/:id vote data', () => {
 	});
 
 	test('returns voteCount:0 and hasVoted:false for unauthenticated user', async () => {
-		const voter = await createUser();
-		const author = await createUser();
-		const catId = await createCategory();
-		const requestId = await createPublishedRequest(author.id, catId);
+		const { id: requestId } = await createRequestFixture({ state: 'published' });
+		const { headers } = await userAuth();
 
 		// Another user votes
-		const token = await loginToken(voter.email);
 		await app.handle(
 			new Request(`http://localhost/requests/${requestId}/vote`, {
 				method: 'POST',
-				headers: { 'content-type': 'application/json', ...authHeaders(token) },
+				headers: { 'content-type': 'application/json', ...headers },
 			}),
 		);
 
@@ -546,16 +371,13 @@ describe('GET /requests/:id vote data', () => {
 	});
 
 	test('vote count in feed includes vote data', async () => {
-		const author = await createUser();
-		const voter = await createUser();
-		const catId = await createCategory();
-		const requestId = await createPublishedRequest(author.id, catId);
+		const { id: requestId } = await createRequestFixture({ state: 'published' });
+		const { headers } = await userAuth();
 
-		const token = await loginToken(voter.email);
 		await app.handle(
 			new Request(`http://localhost/requests/${requestId}/vote`, {
 				method: 'POST',
-				headers: { 'content-type': 'application/json', ...authHeaders(token) },
+				headers: { 'content-type': 'application/json', ...headers },
 			}),
 		);
 
@@ -570,29 +392,15 @@ describe('GET /requests/:id vote data', () => {
 
 describe('DB unique constraint', () => {
 	test('direct duplicate INSERT fails at DB level', async () => {
+		const { id: requestId } = await createRequestFixture({ state: 'published' });
 		const voter = await createUser();
-		const author = await createUser();
-		const catId = await createCategory();
-		const [reqRow] = await getDatabase()
-			.insert(requests)
-			.values({
-				authorId: author.id,
-				categoryId: catId,
-				title: 'Test',
-				goal: 'Goal',
-				barrier: 'Barrier',
-				helpNeeded: 'Help',
-				state: 'published',
-			})
-			.returning();
-		if (!reqRow) throw new Error('Failed to create request');
 
-		await getDatabase().insert(votes).values({ userId: voter.id, requestId: reqRow.id });
+		await getDatabase().insert(votes).values({ userId: voter.id, requestId });
 
 		let threw = false;
 		await getDatabase().execute(sql`SAVEPOINT vote_dup_test`);
 		try {
-			await getDatabase().insert(votes).values({ userId: voter.id, requestId: reqRow.id });
+			await getDatabase().insert(votes).values({ userId: voter.id, requestId });
 			await getDatabase().execute(sql`RELEASE SAVEPOINT vote_dup_test`);
 		} catch {
 			await getDatabase().execute(sql`ROLLBACK TO SAVEPOINT vote_dup_test`);
@@ -603,7 +411,7 @@ describe('DB unique constraint', () => {
 		const [result] = await getDatabase()
 			.select({ count: count() })
 			.from(votes)
-			.where(and(eq(votes.userId, voter.id), eq(votes.requestId, reqRow.id)));
+			.where(and(eq(votes.userId, voter.id), eq(votes.requestId, requestId)));
 		expect(result?.count).toBe(1);
 	});
 });

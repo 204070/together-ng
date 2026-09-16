@@ -1,25 +1,25 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { type Db, desc, eq, getDatabase, getPool, migrate } from '@together/db';
-import {
-	categories,
-	contributorCapabilities,
-	notificationDispatchLog,
-	notificationPreferences,
-	notifications,
-	requestMatches,
-	requests,
-	skills,
-	users,
-} from '@together/db/schema';
+import { notificationDispatchLog, notifications, requestMatches } from '@together/db/schema';
 import { makeApp } from '../app';
 import { createMatchingQueue } from '../queue';
+import {
+	addCapability,
+	createCategoryId as createCategory,
+	createRequest as createRequestRow,
+	createSkillId as createSkill,
+	createUser,
+	DEFAULT_JWT_SECRET,
+	loginToken,
+	setPrefs,
+} from '../testing/helpers';
 import { recomputeMatches } from './matching';
 import { buildNotificationBody, dispatchNotifications } from './notifications';
 
 const DB_URL =
 	process.env.TEST_DATABASE_URL ??
 	'postgresql://together:together@localhost:5433/together_wt13_test';
-const JWT_SECRET = 'test-secret';
+const JWT_SECRET = DEFAULT_JWT_SECRET;
 
 let db: Db;
 let queue: ReturnType<typeof createMatchingQueue>;
@@ -39,133 +39,6 @@ function mkApp(): App {
 
 function req(app: App, path: string, init: RequestInit = {}): Promise<Response> {
 	return app.handle(new Request(`http://localhost:4013${path}`, init));
-}
-
-let seq = 0;
-function unique(prefix: string): string {
-	seq += 1;
-	return `${prefix}-${Date.now()}-${seq}`;
-}
-
-async function createUser(email?: string, isAdmin = false): Promise<{ id: string; email: string }> {
-	const address = email ?? `${unique('m')}@example.com`;
-	const hash = await Bun.password.hash('password123', { algorithm: 'argon2id' });
-	const [row] = await getDatabase()
-		.insert(users)
-		.values({
-			email: address,
-			passwordHash: hash,
-			phoneVerified: true,
-			isAdmin,
-		})
-		.returning();
-	return { id: row!.id, email: address };
-}
-
-async function loginToken(app: App, email: string): Promise<string> {
-	const res = await req(app, '/auth/login', {
-		method: 'POST',
-		headers: { 'content-type': 'application/json' },
-		body: JSON.stringify({ email, password: 'password123' }),
-	});
-	expect(res.status).toBe(200);
-	const body = (await res.json()) as { token: string };
-	return body.token;
-}
-
-async function createCategory(slug?: string): Promise<number> {
-	const s = slug ?? unique('cat');
-	const [row] = await getDatabase().insert(categories).values({ name: s, slug: s }).returning();
-	return row!.id;
-}
-
-async function createSkill(categoryId: number, slug?: string): Promise<number> {
-	const s = slug ?? unique('skill');
-	const [row] = await getDatabase()
-		.insert(skills)
-		.values({ categoryId, name: s, slug: s })
-		.returning();
-	return row!.id;
-}
-
-async function addCapability(input: {
-	userId: string;
-	categoryId?: number | null;
-	skillId?: number | null;
-	modality?: string;
-	location?: string | null;
-}): Promise<void> {
-	await getDatabase()
-		.insert(contributorCapabilities)
-		.values({
-			userId: input.userId,
-			categoryId: input.categoryId ?? null,
-			skillId: input.skillId ?? null,
-			modality: (input.modality as 'online' | 'in_person' | 'both') ?? 'both',
-			location: input.location ?? null,
-		});
-}
-
-async function setPrefs(userId: string, patch: Record<string, unknown>): Promise<void> {
-	const defaults = {
-		notify_new_matches: true,
-		notify_remote: true,
-		notify_local: true,
-		notify_resource_lending: true,
-		notify_mentorship: true,
-		in_app_enabled: true,
-		...patch,
-	};
-	await getDatabase()
-		.insert(notificationPreferences)
-		.values({
-			userId,
-			inAppEnabled: defaults.in_app_enabled as boolean,
-			notifyNewMatches: defaults.notify_new_matches as boolean,
-			notifyRemote: defaults.notify_remote as boolean,
-			notifyLocal: defaults.notify_local as boolean,
-			notifyResourceLending: defaults.notify_resource_lending as boolean,
-			notifyMentorship: defaults.notify_mentorship as boolean,
-		})
-		.onConflictDoUpdate({
-			target: [notificationPreferences.userId],
-			set: {
-				inAppEnabled: defaults.in_app_enabled as boolean,
-				notifyNewMatches: defaults.notify_new_matches as boolean,
-				notifyRemote: defaults.notify_remote as boolean,
-				notifyLocal: defaults.notify_local as boolean,
-				notifyResourceLending: defaults.notify_resource_lending as boolean,
-				notifyMentorship: defaults.notify_mentorship as boolean,
-			},
-		});
-}
-
-async function createRequestRow(
-	authorId: string,
-	fields: {
-		categoryId: number | null;
-		modality?: string | null;
-		helpType?: string | null;
-		location?: string | null;
-		state?: string;
-	},
-): Promise<string> {
-	const [row] = await getDatabase()
-		.insert(requests)
-		.values({
-			authorId,
-			categoryId: fields.categoryId,
-			title: 'Help with soldering',
-			goal: 'Learn to solder a simple circuit for a school project',
-			barrier: 'No tools and no guidance from anyone nearby',
-			helpNeeded: 'Someone patient who can show me the basics',
-			state: (fields.state as 'draft' | 'published' | 'closed') ?? 'published',
-			modality: (fields.modality as 'online' | 'in_person' | 'both') ?? 'both',
-			helpType: (fields.helpType as 'borrow' | 'learn' | null) ?? null,
-			location: fields.location ?? null,
-		})
-		.returning();
-	return row!.id;
 }
 
 async function waitForMatchRows(requestId: string, timeoutMs = 5000) {

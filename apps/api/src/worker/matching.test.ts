@@ -4,25 +4,29 @@ import { resolve } from 'node:path';
 import {
 	and,
 	asc,
-	categories,
 	contributions,
-	contributorCapabilities,
 	type Db,
 	desc,
 	eq,
 	getDatabase,
 	getPool,
 	migrate,
-	notificationPreferences,
 	outcomeConfirmations,
 	requestMatches,
-	requests,
-	skills,
 	sql,
-	users,
 } from '@together/db';
 import { makeApp } from '../app';
 import { createMatchingQueue, MATCHING_QUEUE } from '../queue';
+import {
+	addCapability,
+	createCategoryId as createCategory,
+	createRequest as createRequestRow,
+	createSkillId as createSkill,
+	createUser,
+	DEFAULT_JWT_SECRET,
+	loginToken,
+	setPrefs,
+} from '../testing/helpers';
 import {
 	createInlineMatchingService,
 	createInternalMatchingRouter,
@@ -32,7 +36,7 @@ import {
 const DB_URL =
 	process.env.TEST_DATABASE_URL ??
 	'postgresql://together:together@localhost:5433/together_wt12_test';
-const JWT_SECRET = 'test-secret';
+const JWT_SECRET = DEFAULT_JWT_SECRET;
 
 let db: Db;
 let queue: ReturnType<typeof createMatchingQueue>;
@@ -52,27 +56,6 @@ function mkApp(): App {
 
 function req(app: App, path: string, init: RequestInit = {}): Promise<Response> {
 	return app.handle(new Request(`http://localhost:4012${path}`, init));
-}
-
-let seq = 0;
-function unique(prefix: string): string {
-	seq += 1;
-	return `${prefix}-${Date.now()}-${seq}`;
-}
-
-async function createUser(email?: string, isAdmin = false): Promise<{ id: string; email: string }> {
-	const address = email ?? `${unique('m')}@example.com`;
-	const hash = await Bun.password.hash('password123', { algorithm: 'argon2id' });
-	const [row] = await getDatabase()
-		.insert(users)
-		.values({
-			email: address,
-			passwordHash: hash,
-			phoneVerified: true,
-			isAdmin,
-		})
-		.returning();
-	return { id: row!.id, email: address };
 }
 
 async function waitForMatchRows(requestId: string, timeoutMs = 5000) {
@@ -97,108 +80,6 @@ async function waitForCompletedJob(queueName: string, timeoutMs = 5000): Promise
 		await new Promise((r) => setTimeout(r, 50));
 	}
 	return 0;
-}
-
-async function loginToken(app: App, email: string): Promise<string> {
-	const res = await req(app, '/auth/login', {
-		method: 'POST',
-		headers: { 'content-type': 'application/json' },
-		body: JSON.stringify({ email, password: 'password123' }),
-	});
-	expect(res.status).toBe(200);
-	const body = (await res.json()) as { token: string };
-	return body.token;
-}
-
-async function createCategory(slug?: string): Promise<number> {
-	const s = slug ?? unique('cat');
-	const [row] = await getDatabase().insert(categories).values({ name: s, slug: s }).returning();
-	return row!.id;
-}
-
-async function createSkill(categoryId: number, slug?: string): Promise<number> {
-	const s = slug ?? unique('skill');
-	const [row] = await getDatabase()
-		.insert(skills)
-		.values({ categoryId, name: s, slug: s })
-		.returning();
-	return row!.id;
-}
-
-async function addCapability(input: {
-	userId: string;
-	categoryId?: number | null;
-	skillId?: number | null;
-	modality?: string;
-	location?: string | null;
-}): Promise<void> {
-	await getDatabase()
-		.insert(contributorCapabilities)
-		.values({
-			userId: input.userId,
-			categoryId: input.categoryId ?? null,
-			skillId: input.skillId ?? null,
-			modality: (input.modality as 'online' | 'in_person' | 'both') ?? 'both',
-			location: input.location ?? null,
-		});
-}
-
-async function setPrefs(userId: string, patch: Record<string, boolean>): Promise<void> {
-	const defaults = {
-		notify_new_matches: true,
-		notify_remote: true,
-		notify_local: true,
-		notify_resource_lending: true,
-		notify_mentorship: true,
-		...patch,
-	};
-	await getDatabase()
-		.insert(notificationPreferences)
-		.values({
-			userId,
-			notifyNewMatches: defaults.notify_new_matches,
-			notifyRemote: defaults.notify_remote,
-			notifyLocal: defaults.notify_local,
-			notifyResourceLending: defaults.notify_resource_lending,
-			notifyMentorship: defaults.notify_mentorship,
-		})
-		.onConflictDoUpdate({
-			target: [notificationPreferences.userId],
-			set: {
-				notifyNewMatches: defaults.notify_new_matches,
-				notifyRemote: defaults.notify_remote,
-				notifyLocal: defaults.notify_local,
-				notifyResourceLending: defaults.notify_resource_lending,
-				notifyMentorship: defaults.notify_mentorship,
-			},
-		});
-}
-
-async function createRequestRow(
-	authorId: string,
-	fields: {
-		categoryId: number | null;
-		modality?: string | null;
-		helpType?: string | null;
-		location?: string | null;
-	},
-): Promise<string> {
-	const [row] = await getDatabase()
-		.insert(requests)
-		.values({
-			authorId,
-			categoryId: fields.categoryId,
-			title: 'Help with soldering',
-			goal: 'Learn to solder a simple circuit for a school project',
-			barrier: 'No tools and no guidance from anyone nearby',
-			helpNeeded: 'Someone patient who can show me the basics',
-			state: 'published',
-			modality: (fields.modality as 'online' | 'in_person' | 'both') ?? 'both',
-			helpType: (fields.helpType as 'borrow' | 'learn' | null) ?? null,
-			location: fields.location ?? null,
-		})
-		.returning();
-	return row!.id;
 }
 
 async function addCompletedContribution(

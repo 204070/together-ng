@@ -43,6 +43,13 @@
 			"when": 1789589322343,
 			"tag": "0005_add_contribution_lifecycle_fields",
 			"breakpoints": true
+		},
+		{
+			"idx": 6,
+			"version": "7",
+			"when": 1789617485709,
+			"tag": "0006_stormy_maginty",
+			"breakpoints": true
 		}
 	]
 }

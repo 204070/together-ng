@@ -52,6 +52,8 @@ export const notificationType = pgEnum('notification_type', [
 	'new_match',
 	'request_response',
 	'request_update',
+	'request_closed',
+	'request_cancelled',
 	'response_accepted',
 	'response_declined',
 	'contribution_accepted',

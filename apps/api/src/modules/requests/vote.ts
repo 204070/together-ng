@@ -2,6 +2,8 @@ import { jwt } from '@elysiajs/jwt';
 import { Elysia, t } from 'elysia';
 import { createAuthGuard } from '../../lib/authentication';
 import { HttpError } from '../../lib/errors';
+import type { RedisService } from '../../lib/redis';
+import { publishVoteUpdate } from '../../lib/vote-ws';
 import type { RequestServices } from './services';
 
 const VOTEABLE_STATES = new Set([
@@ -44,9 +46,20 @@ function duplicateVote(): HttpError {
 	return new HttpError(409, 'ALREADY_VOTED', undefined, undefined, 'Already voted');
 }
 
-export function createVoteRouter(services: RequestServices) {
+export interface VoteRouterOptions {
+	redis?: RedisService;
+}
+
+export function createVoteRouter(
+	services: RequestServices,
+	optionsOrRedis?: RedisService | VoteRouterOptions,
+) {
 	const store = services.store;
 	const limiter = services.limiter;
+	const redis =
+		optionsOrRedis && 'publish' in optionsOrRedis
+			? optionsOrRedis
+			: (optionsOrRedis?.redis ?? (services as unknown as { redis?: RedisService }).redis);
 
 	return new Elysia().use(jwt({ name: 'jwt', secret: services.jwtSecret, exp: '15m' })).use(
 		new Elysia()
@@ -86,7 +99,7 @@ export function createVoteRouter(services: RequestServices) {
 					set.status = 201;
 
 					const result = { voteCount, hasVoted: true };
-					broadcastVoteUpdate(requestId, result);
+					await publishVoteUpdate(requestId, voteCount, redis);
 					return result;
 				},
 				{ params: t.Object({ id: t.String({ format: 'uuid' }) }) },
@@ -118,39 +131,10 @@ export function createVoteRouter(services: RequestServices) {
 					set.status = 200;
 
 					const result = { voteCount, hasVoted: false };
-					broadcastVoteUpdate(requestId, result);
+					await publishVoteUpdate(requestId, voteCount, redis);
 					return result;
 				},
 				{ params: t.Object({ id: t.String({ format: 'uuid' }) }) },
 			),
 	);
-}
-
-const voteSubscribers = new Map<
-	string,
-	Set<(data: { voteCount: number; hasVoted: boolean }) => void>
->();
-
-export function subscribeToVoteUpdates(
-	requestId: string,
-	callback: (data: { voteCount: number; hasVoted: boolean }) => void,
-): () => void {
-	let subs = voteSubscribers.get(requestId);
-	if (!subs) {
-		subs = new Set();
-		voteSubscribers.set(requestId, subs);
-	}
-	subs.add(callback);
-	return () => {
-		subs?.delete(callback);
-		if (subs?.size === 0) voteSubscribers.delete(requestId);
-	};
-}
-
-function broadcastVoteUpdate(requestId: string, data: { voteCount: number; hasVoted: boolean }) {
-	const subs = voteSubscribers.get(requestId);
-	if (!subs) return;
-	for (const callback of subs) {
-		callback(data);
-	}
 }

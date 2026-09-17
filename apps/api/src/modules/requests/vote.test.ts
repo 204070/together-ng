@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { and, count, eq, getDatabase, sql } from '@together/db';
 import { votes } from '@together/db/schema';
+import { getVoteRedis, VOTE_UPDATES_CHANNEL } from '../../lib/vote-ws';
 import { createRequestFixture, createUser, makeTestApp, userAuth } from '../../testing/helpers';
 
 let app: ReturnType<typeof makeTestApp>;
@@ -31,6 +32,35 @@ describe('POST /requests/:id/vote', () => {
 			.from(votes)
 			.where(and(eq(votes.userId, voter.id), eq(votes.requestId, requestId)));
 		expect(result?.count).toBe(1);
+	});
+
+	test('POST publishes vote update event to Redis channel vote_updates', async () => {
+		const { id: requestId } = await createRequestFixture({ state: 'published' });
+		const { headers } = await userAuth();
+		const redis = getVoteRedis();
+
+		const published: { channel: string; message: string }[] = [];
+		const unsub = await redis.subscribe(VOTE_UPDATES_CHANNEL, (message, channel) => {
+			published.push({ channel, message });
+		});
+
+		const res = await app.handle(
+			new Request(`http://localhost/requests/${requestId}/vote`, {
+				method: 'POST',
+				headers: { 'content-type': 'application/json', ...headers },
+			}),
+		);
+		expect(res.status).toBe(201);
+
+		expect(published).toHaveLength(1);
+		expect(published[0]?.channel).toBe(VOTE_UPDATES_CHANNEL);
+		const payload = JSON.parse(published[0]?.message ?? '{}') as {
+			requestId: string;
+			voteCount: number;
+		};
+		expect(payload).toEqual({ requestId, voteCount: 1 });
+
+		await unsub();
 	});
 
 	test('duplicate POST returns 409 and voteCount unchanged', async () => {
@@ -234,6 +264,43 @@ describe('DELETE /requests/:id/vote', () => {
 			.from(votes)
 			.where(and(eq(votes.userId, voter.id), eq(votes.requestId, requestId)));
 		expect(result?.count).toBe(0);
+	});
+
+	test('DELETE publishes vote update event with updated voteCount to Redis channel vote_updates', async () => {
+		const { id: requestId } = await createRequestFixture({ state: 'published' });
+		const { headers } = await userAuth();
+		const redis = getVoteRedis();
+
+		// Vote first
+		await app.handle(
+			new Request(`http://localhost/requests/${requestId}/vote`, {
+				method: 'POST',
+				headers: { 'content-type': 'application/json', ...headers },
+			}),
+		);
+
+		const published: { channel: string; message: string }[] = [];
+		const unsub = await redis.subscribe(VOTE_UPDATES_CHANNEL, (message, channel) => {
+			published.push({ channel, message });
+		});
+
+		const res = await app.handle(
+			new Request(`http://localhost/requests/${requestId}/vote`, {
+				method: 'DELETE',
+				headers,
+			}),
+		);
+		expect(res.status).toBe(200);
+
+		expect(published).toHaveLength(1);
+		expect(published[0]?.channel).toBe(VOTE_UPDATES_CHANNEL);
+		const payload = JSON.parse(published[0]?.message ?? '{}') as {
+			requestId: string;
+			voteCount: number;
+		};
+		expect(payload).toEqual({ requestId, voteCount: 0 });
+
+		await unsub();
 	});
 
 	test('DELETE when no vote exists returns 404', async () => {

@@ -74,6 +74,12 @@ Definition of done:
 - The test command and its result are included
 - Nothing in the code was changed
 - The issue is still open
+- If the issue adds a user-visible feature (endpoint, page, form, flow),
+  update `_docs/UAT-GUIDE.md` with a happy-path section for that feature
+  — include the steps a non-technical tester would follow, the expected
+  behaviour at each step, and the API endpoint or UI element involved.
+  If the feature is purely internal (migration, refactor, fix with no UI
+  change), skip this step.
 
 Ignore what the implementation says it does. Only the acceptance
 criteria and the running code count.

@@ -1,0 +1,370 @@
+# Together UAT Guide
+
+Practical guide for testing every feature from the UI locally. Written for non-technical testers.
+
+---
+
+## Prerequisites
+
+Install these before starting:
+
+- **Bun** — `curl -fsSL https://bun.sh/install | bash`
+- **Docker** — [docker.com/get-started](https://docs.docker.com/get-started/install/)
+- A modern web browser (Chrome, Firefox, or Safari)
+
+---
+
+## Starting the Stack
+
+Run these commands from the project root (`together-ng/`):
+
+### 1. Start Postgres and Redis
+
+```bash
+docker compose up -d
+```
+
+Wait until both containers are healthy (~10 seconds). Verify with:
+
+```bash
+docker compose ps
+```
+
+Both should show "healthy" status.
+
+### 2. Install dependencies
+
+```bash
+bun install
+```
+
+### 3. Set up the database
+
+```bash
+bun run --filter @together/db db:migrate
+bun run --filter @together/db db:seed
+```
+
+Migrations create all tables. Seed populates 17 categories (Education, Technology, Science, etc.) that you'll select when creating requests and profiles.
+
+### 4. Start the API and Web servers
+
+```bash
+bun run dev
+```
+
+This starts both servers. Wait for the output:
+
+```
+@together/api listening on http://localhost:4000
+```
+
+The web app runs at **http://localhost:5000**.
+
+### 5. Verify the stack is running
+
+Open **http://localhost:5000** in your browser. You should see the Together homepage with "No published requests yet." if the database is empty.
+
+You can also check the API health endpoint: open **http://localhost:4000/health** — you should see `{"status":"ok"}`.
+
+---
+
+## Test Accounts
+
+There are no pre-seeded user accounts. You'll create accounts during testing. Use the **email registration** path for the simplest flow.
+
+> **Tip:** If you need two separate users (e.g. a requester and a contributor), register two accounts with different email addresses in separate browser windows (one normal, one incognito/private).
+
+---
+
+## Feature Test Paths
+
+### 1. Registration (Email)
+
+1. Open **http://localhost:5000**
+2. Click **"Sign in"** in the top navigation
+3. Click **"Register"** link below the form
+4. Ensure the **"Email"** tab is selected
+5. Fill in:
+   - **Name:** `Alice Test`
+   - **Email:** `alice@test.com`
+   - **Password:** `password123`
+6. Click **"Create account"**
+7. **Expected:** You are redirected to the onboarding page (`/onboarding`)
+
+### 2. Registration (Phone with OTP)
+
+1. Open **http://localhost:5000/auth/register**
+2. Click the **"Phone"** tab
+3. Enter a phone number in E.164 format: `+2348012345678`
+4. Click **"Send verification code"**
+5. **Expected:** A code entry form appears. In local development with `OTP_PROVIDER=mock`, check the API server logs — the OTP code is printed there (typically `000000` for mock).
+6. Enter the 6-digit code
+7. Click **"Verify"**
+8. **Expected:** You are redirected to onboarding
+
+### 3. Profile Creation (3-Step Onboarding)
+
+After registration you land on `/onboarding`. The flow has 3 steps:
+
+**Step 1 — Profile Basics:**
+1. **Name** is pre-filled from registration. Edit if desired.
+2. **Photo URL** (optional): paste any image URL, e.g. `https://picsum.photos/200`
+3. **Location** (optional): type `Lagos, Nigeria`
+4. **About you** (optional): type a short bio
+5. Under **"What can you help with?"**, check one or more categories (e.g. "Technology", "Education"). Skills load when you check a category — optionally check specific skills.
+6. Click **"Next"**
+
+**Step 2 — Refine Skills:**
+1. Optionally check specific skills from the loaded list
+2. Click **"Next"**, or click **"Skip — I just need help for now"** to skip skills
+
+**Step 3 — Contribution Availability:**
+1. Under "How can you contribute?", check **Online** and/or **In person**
+2. Optionally fill in a preferred geographic area
+3. Under "What are you willing to do?", check any that apply: **Lend resources**, **Mentor**, **Answer questions**, **Collaborate**
+4. Click **"Complete setup"**
+5. **Expected:** You are redirected to the home feed (`/`)
+
+> **Alternative:** At any step you can click **"Skip — I just need help for now"** to skip the rest of onboarding and land on the feed with a basic profile.
+
+### 4. Login
+
+1. Open **http://localhost:5000/auth/login**
+2. Enter the email and password you registered with
+3. Click **"Sign in"**
+4. **Expected:** You are redirected to the home feed, and your name appears in the top navigation
+
+### 5. Creating a Request (6-Step Wizard)
+
+1. Click **"Ask for help"** in the top navigation, or go to **http://localhost:5000/requests/new**
+2. You must be logged in. If not, you'll be redirected to login first.
+
+**Step 1 — Category:**
+1. Select a category from the list (e.g. "Technology")
+2. Click **"Continue"**
+
+**Step 2 — Goal:**
+1. Describe what you're trying to accomplish, e.g. "I need a laptop for a coding bootcamp"
+2. Click **"Continue"**
+
+**Step 3 — Barrier:**
+1. Describe what's preventing progress, e.g. "I can't afford a laptop and my current computer is too old to run development tools"
+2. Click **"Continue"**
+
+**Step 4 — Requested Help:**
+1. Describe what would help, e.g. "Someone who can lend me a laptop for 3 months, or point me to a lending program"
+2. Click **"Continue"**
+
+**Step 5 — Optional Details:**
+1. Fill in any optional fields (modality, location, skill level, duration, deadline, etc.)
+2. Click **"Continue"**
+
+**Step 6 — Preview:**
+1. Review your request. Quality hints may appear suggesting improvements.
+2. Click **"Edit"** next to any field to go back and change it
+3. Click **"Publish"** to make the request live
+4. **Expected:** You see a "Request published!" toast, then you're redirected to the request detail page at `/requests/<id>`
+
+### 6. Viewing the Feed
+
+1. Go to **http://localhost:5000/**
+2. **Expected:** The published request appears in the feed list with its title and vote count
+3. Click the request title to view its detail page
+
+### 7. Voting on a Request
+
+1. Log in as a **different user** (the one who didn't create the request — you cannot vote on your own request)
+2. Navigate to a request detail page (click a request in the feed)
+3. Click the **upvote button** (the triangle icon △ with the vote count)
+4. **Expected:** The vote count increases by 1, the icon changes to filled (▲)
+5. Click the button again to **remove your vote**
+6. **Expected:** The vote count decreases by 1, the icon reverts to outline (△)
+
+> **Note:** Vote updates are broadcast in real-time via WebSocket. If you have two browser tabs open on the same request, both should update instantly.
+
+### 8. Offering Help ("I can help")
+
+1. Log in as the **contributor** (the different user)
+2. Navigate to a published request's detail page
+3. Click the **"I can help"** or offer button (if available in the UI)
+4. If no dedicated offer button exists in the UI yet, you can test via the API:
+   - The offer endpoint is `POST /requests/:id/offers`
+   - Body: `{ "message": "I have a laptop you can borrow for 3 months", "modality": "in_person" }`
+5. **Expected:** The offer is created with status `pending`
+
+### 9. Accepting/Declining Offers
+
+1. Log in as the **request author** (Alice)
+2. View the request detail page — offers from contributors should be listed
+3. Click **"Accept"** on an offer
+4. **Expected:**
+   - The offer status changes to `accepted`
+   - The request state transitions to `help_arranged`
+   - The contributor receives a notification: "Your offer was accepted"
+5. Alternatively, click **"Decline"** on an offer
+6. **Expected:**
+   - The offer status changes to `declined`
+   - The contributor receives a notification: "Your offer was declined"
+
+### 10. Contributing and Marking Complete
+
+1. Log in as the **contributor** whose offer was accepted
+2. The contribution starts in `accepted` (or `in_progress`) status
+3. Mark the contribution as **completed**:
+   - The contributor endpoint is `POST /contributions/:id/complete`
+   - Body: `{ "notes": "Delivered the laptop on Monday" }`
+4. **Expected:**
+   - The contribution status changes to `completed`
+   - The request author receives a notification: "A contribution has been marked as completed. Please confirm."
+
+### 11. Two-Sided Confirmation
+
+After the contributor marks completion, the **request author** must confirm:
+
+1. Log in as the **request author**
+2. Confirm the contribution:
+   - The endpoint is `POST /contributions/:id/confirm`
+   - Body: `{ "completedAsAgreed": true }`
+3. **Expected:**
+   - A `contributor_confirmations` record is created
+   - The contributor receives a notification: "Your completion has been confirmed"
+   - The contribution is fully completed
+
+> **Important:** The contributor **cannot** confirm their own completion — only the request author can. If the contributor tries, they get a `CANNOT_CONFIRM_OWN_COMPLETION` error.
+
+### 12. Outcome Submission
+
+After confirmation, the **request author** submits an outcome:
+
+1. Log in as the **request author**
+2. Submit the outcome:
+   - The endpoint is `POST /contributions/:id/outcome`
+   - Body: `{ "response": "yes_significantly", "explanation": "The laptop was exactly what I needed for the bootcamp" }`
+3. **Expected:**
+   - An `outcome_confirmations` record is created
+   - The contributor receives a notification: "The recipient has recorded the outcome of your contribution"
+   - The response field accepts: `yes_significantly`, `yes_somewhat`, `not_yet`, `no`
+
+> **Important:** Only the request author (recipient) can submit an outcome — not the contributor.
+
+### 13. Viewing Profile
+
+1. Click your name in the top navigation
+2. Go to **http://localhost:5000/profile/<your-user-id>**
+3. **Expected:** The profile page displays with:
+   - "Contributor since" date
+   - "People helped" count (distinct recipients who received helpful contributions)
+   - "Successful contributions" count
+   - Empty state shows 0/0 if no contributions yet
+
+### 14. Notifications
+
+1. Log in as either user (contributor or request author)
+2. The notifications API endpoint is `GET /notifications`
+3. **Expected:** You see notifications for actions that happened:
+   - "Your offer was accepted" (contributor)
+   - "A contribution has been marked as completed. Please confirm." (request author)
+   - "Your completion has been confirmed" (contributor)
+   - "The recipient has recorded the outcome of your contribution" (contributor)
+4. Mark a notification as read: `PATCH /notifications/:id` with body `{ "read": true }`
+5. Mark all as read: `POST /notifications/read-all`
+
+### 15. Category Browsing
+
+1. Go to **http://localhost:5000/categories/technology** (or any slug)
+2. **Expected:** The page shows "Category: technology" with a "No requests in this category yet" message (or lists requests if some exist in that category)
+
+### 16. Discovery / Search
+
+1. Go to the home feed at **http://localhost:5000/**
+2. The feed shows published requests ordered by most recent
+3. Click any request title to view its details
+4. The feed endpoint is `GET /requests/featured` — it returns the 20 most recent published requests with vote counts
+
+---
+
+## Request State Machine
+
+Requests transition through these states during the happy path:
+
+```
+draft → published → receiving_responses → help_arranged → in_progress → completed → closed
+```
+
+At each state, different actions are available:
+- **draft**: Edit, publish
+- **published**: Vote, offer help
+- **receiving_responses**: Vote, offer help, accept/decline offers
+- **help_arranged**: Start contribution
+- **in_progress**: Mark contribution complete
+- **completed**: Confirm completion, submit outcome, close
+
+---
+
+## Quick Reference: API Endpoints
+
+| Action | Method | Endpoint |
+|---|---|---|
+| Register | POST | `/auth/register` |
+| Login | POST | `/auth/login` |
+| Get current user | GET | `/auth/me` |
+| Create profile | POST | `/profiles` |
+| Get my profile | GET | `/profiles/me` |
+| List categories | GET | `/categories` |
+| Get skills for category | GET | `/categories/:id/skills` |
+| Create request | POST | `/requests` |
+| Get request | GET | `/requests/:id` |
+| Edit request (draft) | PATCH | `/requests/:id` |
+| Preview request | GET | `/requests/:id/preview` |
+| Publish request | POST | `/requests/:id/publish` |
+| Vote on request | POST | `/requests/:id/vote` |
+| Remove vote | DELETE | `/requests/:id/vote` |
+| Submit offer | POST | `/requests/:id/offers` |
+| List offers | GET | `/requests/:id/offers` |
+| Accept offer | POST | `/requests/:id/offers/:offerId/accept` |
+| Decline offer | POST | `/requests/:id/offers/:offerId/decline` |
+| Get contribution | GET | `/contributions/:id` |
+| Mark complete | POST | `/contributions/:id/complete` |
+| Confirm completion | POST | `/contributions/:id/confirm` |
+| Submit outcome | POST | `/contributions/:id/outcome` |
+| List notifications | GET | `/notifications` |
+| Mark notification read | PATCH | `/notifications/:id` |
+| Mark all read | POST | `/notifications/read-all` |
+| Featured feed | GET | `/requests/featured` |
+| Health check | GET | `/health` |
+
+---
+
+## Troubleshooting
+
+| Problem | Fix |
+|---|---|
+| "Feed unavailable" on homepage | Ensure the API is running on port 4000. Check `docker compose ps` for Postgres/Redis. |
+| Categories don't load in onboarding | Run `bun run --filter @together/db db:seed` to populate categories. |
+| Registration fails silently | Check API server logs for error messages. |
+| Cannot vote on own request | This is expected — use a second account. |
+| OTP code not working | In development, check API terminal output for the mock OTP code. It's typically `000000`. |
+| Port conflict on 5433 or 6380 | Another service may be using those ports. Stop it, or change `POSTGRES_PORT`/`REDIS_PORT` in `.env` and update `DATABASE_URL`/`REDIS_URL` to match. |
+
+---
+
+## Happy Path Summary (End-to-End)
+
+This is the complete flow from zero to a fully completed request:
+
+1. **Alice** registers with email → lands on onboarding
+2. **Alice** completes profile (name, location, categories, skills)
+3. **Alice** creates a request via the wizard (category → goal → barrier → help → optional → publish)
+4. **Bob** registers with a different email → completes profile
+5. **Bob** sees Alice's request in the feed → clicks into it → clicks the vote button
+6. **Bob** submits an offer: "I can lend you my laptop for 3 months"
+7. **Alice** views the request → sees Bob's offer → clicks **Accept**
+8. **Bob** sees notification: "Your offer was accepted"
+9. **Bob** marks the contribution as complete: "Delivered the laptop"
+10. **Alice** sees notification: "A contribution has been marked as completed. Please confirm."
+11. **Alice** confirms the contribution: "Completed as agreed"
+12. **Bob** sees notification: "Your completion has been confirmed"
+13. **Alice** submits outcome: "yes_significantly — the laptop was exactly what I needed"
+14. **Bob** sees notification: "The recipient has recorded the outcome of your contribution"
+15. Both users check their profiles to see reputation data updated

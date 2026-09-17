@@ -1,5 +1,6 @@
 import { env as configEnv, loadEnv } from '@together/config';
 import { createDb, type Db } from '@together/db';
+import { ValueErrorType } from '@together/schemas';
 import { Elysia } from 'elysia';
 import { ValidationError } from 'elysia/error';
 import { HttpError } from './lib/errors';
@@ -119,10 +120,12 @@ function normalizePath(path: string): string {
 }
 
 function fieldCode(type: number | string): string {
-	if (type === 45 /* ObjectRequiredProperty */) return 'required';
-	if (type === 49 /* StringFormatUnknown */ || type === 50 /* StringFormat */) return 'format';
-	if (type === 52 /* StringMinLength */ || type === 51 /* StringMaxLength */) return 'min_length';
-	if (type === 42 /* ObjectAdditionalProperties */) return 'additional_properties';
+	if (type === ValueErrorType.ObjectRequiredProperty) return 'required';
+	if (type === ValueErrorType.StringFormatUnknown || type === ValueErrorType.StringFormat)
+		return 'format';
+	if (type === ValueErrorType.StringMinLength || type === ValueErrorType.StringMaxLength)
+		return 'min_length';
+	if (type === ValueErrorType.ObjectAdditionalProperties) return 'additional_properties';
 	return String(type);
 }
 

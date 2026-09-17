@@ -24,9 +24,11 @@ import type { UserRow } from './store';
 import {
 	generateOtpCode,
 	generateRefreshToken,
+	hashOtpCode,
 	hashRefreshToken,
 	OTP_TTL_SECONDS,
 	REFRESH_TTL_SECONDS,
+	verifyOtpCode,
 } from './tokens';
 import { toUserPrivate } from './wire';
 
@@ -90,7 +92,7 @@ async function issueOtp(
 	input: { userId: string; phone: string; context: OtpContext },
 ): Promise<string> {
 	const code = generateOtpCode();
-	const codeHash = await Bun.password.hash(code, { algorithm: 'argon2id' });
+	const codeHash = hashOtpCode(code, services.jwtSecret);
 	const expiresAt = new Date(services.now().getTime() + OTP_TTL_SECONDS * 1000);
 	await services.store.deleteOtpsForPhone(input.phone);
 	await services.store.insertOtp({
@@ -170,7 +172,10 @@ export async function consumeOtp(
 	if (otp.attempts >= 5) throw otpAttemptsExceededError();
 	if (otp.usedAt !== null) throw otpAlreadyUsedError();
 	if (otp.expiresAt.getTime() <= services.now().getTime()) throw otpExpiredError();
-	if (!(await Bun.password.verify(code, otp.codeHash))) {
+	const isValid = otp.codeHash.startsWith('$argon2id$')
+		? await Bun.password.verify(code, otp.codeHash)
+		: verifyOtpCode(code, otp.codeHash, services.jwtSecret);
+	if (!isValid) {
 		await services.store.incrementOtpAttempts(otp.id);
 		throw invalidOtpError();
 	}

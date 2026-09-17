@@ -1,4 +1,5 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { Buffer } from 'node:buffer';
+import { createHash, createHmac, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 
 export const ACCESS_TOKEN_TTL_SECONDS = 15 * 60;
 export const OTP_TTL_SECONDS = 5 * 60;
@@ -14,7 +15,19 @@ export function hashRefreshToken(token: string): string {
 }
 
 export function generateOtpCode(): string {
-	const bytes = randomBytes(3);
-	const number = (bytes[0] ?? 0) * 65536 + (bytes[1] ?? 0) * 256 + (bytes[2] ?? 0);
-	return String(number % 1000000).padStart(6, '0');
+	return String(randomInt(100_000, 1_000_000));
+}
+
+export function hashOtpCode(code: string, secret: string): string {
+	return createHmac('sha256', secret).update(code).digest('hex');
+}
+
+export function verifyOtpCode(code: string, expectedHash: string, secret: string): boolean {
+	const computedHash = hashOtpCode(code, secret);
+	const computedBuf = Buffer.from(computedHash);
+	const expectedBuf = Buffer.from(expectedHash);
+	if (computedBuf.length !== expectedBuf.length) {
+		return false;
+	}
+	return timingSafeEqual(computedBuf, expectedBuf);
 }

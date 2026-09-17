@@ -4,6 +4,7 @@ import { otpTokens, profiles, sessions, users } from '@together/db/schema';
 import { makeApp } from '../../app';
 import type { MockOtpSender } from './otp-sender';
 import type { AuthServices } from './services';
+import { generateOtpCode, hashOtpCode, verifyOtpCode } from './tokens';
 
 const JWT_SECRET = 'test-secret';
 
@@ -173,7 +174,8 @@ describe('POST /auth/register', () => {
 			})
 			.from(otpTokens);
 		expect(otps).toHaveLength(1);
-		expect(otps[0]?.codeHash).toStartWith('$argon2id$');
+		expect(otps[0]?.codeHash).not.toStartWith('$argon2id$');
+		expect(otps[0]?.codeHash).toMatch(/^[0-9a-f]{64}$/);
 		expect(otps[0]?.context).toBe('verify');
 		expect(otpCode).toMatch(/^\d{6}$/);
 	});
@@ -615,5 +617,36 @@ describe('POST /auth/refresh and logout', () => {
 		const after = await postJson(app, '/auth/refresh', undefined, { cookie: `refresh=${refresh}` });
 		expect(after.status).toBe(401);
 		expect((await readBody(after)).error).toBe('UNAUTHORIZED');
+	});
+});
+
+describe('OTP generation and HMAC-SHA256 verification', () => {
+	test('generateOtpCode produces a 6-digit numeric string in [100000, 999999]', () => {
+		for (let i = 0; i < 200; i++) {
+			const code = generateOtpCode();
+			expect(code).toMatch(/^\d{6}$/);
+			const num = Number(code);
+			expect(num).toBeGreaterThanOrEqual(100_000);
+			expect(num).toBeLessThan(1_000_000);
+		}
+	});
+
+	test('hashOtpCode generates 64-character hex HMAC-SHA256', () => {
+		const hash = hashOtpCode('123456', 'secret');
+		expect(hash).toMatch(/^[0-9a-f]{64}$/);
+		expect(hashOtpCode('123456', 'secret')).toBe(hash);
+		expect(hashOtpCode('123456', 'different-secret')).not.toBe(hash);
+	});
+
+	test('verifyOtpCode validates matching code and secret in constant time', () => {
+		const secret = 'super-secret';
+		const code = '654321';
+		const hash = hashOtpCode(code, secret);
+
+		expect(verifyOtpCode(code, hash, secret)).toBe(true);
+		expect(verifyOtpCode('000000', hash, secret)).toBe(false);
+		expect(verifyOtpCode(code, hash, 'wrong-secret')).toBe(false);
+		expect(verifyOtpCode(code, 'invalid-length', secret)).toBe(false);
+		expect(verifyOtpCode(code, '', secret)).toBe(false);
 	});
 });

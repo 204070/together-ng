@@ -128,12 +128,15 @@ describe('GET /requests/featured', () => {
 			category,
 			title: 'Older request',
 		});
-		await new Promise((r) => setTimeout(r, 10));
 		const newer = await createRequestFixture({
 			state: 'published',
 			category,
 			title: 'Newer request',
 		});
+
+		await getDatabase().execute(
+			sql`UPDATE requests SET created_at = created_at - interval '1 hour' WHERE id = ${older.id}`,
+		);
 
 		const res = await app.handle(
 			new Request(`http://localhost/requests/featured?sort=newest&categoryId=${category.id}`),
@@ -910,7 +913,7 @@ describe('GET /requests/search', () => {
 	test('search sort=newest orders by createdAt', async () => {
 		const searchTerm = unique('sortsearch');
 		const category = await createCategory(unique('sort-search-cat'));
-		await createRequestFixture({
+		const older = await createRequestFixture({
 			state: 'published',
 			category,
 			title: `Older ${searchTerm} project`,
@@ -918,7 +921,6 @@ describe('GET /requests/search', () => {
 			barrier: 'Old barrier',
 			helpNeeded: 'Old help',
 		});
-		await new Promise((r) => setTimeout(r, 10));
 		await createRequestFixture({
 			state: 'published',
 			category,
@@ -927,6 +929,10 @@ describe('GET /requests/search', () => {
 			barrier: 'New barrier',
 			helpNeeded: 'New help',
 		});
+
+		await getDatabase().execute(
+			sql`UPDATE requests SET created_at = created_at - interval '1 hour' WHERE id = ${older.id}`,
+		);
 
 		const res = await app.handle(
 			new Request(

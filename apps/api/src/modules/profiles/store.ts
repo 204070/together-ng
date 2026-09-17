@@ -1,4 +1,12 @@
-import { contributions, type Db, eq, type Profile, profiles, sql } from '@together/db';
+import {
+	contributions,
+	type Db,
+	eq,
+	outcomeConfirmations,
+	type Profile,
+	profiles,
+	sql,
+} from '@together/db';
 
 export class ProfileStore {
 	constructor(private readonly db: Db) {}
@@ -18,7 +26,29 @@ export class ProfileStore {
 			.select({ min: sql<Date | null>`MIN(${contributions.createdAt})` })
 			.from(contributions)
 			.where(eq(contributions.contributorId, userId));
-		return rows[0]?.min ?? null;
+		const val = rows[0]?.min ?? null;
+		if (val === null) return null;
+		return val instanceof Date ? val : new Date(val as unknown as string);
+	}
+
+	async peopleHelped(userId: string): Promise<number> {
+		const rows = await this.db
+			.select({
+				count: sql<string>`COUNT(DISTINCT ${outcomeConfirmations.recipientId})::text`,
+			})
+			.from(contributions)
+			.innerJoin(outcomeConfirmations, eq(contributions.id, outcomeConfirmations.contributionId))
+			.where(eq(contributions.contributorId, userId));
+		return Number(rows[0]?.count ?? 0);
+	}
+
+	async successfulContributions(userId: string): Promise<number> {
+		const rows = await this.db
+			.select({ count: sql<string>`COUNT(*)::text` })
+			.from(contributions)
+			.innerJoin(outcomeConfirmations, eq(contributions.id, outcomeConfirmations.contributionId))
+			.where(eq(contributions.contributorId, userId));
+		return Number(rows[0]?.count ?? 0);
 	}
 
 	async create(input: {

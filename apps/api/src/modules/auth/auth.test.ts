@@ -158,13 +158,17 @@ describe('POST /auth/register', () => {
 				passwordHash: users.passwordHash,
 				phone: users.phone,
 			})
-			.from(users);
+			.from(users)
+			.where(eq(users.id, body.id));
 		expect(rows).toHaveLength(1);
 		expect(rows[0]?.email).toBe('ada@x.com');
 		expect(rows[0]?.phone).toBe('+2348012345678');
 		expect(rows[0]?.passwordHash).toStartWith('$argon2id$');
 
-		const [profileCount] = await getDatabase().select({ count: count() }).from(profiles);
+		const [profileCount] = await getDatabase()
+			.select({ count: count() })
+			.from(profiles)
+			.where(eq(profiles.userId, body.id));
 		expect(profileCount?.count).toBe(0);
 
 		const otps = await getDatabase()
@@ -172,7 +176,8 @@ describe('POST /auth/register', () => {
 				codeHash: otpTokens.codeHash,
 				context: otpTokens.context,
 			})
-			.from(otpTokens);
+			.from(otpTokens)
+			.where(eq(otpTokens.userId, body.id));
 		expect(otps).toHaveLength(1);
 		expect(otps[0]?.codeHash).not.toStartWith('$argon2id$');
 		expect(otps[0]?.codeHash).toMatch(/^[0-9a-f]{64}$/);
@@ -182,9 +187,15 @@ describe('POST /auth/register', () => {
 
 	test('registering without a phone sends no OTP', async () => {
 		const app = mkApp();
-		const { status } = await register(app, { email: 'no.phone@x.com', password: 'password123' });
+		const { status, body } = await register(app, {
+			email: 'no.phone@x.com',
+			password: 'password123',
+		});
 		expect(status).toBe(201);
-		const [otpCount] = await getDatabase().select({ count: count() }).from(otpTokens);
+		const [otpCount] = await getDatabase()
+			.select({ count: count() })
+			.from(otpTokens)
+			.where(eq(otpTokens.userId, body.id));
 		expect(otpCount?.count).toBe(0);
 	});
 
@@ -200,7 +211,10 @@ describe('POST /auth/register', () => {
 			expect(json.error).toBe('EMAIL_TAKEN');
 		}
 
-		const [userCount] = await getDatabase().select({ count: count() }).from(users);
+		const [userCount] = await getDatabase()
+			.select({ count: count() })
+			.from(users)
+			.where(eq(users.email, 'ada@x.com'));
 		expect(userCount?.count).toBe(1);
 	});
 
@@ -223,7 +237,10 @@ describe('POST /auth/register', () => {
 		expect(json.error).toBe('PHONE_TAKEN');
 		expect(json.fields).toEqual({ phone: 'taken' });
 
-		const [userCount] = await getDatabase().select({ count: count() }).from(users);
+		const [userCount] = await getDatabase()
+			.select({ count: count() })
+			.from(users)
+			.where(eq(users.phone, '+2348012345678'));
 		expect(userCount?.count).toBe(1);
 	});
 });
@@ -324,7 +341,7 @@ describe('OTP send and verify', () => {
 	test('send uses verify context until the phone is verified, then login context', async () => {
 		const app = mkApp();
 		const phone = '+2348012345678';
-		const { otpCode } = await register(app, {
+		const { body, otpCode } = await register(app, {
 			email: 'user@x.com',
 			password: 'password123',
 			phone,
@@ -334,7 +351,8 @@ describe('OTP send and verify', () => {
 			.select({
 				context: otpTokens.context,
 			})
-			.from(otpTokens);
+			.from(otpTokens)
+			.where(eq(otpTokens.userId, body.id));
 		expect(afterRegister[0]?.context).toBe('verify');
 
 		await postJson(app, '/auth/verify-otp', { phone, code: otpCode });
@@ -344,7 +362,8 @@ describe('OTP send and verify', () => {
 			.select({
 				context: otpTokens.context,
 			})
-			.from(otpTokens);
+			.from(otpTokens)
+			.where(eq(otpTokens.userId, body.id));
 		expect(afterLogin[0]?.context).toBe('login');
 	});
 });

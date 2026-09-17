@@ -47,11 +47,16 @@ if (packages.length === 0) {
 	process.exit(1);
 }
 
+const testEnv = {
+	...process.env,
+	...(process.env.TEST_DATABASE_URL ? { DATABASE_URL: process.env.TEST_DATABASE_URL } : {}),
+};
+
 // Migrate database once before running test suites
 console.log('test: ensuring database schema is migrated...');
 spawnSync(process.execPath, ['run', '--filter', '@together/db', 'db:migrate'], {
 	cwd: REPO_ROOT,
-	env: process.env,
+	env: testEnv,
 	stdio: 'inherit',
 });
 
@@ -60,7 +65,7 @@ for (const pkg of packages) {
 	console.log(`\ntest: ${pkg.name} (${pkg.dir})`);
 	const result = spawnSync(process.execPath, ['run', '--filter', pkg.name, 'test'], {
 		cwd: REPO_ROOT,
-		env: process.env,
+		env: testEnv,
 		stdio: 'inherit',
 	});
 	if (result.status !== 0 || result.signal) {

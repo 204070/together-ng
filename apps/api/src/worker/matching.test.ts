@@ -56,14 +56,10 @@ async function waitForMatchRows(requestId: string, timeoutMs = 5000) {
 	return matchRows(requestId);
 }
 
-async function waitForCompletedJob(queueName: string, timeoutMs = 5000): Promise<number> {
+async function waitForCompletedJob(_queueName?: string, timeoutMs = 5000): Promise<number> {
 	const deadline = Date.now() + timeoutMs;
 	while (Date.now() < deadline) {
-		const { rows } = await getPool().query<{ count: number }>(
-			"SELECT count(*)::int AS count FROM pgboss.job WHERE name = $1 AND state = 'completed'",
-			[queueName],
-		);
-		const count = rows[0]?.count ?? 0;
+		const count = await queue.getCompletedCount();
 		if (count > 0) return count;
 		await new Promise((r) => setTimeout(r, 50));
 	}
@@ -153,7 +149,15 @@ beforeEach(async () => {
 	db = getDatabase();
 });
 
-describe('matching queue (Postgres-backed)', () => {
+describe('matching queue (BullMQ-backed)', () => {
+	test('matching jobs are deduplicated/debounced using requestId as job ID', async () => {
+		const requestId = 'test-request-dedup-id';
+		const id1 = await queue.send({ requestId });
+		const id2 = await queue.send({ requestId });
+		expect(id1).toBe(requestId);
+		expect(id2).toBe(requestId);
+	});
+
 	test('publish enqueues a job that completes and writes request_matches', async () => {
 		const app = mkApp();
 		const author = await createUser();

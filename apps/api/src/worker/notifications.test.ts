@@ -82,7 +82,11 @@ async function dispatchLogRows(requestId: string) {
 beforeAll(async () => {
 	(globalThis as Record<string, unknown>).__SKIP_TX_ISOLATION__ = true;
 	db = getDatabase();
-	queue = createMatchingQueue({ connectionString: TEST_DATABASE_URL, db });
+	queue = createMatchingQueue({
+		connectionString: TEST_DATABASE_URL,
+		redisUrl: process.env.REDIS_URL,
+		db,
+	});
 	await queue.start();
 });
 

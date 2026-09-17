@@ -167,6 +167,10 @@ export async function dispatchNotifications(
 	let sent = 0;
 	let suppressed = 0;
 
+	const dispatchLogs: (typeof notificationDispatchLog.$inferInsert)[] = [];
+	const notificationsToInsert: (typeof notifications.$inferInsert)[] = [];
+	const sentContributorIds: string[] = [];
+
 	for (const match of matches) {
 		const contributorId = match.contributorId;
 		const reasons = (match.reasons ?? {}) as {
@@ -211,7 +215,7 @@ export async function dispatchNotifications(
 			capsEvaluated.frequency_cap_exceeded = true;
 		}
 
-		await db.insert(notificationDispatchLog).values({
+		dispatchLogs.push({
 			requestId,
 			userId: contributorId,
 			matchFactors: factorBreakdown as unknown as Record<string, unknown>,
@@ -223,32 +227,44 @@ export async function dispatchNotifications(
 
 		if (decision === 'sent') {
 			const { title, body } = buildNotificationBody(factorBreakdown, request.title);
-			await db
-				.insert(notifications)
-				.values({
-					userId: contributorId,
-					requestId,
-					type: 'new_match',
-					title,
-					body,
-					data: { factor_breakdown: factorBreakdown } as Record<string, unknown>,
-				})
-				.onConflictDoNothing({
-					target: [notifications.requestId, notifications.userId],
-				});
-			await db
-				.update(requestMatches)
-				.set({ notifiedAt: new Date() })
-				.where(
-					and(
-						eq(requestMatches.requestId, requestId),
-						eq(requestMatches.contributorId, contributorId),
-					),
-				);
+			notificationsToInsert.push({
+				userId: contributorId,
+				requestId,
+				type: 'new_match',
+				title,
+				body,
+				data: { factor_breakdown: factorBreakdown } as Record<string, unknown>,
+			});
+			sentContributorIds.push(contributorId);
 			sent += 1;
 		} else {
 			suppressed += 1;
 		}
+	}
+
+	if (dispatchLogs.length > 0) {
+		await db.insert(notificationDispatchLog).values(dispatchLogs);
+	}
+
+	if (notificationsToInsert.length > 0) {
+		await db
+			.insert(notifications)
+			.values(notificationsToInsert)
+			.onConflictDoNothing({
+				target: [notifications.requestId, notifications.userId],
+			});
+	}
+
+	if (sentContributorIds.length > 0) {
+		await db
+			.update(requestMatches)
+			.set({ notifiedAt: new Date() })
+			.where(
+				and(
+					eq(requestMatches.requestId, requestId),
+					inArray(requestMatches.contributorId, sentContributorIds),
+				),
+			);
 	}
 
 	return { sent, suppressed };

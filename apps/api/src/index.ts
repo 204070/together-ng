@@ -9,11 +9,9 @@ const port = env.PORT;
 
 const db = initDatabase(env.DATABASE_URL);
 const matchingQueue = createMatchingQueue({
-	connectionString: env.DATABASE_URL,
+	redisUrl: env.REDIS_URL,
 	db,
 });
-
-await matchingQueue.start();
 
 const serverApp = makeApp({
 	db,

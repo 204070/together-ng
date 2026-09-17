@@ -369,87 +369,75 @@ export async function recomputeMatches(
 	const userIds = [...byUser.keys()].slice(0, MAX_CANDIDATES);
 	const skillIdSet = new Set(skillIds);
 
-	const prefsRows =
+	const windowStart = new Date(now.getTime() - FATIGUE_WINDOW_HOURS * 3600 * 1000);
+
+	const [prefsRows, completedRows, confirmationRows, recentRows, profileRows] =
 		userIds.length > 0
-			? await db
-					.select({
-						userId: notificationPreferences.userId,
-						notifyNewMatches: notificationPreferences.notifyNewMatches,
-						notifyRemote: notificationPreferences.notifyRemote,
-						notifyLocal: notificationPreferences.notifyLocal,
-						notifyResourceLending: notificationPreferences.notifyResourceLending,
-						notifyMentorship: notificationPreferences.notifyMentorship,
-					})
-					.from(notificationPreferences)
-					.where(inArray(notificationPreferences.userId, userIds))
-			: [];
+			? await Promise.all([
+					db
+						.select({
+							userId: notificationPreferences.userId,
+							notifyNewMatches: notificationPreferences.notifyNewMatches,
+							notifyRemote: notificationPreferences.notifyRemote,
+							notifyLocal: notificationPreferences.notifyLocal,
+							notifyResourceLending: notificationPreferences.notifyResourceLending,
+							notifyMentorship: notificationPreferences.notifyMentorship,
+						})
+						.from(notificationPreferences)
+						.where(inArray(notificationPreferences.userId, userIds)),
+					db
+						.select({
+							contributorId: contributions.contributorId,
+							completed: sql<number>`count(*)::int`,
+						})
+						.from(contributions)
+						.where(
+							and(
+								inArray(contributions.contributorId, userIds),
+								eq(contributions.status, 'completed'),
+							),
+						)
+						.groupBy(contributions.contributorId),
+					db
+						.select({
+							contributorId: contributions.contributorId,
+							total: sql<number>`count(*)::int`,
+							helpful: sql<number>`count(*) FILTER (WHERE ${outcomeConfirmations.response} = ANY(ARRAY['yes_significantly', 'yes_somewhat']::outcome_response[]))::int`,
+						})
+						.from(outcomeConfirmations)
+						.innerJoin(contributions, eq(contributions.id, outcomeConfirmations.contributionId))
+						.where(inArray(contributions.contributorId, userIds))
+						.groupBy(contributions.contributorId),
+					db
+						.select({
+							contributorId: requestMatches.contributorId,
+							recent: sql<number>`count(*)::int`,
+						})
+						.from(requestMatches)
+						.where(
+							and(
+								inArray(requestMatches.contributorId, userIds),
+								ne(requestMatches.requestId, requestId),
+								gt(requestMatches.createdAt, windowStart),
+							),
+						)
+						.groupBy(requestMatches.contributorId),
+					db
+						.select({
+							userId: profiles.userId,
+							location: profiles.location,
+						})
+						.from(profiles)
+						.where(inArray(profiles.userId, userIds)),
+				])
+			: [[], [], [], [], []];
+
 	const prefsByUser = new Map(prefsRows.map((row) => [row.userId, row]));
-
-	const completedRows =
-		userIds.length > 0
-			? await db
-					.select({
-						contributorId: contributions.contributorId,
-						completed: sql<number>`count(*)::int`,
-					})
-					.from(contributions)
-					.where(
-						and(
-							inArray(contributions.contributorId, userIds),
-							eq(contributions.status, 'completed'),
-						),
-					)
-					.groupBy(contributions.contributorId)
-			: [];
 	const completedByUser = new Map(completedRows.map((row) => [row.contributorId, row.completed]));
-
-	const confirmationRows =
-		userIds.length > 0
-			? await db
-					.select({
-						contributorId: contributions.contributorId,
-						total: sql<number>`count(*)::int`,
-						helpful: sql<number>`count(*) FILTER (WHERE ${outcomeConfirmations.response} = ANY(ARRAY['yes_significantly', 'yes_somewhat']::outcome_response[]))::int`,
-					})
-					.from(outcomeConfirmations)
-					.innerJoin(contributions, eq(contributions.id, outcomeConfirmations.contributionId))
-					.where(inArray(contributions.contributorId, userIds))
-					.groupBy(contributions.contributorId)
-			: [];
 	const confirmationsByUser = new Map(
 		confirmationRows.map((row) => [row.contributorId, { helpful: row.helpful, total: row.total }]),
 	);
-
-	const windowStart = new Date(now.getTime() - FATIGUE_WINDOW_HOURS * 3600 * 1000);
-	const recentRows =
-		userIds.length > 0
-			? await db
-					.select({
-						contributorId: requestMatches.contributorId,
-						recent: sql<number>`count(*)::int`,
-					})
-					.from(requestMatches)
-					.where(
-						and(
-							inArray(requestMatches.contributorId, userIds),
-							ne(requestMatches.requestId, requestId),
-							gt(requestMatches.createdAt, windowStart),
-						),
-					)
-					.groupBy(requestMatches.contributorId)
-			: [];
 	const recentByUser = new Map(recentRows.map((row) => [row.contributorId, row.recent]));
-
-	const profileRows =
-		userIds.length > 0
-			? await db
-					.select({
-						userId: profiles.userId,
-						location: profiles.location,
-					})
-					.from(profiles)
-					.where(inArray(profiles.userId, userIds))
-			: [];
 	const profileLocationByUser = new Map(profileRows.map((row) => [row.userId, row.location]));
 
 	const requiresLocation = requestRequiresLocation(request);

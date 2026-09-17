@@ -129,7 +129,9 @@ export function createFeedRouter(services: AuthServices) {
 					const orderExpr =
 						sort === 'still_open'
 							? asc(requests.publishedAt)
-							: sql`${voteCountExpr} desc, ${desc(requests.createdAt)}`;
+							: sort === 'newest'
+								? sql`${desc(requests.createdAt)}, ${desc(requests.id)}`
+								: sql`${voteCountExpr} desc, ${desc(requests.createdAt)}, ${desc(requests.id)}`;
 
 					const result = await services.db
 						.select()
@@ -336,7 +338,7 @@ export function createFeedRouter(services: AuthServices) {
 
 				const orderExpr =
 					sort === 'newest'
-						? desc(requests.createdAt)
+						? sql`${desc(requests.createdAt)}, ${desc(requests.id)}`
 						: sort === 'most_supported'
 							? desc(
 									sql<number>`coalesce((select count(*) from ${votes} where ${votes.requestId} = ${requests.id}), 0)`,

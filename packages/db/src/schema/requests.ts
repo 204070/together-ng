@@ -51,6 +51,7 @@ export const requests = pgTable(
 				sql`to_tsvector('simple', coalesce(${requests.title}, '') || ' ' || coalesce(${requests.goal}, '') || ' ' || coalesce(${requests.barrier}, '') || ' ' || coalesce(${requests.helpNeeded}, ''))`,
 		),
 		embedding: vector('embedding', { dimensions: 384 }),
+		voteCount: integer('vote_count').notNull().default(0),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 		updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 	}),
@@ -59,6 +60,7 @@ export const requests = pgTable(
 		index('requests_category_id_idx').on(table.categoryId),
 		index('requests_state_idx').on(table.state),
 		index('requests_created_at_idx').on(table.createdAt),
+		index('requests_state_created_at_idx').on(table.state, table.createdAt.desc()),
 		index('requests_search_vector_idx').using('gin', table.searchVector),
 	],
 );

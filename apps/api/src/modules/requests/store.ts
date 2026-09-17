@@ -130,19 +130,45 @@ export class RequestStore {
 
 	async addVote(userId: string, requestId: string): Promise<boolean> {
 		try {
-			await this.db.insert(votes).values({ userId, requestId });
-			return true;
+			return await this.db.transaction(async (tx) => {
+				const inserted = await tx
+					.insert(votes)
+					.values({ userId, requestId })
+					.onConflictDoNothing()
+					.returning();
+				if (inserted.length === 0) return false;
+				await tx
+					.update(requests)
+					.set({
+						voteCount: sql`${requests.voteCount} + 1`,
+					})
+					.where(eq(requests.id, requestId));
+				return true;
+			});
 		} catch {
 			return false;
 		}
 	}
 
 	async removeVote(userId: string, requestId: string): Promise<boolean> {
-		const result = await this.db
-			.delete(votes)
-			.where(and(eq(votes.userId, userId), eq(votes.requestId, requestId)))
-			.returning();
-		return result.length > 0;
+		try {
+			return await this.db.transaction(async (tx) => {
+				const result = await tx
+					.delete(votes)
+					.where(and(eq(votes.userId, userId), eq(votes.requestId, requestId)))
+					.returning();
+				if (result.length === 0) return false;
+				await tx
+					.update(requests)
+					.set({
+						voteCount: sql`greatest(${requests.voteCount} - 1, 0)`,
+					})
+					.where(eq(requests.id, requestId));
+				return true;
+			});
+		} catch {
+			return false;
+		}
 	}
 
 	async findVote(userId: string, requestId: string): Promise<{ id: string } | undefined> {
@@ -156,10 +182,11 @@ export class RequestStore {
 
 	async countVotes(requestId: string): Promise<number> {
 		const rows = await this.db
-			.select({ count: sql<number>`count(*)::int` })
-			.from(votes)
-			.where(eq(votes.requestId, requestId));
-		return rows[0]?.count ?? 0;
+			.select({ voteCount: requests.voteCount })
+			.from(requests)
+			.where(eq(requests.id, requestId))
+			.limit(1);
+		return rows[0]?.voteCount ?? 0;
 	}
 
 	async findVotesForRequests(
@@ -169,17 +196,16 @@ export class RequestStore {
 		const result = new Map<string, { voteCount: number; hasVoted: boolean }>();
 		if (requestIds.length === 0) return result;
 
-		const counts = await this.db
+		const reqRows = await this.db
 			.select({
-				requestId: votes.requestId,
-				count: sql<number>`count(*)::int`,
+				id: requests.id,
+				voteCount: requests.voteCount,
 			})
-			.from(votes)
-			.where(inArray(votes.requestId, requestIds))
-			.groupBy(votes.requestId);
+			.from(requests)
+			.where(inArray(requests.id, requestIds));
 
-		for (const row of counts) {
-			result.set(row.requestId, { voteCount: row.count, hasVoted: false });
+		for (const row of reqRows) {
+			result.set(row.id, { voteCount: row.voteCount, hasVoted: false });
 		}
 
 		if (userId) {

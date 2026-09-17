@@ -50,6 +50,13 @@
 			"when": 1789617485709,
 			"tag": "0006_stormy_maginty",
 			"breakpoints": true
+		},
+		{
+			"idx": 7,
+			"version": "7",
+			"when": 1789637822867,
+			"tag": "0007_add_vote_count_to_requests",
+			"breakpoints": true
 		}
 	]
 }

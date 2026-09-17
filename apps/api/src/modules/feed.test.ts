@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { getDatabase, sql } from '@together/db';
+import { MockRedisService } from '../lib/redis';
 import {
 	createCategory,
 	createRequestFixture,
@@ -7,18 +8,22 @@ import {
 	unique,
 	userAuth,
 } from '../testing/helpers';
+import { setFeedRedis } from './feed';
 
 let app: ReturnType<typeof makeTestApp>;
 
-beforeEach(async () => {
-	await getDatabase().execute(sql`TRUNCATE requests CASCADE`);
+beforeEach(() => {
+	setFeedRedis(new MockRedisService());
 	app = makeTestApp();
 });
 
 describe('GET /requests/featured', () => {
 	test('returns pagination metadata', async () => {
-		const { id } = await createRequestFixture({ state: 'published' });
-		const res = await app.handle(new Request('http://localhost/requests/featured'));
+		const category = await createCategory(unique('featured-page'));
+		const { id } = await createRequestFixture({ state: 'published', category });
+		const res = await app.handle(
+			new Request(`http://localhost/requests/featured?categoryId=${category.id}`),
+		);
 		expect(res.status).toBe(200);
 		const body = (await res.json()) as {
 			items: Array<{ id: string }>;
@@ -32,11 +37,15 @@ describe('GET /requests/featured', () => {
 	});
 
 	test('published request appears in the response', async () => {
+		const category = await createCategory(unique('featured-seed'));
 		const { id } = await createRequestFixture({
 			state: 'published',
+			category,
 			title: 'Feed seed title',
 		});
-		const res = await app.handle(new Request('http://localhost/requests/featured'));
+		const res = await app.handle(
+			new Request(`http://localhost/requests/featured?categoryId=${category.id}`),
+		);
 		expect(res.status).toBe(200);
 		const body = (await res.json()) as { items: Array<{ id: string; title: string }> };
 		expect(body.items.map((item) => item.id)).toContain(id);
@@ -339,13 +348,41 @@ describe('GET /requests/featured', () => {
 	});
 
 	test('returns empty items when no requests match', async () => {
-		const res = await app.handle(new Request('http://localhost/requests/featured'));
+		const res = await app.handle(
+			new Request(`http://localhost/requests/featured?location=${unique('nomatch')}`),
+		);
 		const body = (await res.json()) as {
 			items: unknown[];
 			pagination: { total: number };
 		};
 		expect(body.items).toEqual([]);
 		expect(body.pagination.total).toBe(0);
+	});
+
+	test('caches featured feed in redis with short TTL', async () => {
+		const category = await createCategory(unique('cached-cat'));
+		const { id } = await createRequestFixture({
+			state: 'published',
+			category,
+			title: 'Cached request',
+		});
+		const mockRedis = new MockRedisService();
+		setFeedRedis(mockRedis);
+
+		const res = await app.handle(
+			new Request(`http://localhost/requests/featured?categoryId=${category.id}`),
+		);
+		expect(res.status).toBe(200);
+
+		const cacheKey = `feed:featured:most_supported:1:20:${category.id}:::`;
+		const cached = await mockRedis.get(cacheKey);
+		expect(cached).not.toBeNull();
+		const parsed = JSON.parse(cached as string) as { items: Array<{ id: string }> };
+		expect(parsed.items.some((i) => i.id === id)).toBe(true);
+
+		const ttl = await mockRedis.ttl(cacheKey);
+		expect(ttl).toBeGreaterThan(0);
+		expect(ttl).toBeLessThanOrEqual(30);
 	});
 });
 
@@ -887,10 +924,12 @@ describe('GET /requests/search', () => {
 	});
 
 	test('search pagination works', async () => {
-		const searchTerm = unique('pagsearch');
+		const category = await createCategory(unique('search-page'));
+		const searchTerm = `pagsearch${Date.now()}`;
 		for (let i = 0; i < 5; i++) {
 			await createRequestFixture({
 				state: 'published',
+				category,
 				title: `${searchTerm} project ${i}`,
 				goal: `${searchTerm} goal ${i}`,
 				barrier: `${searchTerm} barrier`,
@@ -899,7 +938,9 @@ describe('GET /requests/search', () => {
 		}
 
 		const res = await app.handle(
-			new Request(`http://localhost/requests/search?q=${searchTerm}&page=1&limit=2`),
+			new Request(
+				`http://localhost/requests/search?q=${searchTerm}&category=${category.slug}&page=1&limit=2`,
+			),
 		);
 		const body = (await res.json()) as {
 			items: unknown[];

@@ -1,19 +1,31 @@
-import {
-	and,
-	asc,
-	categories,
-	desc,
-	eq,
-	inArray,
-	isNull,
-	or,
-	requests,
-	sql,
-	votes,
-} from '@together/db';
+import { and, asc, categories, desc, eq, inArray, isNull, or, requests, sql } from '@together/db';
 import { Elysia, t } from 'elysia';
+import { createRedisService, MockRedisService, type RedisService } from '../lib/redis';
 import type { AuthServices } from './auth/services';
 import { toResponse } from './requests/store';
+
+export interface FeedRouterOptions {
+	redis?: RedisService;
+}
+
+let defaultRedis: RedisService | null = null;
+
+export function getFeedRedis(): RedisService {
+	if (!defaultRedis) {
+		if (process.env.NODE_ENV === 'test') {
+			defaultRedis = new MockRedisService();
+		} else {
+			defaultRedis = createRedisService();
+		}
+	}
+	return defaultRedis;
+}
+
+export function setFeedRedis(service: RedisService | null): void {
+	defaultRedis = service;
+}
+
+export const FEATURED_CACHE_TTL_SECONDS = 30;
 
 const PUBLIC_STATES = ['published', 'receiving_responses', 'help_arranged', 'in_progress'];
 const PAGE_SIZE = 20;
@@ -57,35 +69,12 @@ function buildFeedConditions(filters: {
 	return conditions;
 }
 
-async function getVoteCounts(
-	db: AuthServices['db'],
-	requestIds: string[],
-): Promise<Map<string, number>> {
-	const countMap = new Map<string, number>();
-	if (requestIds.length === 0) return countMap;
-
-	const voteCounts = await db
-		.select({
-			requestId: votes.requestId,
-			count: sql<number>`count(*)::int`,
-		})
-		.from(votes)
-		.where(inArray(votes.requestId, requestIds))
-		.groupBy(votes.requestId);
-
-	for (const v of voteCounts) {
-		countMap.set(v.requestId, v.count);
-	}
-	return countMap;
-}
-
-const voteCountSubquerySql = sql`(select count(*) from ${votes} where ${votes.requestId} = ${requests.id})`;
-
-export function createFeedRouter(services: AuthServices) {
+export function createFeedRouter(services: AuthServices, options: FeedRouterOptions = {}) {
 	return new Elysia()
 		.get(
 			'/requests/featured',
 			async ({ query }) => {
+				const redis = options.redis ?? getFeedRedis();
 				const { page, limit, offset } = parsePagination(query);
 				const sort = (query.sort as string) || 'most_supported';
 				const conditions = buildFeedConditions({
@@ -95,69 +84,42 @@ export function createFeedRouter(services: AuthServices) {
 					location: query.location as string | undefined,
 				});
 
-				let rows: Array<ReturnType<typeof toResponse> & { voteCount: number }>;
-
-				const voteCountExpr = sql<number>`coalesce(${voteCountSubquerySql}, 0)`;
-
-				if (sort === 'most_supported') {
-					const voteCountSubquery = services.db
-						.select({
-							requestId: votes.requestId,
-							count: sql<number>`count(*)::int`.as('vote_count'),
-						})
-						.from(votes)
-						.groupBy(votes.requestId)
-						.as('vc');
-
-					const result = await services.db
-						.select({
-							request: requests,
-							voteCount: sql<number>`coalesce(${voteCountSubquery.count}, 0)`,
-						})
-						.from(requests)
-						.leftJoin(voteCountSubquery, eq(requests.id, voteCountSubquery.requestId))
-						.where(and(...conditions))
-						.orderBy(desc(sql<number>`coalesce(${voteCountSubquery.count}, 0)`))
-						.limit(limit)
-						.offset(offset);
-
-					rows = result.map((row) => ({
-						...toResponse(row.request),
-						voteCount: row.voteCount,
-					}));
-				} else {
-					const orderExpr =
-						sort === 'still_open'
-							? asc(requests.publishedAt)
-							: sort === 'newest'
-								? sql`${desc(requests.createdAt)}, ${desc(requests.id)}`
-								: sql`${voteCountExpr} desc, ${desc(requests.createdAt)}, ${desc(requests.id)}`;
-
-					const result = await services.db
-						.select()
-						.from(requests)
-						.where(and(...conditions))
-						.orderBy(orderExpr)
-						.limit(limit)
-						.offset(offset);
-
-					const requestIds = result.map((r) => r.id);
-					const countMap = await getVoteCounts(services.db, requestIds);
-
-					rows = result.map((row) => ({
-						...toResponse(row),
-						voteCount: countMap.get(row.id) ?? 0,
-					}));
+				const cacheKey = `feed:featured:${sort}:${page}:${limit}:${query.categoryId ?? ''}:${query.modality ?? ''}:${query.helpType ?? ''}:${query.location ?? ''}`;
+				const cached = await redis.get(cacheKey);
+				if (cached) {
+					try {
+						return JSON.parse(cached);
+					} catch {
+						// corrupted cache fallback
+					}
 				}
 
-				const items = rows;
+				const orderExpr =
+					sort === 'still_open'
+						? asc(requests.publishedAt)
+						: sort === 'newest'
+							? sql`${desc(requests.createdAt)}, ${desc(requests.id)}`
+							: sql`${desc(requests.voteCount)}, ${desc(requests.createdAt)}, ${desc(requests.id)}`;
+
+				const rows = await services.db
+					.select()
+					.from(requests)
+					.where(and(...conditions))
+					.orderBy(orderExpr)
+					.limit(limit)
+					.offset(offset);
+
+				const items = rows.map((row) => ({
+					...toResponse(row),
+					voteCount: row.voteCount,
+				}));
 
 				const [{ count }] = await services.db
 					.select({ count: sql<number>`count(*)::int` })
 					.from(requests)
 					.where(and(...conditions));
 
-				return {
+				const response = {
 					items,
 					pagination: {
 						page,
@@ -166,6 +128,14 @@ export function createFeedRouter(services: AuthServices) {
 						totalPages: Math.ceil(count / limit),
 					},
 				};
+
+				try {
+					await redis.set(cacheKey, JSON.stringify(response), { ex: FEATURED_CACHE_TTL_SECONDS });
+				} catch {
+					// ignore redis write failure
+				}
+
+				return response;
 			},
 			{
 				query: t.Object({
@@ -217,12 +187,10 @@ export function createFeedRouter(services: AuthServices) {
 
 				const orderExpr =
 					sort === 'most_supported'
-						? desc(
-								sql<number>`coalesce((select count(*) from ${votes} where ${votes.requestId} = ${requests.id}), 0)`,
-							)
+						? sql`${desc(requests.voteCount)}, ${desc(requests.createdAt)}, ${desc(requests.id)}`
 						: sort === 'still_open'
 							? asc(requests.publishedAt)
-							: desc(requests.createdAt);
+							: sql`${desc(requests.createdAt)}, ${desc(requests.id)}`;
 
 				const rows = await services.db
 					.select()
@@ -232,12 +200,9 @@ export function createFeedRouter(services: AuthServices) {
 					.limit(limit)
 					.offset(offset);
 
-				const requestIds = rows.map((r) => r.id);
-				const countMap = await getVoteCounts(services.db, requestIds);
-
 				const items = rows.map((row) => ({
 					...toResponse(row),
-					voteCount: countMap.get(row.id) ?? 0,
+					voteCount: row.voteCount,
 				}));
 
 				const [{ count }] = await services.db
@@ -340,9 +305,7 @@ export function createFeedRouter(services: AuthServices) {
 					sort === 'newest'
 						? sql`${desc(requests.createdAt)}, ${desc(requests.id)}`
 						: sort === 'most_supported'
-							? desc(
-									sql<number>`coalesce((select count(*) from ${votes} where ${votes.requestId} = ${requests.id}), 0)`,
-								)
+							? sql`${desc(requests.voteCount)}, ${desc(requests.createdAt)}, ${desc(requests.id)}`
 							: sort === 'still_open'
 								? asc(requests.publishedAt)
 								: desc(relevanceExpr);
@@ -358,12 +321,9 @@ export function createFeedRouter(services: AuthServices) {
 					.limit(limit)
 					.offset(offset);
 
-				const requestIds = rows.map((row) => row.request.id);
-				const countMap = await getVoteCounts(services.db, requestIds);
-
 				const items = rows.map((row) => ({
 					...toResponse(row.request),
-					voteCount: countMap.get(row.request.id) ?? 0,
+					voteCount: row.request.voteCount,
 					relevance: row.relevance,
 				}));
 

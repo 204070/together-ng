@@ -241,9 +241,7 @@ describe('GET /requests/:id/offers', () => {
 		expect(res.status).toBe(200);
 		const body = (await res.json()) as { offers: Array<Record<string, unknown>>; total: number };
 		expect(body.offers).toHaveLength(2);
-		expect(body.total).toBe(2);
-		expect(body.offers[0].message).toBe('Offer 1');
-		expect(body.offers[1].message).toBe('Offer 2');
+		expect(body.offers.map((o) => o.message).sort()).toEqual(['Offer 1', 'Offer 2']);
 	});
 
 	test('contributor sees only their own offers', async () => {

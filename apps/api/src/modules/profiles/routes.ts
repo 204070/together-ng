@@ -16,7 +16,13 @@ function profileExistsError(): HttpError {
 	return new HttpError(409, 'PROFILE_EXISTS', undefined, undefined, 'Profile already exists');
 }
 
-function toPublic(row: ProfileRow, contributorSince: Date | null, storage: PhotoStorage) {
+interface ReputationData {
+	contributorSince: Date | null;
+	peopleHelped: number;
+	successfulContributions: number;
+}
+
+function toPublic(row: ProfileRow, reputation: ReputationData, storage: PhotoStorage) {
 	const photoKey = row.profilePhotoKey;
 	const photoUrl =
 		photoKey === null
@@ -35,15 +41,19 @@ function toPublic(row: ProfileRow, contributorSince: Date | null, storage: Photo
 		skills: (row.skills as number[] | null) ?? [],
 		resources: (row.resources as string[] | null) ?? [],
 		contributionAvailability: (row.contributionAvailability as unknown) ?? null,
-		contributorSince: contributorSince ? contributorSince.toISOString() : null,
+		contributorSince: reputation.contributorSince
+			? reputation.contributorSince.toISOString()
+			: null,
+		peopleHelped: reputation.peopleHelped,
+		successfulContributions: reputation.successfulContributions,
 		createdAt: row.createdAt.toISOString(),
 		updatedAt: row.updatedAt.toISOString(),
 	};
 }
 
-function toPrivate(row: ProfileRow, contributorSince: Date | null, storage: PhotoStorage) {
+function toPrivate(row: ProfileRow, reputation: ReputationData, storage: PhotoStorage) {
 	return {
-		...toPublic(row, contributorSince, storage),
+		...toPublic(row, reputation, storage),
 		exactAddress: row.exactAddress ?? null,
 	};
 }
@@ -133,6 +143,15 @@ function mapPatchBody(body: Record<string, unknown>): Partial<{
 	return patch;
 }
 
+async function fetchReputation(store: ProfileStore, userId: string): Promise<ReputationData> {
+	const [since, helped, successful] = await Promise.all([
+		store.contributorSince(userId),
+		store.peopleHelped(userId),
+		store.successfulContributions(userId),
+	]);
+	return { contributorSince: since, peopleHelped: helped, successfulContributions: successful };
+}
+
 export function createProfileRouter(services: ProfileServices) {
 	const store = services.store;
 	const storage = services.storage;
@@ -143,8 +162,8 @@ export function createProfileRouter(services: ProfileServices) {
 			const { userId } = actor;
 			const row = await store.findByUserId(userId);
 			if (row === undefined) throw notFoundError();
-			const since = await store.contributorSince(userId);
-			return toPrivate(row, since, storage);
+			const reputation = await fetchReputation(store, userId);
+			return toPrivate(row, reputation, storage);
 		})
 		.post(
 			'/profiles',
@@ -155,9 +174,9 @@ export function createProfileRouter(services: ProfileServices) {
 				const input = mapCreateBody(body as Record<string, unknown>);
 				try {
 					const row = await store.create({ userId, ...input });
-					const since = await store.contributorSince(userId);
+					const reputation = await fetchReputation(store, userId);
 					set.status = 201;
-					return toPrivate(row, since, storage);
+					return toPrivate(row, reputation, storage);
 				} catch (error) {
 					const code = (error as { code?: string; constraint_name?: string })?.constraint_name;
 					if (code === 'profiles_user_id_unique') throw profileExistsError();
@@ -175,8 +194,8 @@ export function createProfileRouter(services: ProfileServices) {
 				if (row.userId !== userId) throw forbiddenError();
 				const input = mapReplaceBody(body as Record<string, unknown>);
 				const updated = await store.updateReplace(params.id, input);
-				const since = await store.contributorSince(userId);
-				return toPrivate(updated, since, storage);
+				const reputation = await fetchReputation(store, userId);
+				return toPrivate(updated, reputation, storage);
 			},
 			{
 				params: t.Object({ id: t.String({ format: 'uuid' }) }),
@@ -193,8 +212,8 @@ export function createProfileRouter(services: ProfileServices) {
 				if (row.userId !== userId) throw forbiddenError();
 				const patch = mapPatchBody(body as Record<string, unknown>);
 				const updated = await store.updatePatch(params.id, patch);
-				const since = await store.contributorSince(userId);
-				return toPrivate(updated, since, storage);
+				const reputation = await fetchReputation(store, userId);
+				return toPrivate(updated, reputation, storage);
 			},
 			{
 				params: t.Object({ id: t.String({ format: 'uuid' }) }),
@@ -243,8 +262,8 @@ export function createProfileRouter(services: ProfileServices) {
 				const key = buildPhotoKey(userId);
 				await storage.put(key, bytes, file.type);
 				const updated = await store.updatePhotoKey(params.id, key);
-				const since = await store.contributorSince(userId);
-				return toPrivate(updated, since, storage);
+				const reputation = await fetchReputation(store, userId);
+				return toPrivate(updated, reputation, storage);
 			},
 			{
 				params: t.Object({ id: t.String({ format: 'uuid' }) }),
@@ -257,8 +276,8 @@ export function createProfileRouter(services: ProfileServices) {
 		async ({ params }) => {
 			const row = await store.findById(params.id);
 			if (row === undefined) throw notFoundError();
-			const since = await store.contributorSince(row.userId);
-			return toPublic(row, since, storage);
+			const reputation = await fetchReputation(store, row.userId);
+			return toPublic(row, reputation, storage);
 		},
 		{ params: t.Object({ id: t.String({ format: 'uuid' }) }) },
 	);

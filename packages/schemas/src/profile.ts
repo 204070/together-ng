@@ -65,6 +65,8 @@ const ProfilePublicFields = {
 	resources: ResourcesField,
 	contributionAvailability: Type.Union([ContributionAvailability, Type.Null()]),
 	contributorSince: Type.Union([Type.String({ format: 'date-time' }), Type.Null()]),
+	peopleHelped: Type.Integer({ minimum: 0 }),
+	successfulContributions: Type.Integer({ minimum: 0 }),
 	createdAt: Type.String({ format: 'date-time' }),
 	updatedAt: Type.String({ format: 'date-time' }),
 };

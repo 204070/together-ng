@@ -371,3 +371,13 @@ Rules
 - An agent stays inside its own worktree. Reading main is fine, writing
   to it or to another worktree is not
 - Only the orchestrator merges, closes issues, and deletes worktrees
+- QA must verify before merge. If the engineer makes additional commits
+  after QA's initial pass, QA must re-verify those changes before merge.
+  The orchestrator must not merge without a QA PASS on the final state
+
+Process Violations
+
+- 2026-09-17: Issue #10 merged without QA on final commits. Engineer made
+  3 additional commits after initial QA PASS (sort default fix, timestamp
+  collision fix, test robustness fix). Orchestrator merged without
+  re-running QA. Retroactive QA confirmed PASS.

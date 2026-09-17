@@ -87,7 +87,7 @@ export function createFeedRouter(services: AuthServices) {
 			'/requests/featured',
 			async ({ query }) => {
 				const { page, limit, offset } = parsePagination(query);
-				const sort = (query.sort as string) || 'newest';
+				const sort = (query.sort as string) || 'most_supported';
 				const conditions = buildFeedConditions({
 					categoryId: query.categoryId ? Number(query.categoryId) : undefined,
 					modality: query.modality as string | undefined,

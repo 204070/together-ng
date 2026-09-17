@@ -1,4 +1,5 @@
 import { jwt } from '@elysiajs/jwt';
+import { notifications } from '@together/db/schema';
 import { RequestDraftCreate, RequestPatch, Value } from '@together/schemas';
 import { Elysia, t } from 'elysia';
 import { createAuthGuard, type JwtVerifier, requireActiveActor } from '../../lib/authentication';
@@ -11,6 +12,9 @@ import { toResponse } from './store';
 function notFound(): HttpError {
 	return new HttpError(404, 'NOT_FOUND', undefined, undefined, 'Request not found');
 }
+function notOwner(): HttpError {
+	return new HttpError(403, 'NOT_REQUEST_OWNER', undefined, undefined, 'Not the request owner');
+}
 function invalidState(): HttpError {
 	return new HttpError(
 		409,
@@ -18,6 +22,15 @@ function invalidState(): HttpError {
 		undefined,
 		undefined,
 		'Invalid state transition',
+	);
+}
+function cannotEditInState(state: string): HttpError {
+	return new HttpError(
+		422,
+		'CANNOT_EDIT',
+		{ state },
+		undefined,
+		'Request cannot be edited in this state',
 	);
 }
 function categoryNotFound(): HttpError {
@@ -52,6 +65,42 @@ function collectIssues(schema: unknown, value: unknown): Record<string, string> 
 		}
 	}
 	return issues;
+}
+
+const EDITABLE_STATES = new Set(['published', 'receiving_responses']);
+
+const FUNDAMENTAL_FIELDS = ['goal', 'barrier', 'helpNeeded'] as const;
+
+function computeChangeRatio(old: Record<string, unknown>, patch: Record<string, unknown>): number {
+	let totalChars = 0;
+	let changedChars = 0;
+	for (const field of FUNDAMENTAL_FIELDS) {
+		const oldVal = String(old[field] ?? '');
+		const newVal = patch[field] !== undefined ? String(patch[field]) : oldVal;
+		totalChars += oldVal.length;
+		changedChars += Math.abs(newVal.length - oldVal.length);
+		if (oldVal !== newVal) {
+			changedChars += levenshteinDistance(oldVal, newVal);
+		}
+	}
+	if (totalChars === 0) return 1;
+	const similarity = 1 - changedChars / (2 * totalChars);
+	return 1 - similarity;
+}
+
+function levenshteinDistance(a: string, b: string): number {
+	const m = a.length;
+	const n = b.length;
+	const d: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+	for (let i = 0; i <= m; i++) d[i][0] = i;
+	for (let j = 0; j <= n; j++) d[0][j] = j;
+	for (let i = 1; i <= m; i++) {
+		for (let j = 1; j <= n; j++) {
+			const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+			d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
+		}
+	}
+	return d[m][n];
 }
 export function createRequestRouter(services: RequestServices) {
 	const store = services.store;
@@ -154,11 +203,14 @@ export function createRequestRouter(services: RequestServices) {
 								'RATE_LIMITED',
 								undefined,
 								lim.retryAfterSeconds,
-								'Too many requests',
-							);
-						const row = await store.findRequestById(params.id);
-						if (!row || row.authorId !== userId) throw notFound();
-						if (row.state !== 'draft') throw invalidState();
+							'Too many requests',
+						);
+					const row = await store.findRequestById(params.id);
+					if (!row) throw notFound();
+					if (row.authorId !== userId) throw notOwner();
+						const isDraft = row.state === 'draft';
+						const isEditable = isDraft || EDITABLE_STATES.has(row.state);
+						if (!isEditable) throw cannotEditInState(row.state);
 						const b = (body ?? {}) as Record<string, unknown>;
 						if (!Value.Check(RequestPatch, b)) {
 							const issues = collectIssues(RequestPatch, b);
@@ -171,10 +223,31 @@ export function createRequestRouter(services: RequestServices) {
 						}
 						const updated = await store.updateRequest(params.id, b);
 						if (!updated) throw notFound();
-						// Recompute only for edits of published requests; draft edits skip
-						// matching entirely (unreachable today: PATCH rejects non-drafts,
-						// but the hook stays correct if a published-edit route appears).
 						if (updated.state === 'published') triggerMatching(params.id);
+						// Notify responders when fundamental need changes significantly
+						if (!isDraft && EDITABLE_STATES.has(row.state)) {
+							const changeRatio = computeChangeRatio(row, b);
+							if (changeRatio >= 0.5) {
+								const responderIds = await store.listRespondersForRequest(params.id);
+								for (const responderId of responderIds) {
+									if (responderId !== userId) {
+										await services.db
+											.insert(notifications)
+											.values({
+												userId: responderId,
+												requestId: params.id,
+												type: 'request_update',
+												title: 'Request updated',
+												body: `The request "${updated.title}" has been significantly updated. Please review the changes.`,
+												data: { changeRatio },
+											})
+											.onConflictDoNothing({
+												target: [notifications.requestId, notifications.userId],
+											});
+									}
+								}
+							}
+						}
 						const base = toResponse(updated);
 						const hints = qualityHints({
 							title: updated.title,
@@ -250,6 +323,90 @@ export function createRequestRouter(services: RequestServices) {
 							helpNeeded: published.helpNeeded,
 						} as never);
 						return { ...base, qualityHints: hints };
+					},
+					{ params: t.Object({ id: t.String({ format: 'uuid' }) }) },
+				)
+				.post(
+					'/requests/:id/close',
+					async ({ params, body, actor }) => {
+						const userId = actor.userId;
+						const row = await store.findRequestById(params.id);
+						if (!row) throw notFound();
+						if (row.authorId !== userId) throw notOwner();
+						if (!canTransition(row.state, 'closed')) throw invalidState();
+						const b = (body ?? {}) as Record<string, unknown>;
+						const reason = (b.reason as string | undefined) ?? undefined;
+						const closed = await store.closeRequest(params.id, reason);
+						if (!closed) throw notFound();
+						// Notify existing responders
+						const responderIds = await store.listRespondersForRequest(params.id);
+						for (const responderId of responderIds) {
+							if (responderId !== userId) {
+								await services.db
+									.insert(notifications)
+									.values({
+										userId: responderId,
+										requestId: params.id,
+										type: 'request_closed',
+										title: 'Request closed',
+										body: `The request "${closed.title}" has been closed.`,
+										data: { reason: reason ?? null },
+									})
+									.onConflictDoNothing({
+										target: [notifications.requestId, notifications.userId],
+									});
+							}
+						}
+						return toResponse(closed);
+					},
+					{
+						params: t.Object({ id: t.String({ format: 'uuid' }) }),
+						body: t.Optional(t.Object({ reason: t.Optional(t.String()) })),
+					},
+				)
+				.post(
+					'/requests/:id/cancel',
+					async ({ params, actor }) => {
+						const userId = actor.userId;
+						const row = await store.findRequestById(params.id);
+						if (!row) throw notFound();
+						if (row.authorId !== userId) throw notOwner();
+						if (!canTransition(row.state, 'cancelled')) throw invalidState();
+						const cancelled = await store.cancelRequest(params.id);
+						if (!cancelled) throw notFound();
+						// Notify existing responders
+						const responderIds = await store.listRespondersForRequest(params.id);
+						for (const responderId of responderIds) {
+							if (responderId !== userId) {
+								await services.db
+									.insert(notifications)
+									.values({
+										userId: responderId,
+										requestId: params.id,
+										type: 'request_cancelled',
+										title: 'Request cancelled',
+										body: `The request "${cancelled.title}" has been cancelled.`,
+									})
+									.onConflictDoNothing({
+										target: [notifications.requestId, notifications.userId],
+									});
+							}
+						}
+						return toResponse(cancelled);
+					},
+					{ params: t.Object({ id: t.String({ format: 'uuid' }) }) },
+				)
+				.post(
+					'/requests/:id/archive',
+					async ({ params, actor }) => {
+						const userId = actor.userId;
+						const row = await store.findRequestById(params.id);
+						if (!row) throw notFound();
+						if (row.authorId !== userId) throw notOwner();
+						if (!canTransition(row.state, 'archived')) throw invalidState();
+						const archived = await store.archiveRequest(params.id);
+						if (!archived) throw notFound();
+						return toResponse(archived);
 					},
 					{ params: t.Object({ id: t.String({ format: 'uuid' }) }) },
 				),

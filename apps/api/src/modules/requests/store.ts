@@ -285,6 +285,54 @@ export class RequestStore {
 			.returning();
 		return rows[0];
 	}
+
+	// ── Lifecycle methods ────────────────────────────────────────────────
+
+	async closeRequest(id: string, reason?: string): Promise<Request | undefined> {
+		const rows = await this.db
+			.update(requests)
+			.set({
+				state: 'closed',
+				closedAt: new Date(),
+				closedReason: reason ?? null,
+				updatedAt: new Date(),
+			})
+			.where(eq(requests.id, id))
+			.returning();
+		return rows[0];
+	}
+
+	async cancelRequest(id: string): Promise<Request | undefined> {
+		const rows = await this.db
+			.update(requests)
+			.set({
+				state: 'cancelled',
+				updatedAt: new Date(),
+			})
+			.where(eq(requests.id, id))
+			.returning();
+		return rows[0];
+	}
+
+	async archiveRequest(id: string): Promise<Request | undefined> {
+		const rows = await this.db
+			.update(requests)
+			.set({
+				state: 'archived',
+				updatedAt: new Date(),
+			})
+			.where(eq(requests.id, id))
+			.returning();
+		return rows[0];
+	}
+
+	async listRespondersForRequest(requestId: string): Promise<string[]> {
+		const rows = await this.db
+			.selectDistinct({ contributorId: requestResponses.contributorId })
+			.from(requestResponses)
+			.where(eq(requestResponses.requestId, requestId));
+		return rows.map((r) => r.contributorId);
+	}
 }
 
 export function toResponse(row: Request) {

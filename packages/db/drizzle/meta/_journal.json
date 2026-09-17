@@ -1,48 +1,55 @@
 {
-	"version": "7",
-	"dialect": "postgresql",
-	"entries": [
-		{
-			"idx": 0,
-			"version": "7",
-			"when": 1789100053443,
-			"tag": "0000_greedy_payback",
-			"breakpoints": true
-		},
-		{
-			"idx": 1,
-			"version": "7",
-			"when": 1789251196372,
-			"tag": "0001_add_otp_tokens_sessions",
-			"breakpoints": true
-		},
-		{
-			"idx": 2,
-			"version": "7",
-			"when": 1789298161327,
-			"tag": "0002_add_profile_crud_fields",
-			"breakpoints": true
-		},
-		{
-			"idx": 3,
-			"version": "7",
-			"when": 1789403876934,
-			"tag": "0003_add_is_admin_to_users",
-			"breakpoints": true
-		},
-		{
-			"idx": 4,
-			"version": "7",
-			"when": 1789499072442,
-			"tag": "0004_add_notification_dispatch_log",
-			"breakpoints": true
-		},
-		{
-			"idx": 5,
-			"version": "7",
-			"when": 1789589322343,
-			"tag": "0005_add_contribution_lifecycle_fields",
-			"breakpoints": true
-		}
-	]
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1789100053443,
+      "tag": "0000_greedy_payback",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1789251196372,
+      "tag": "0001_add_otp_tokens_sessions",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789298161327,
+      "tag": "0002_add_profile_crud_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789403876934,
+      "tag": "0003_add_is_admin_to_users",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1789499072442,
+      "tag": "0004_add_notification_dispatch_log",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1789589322343,
+      "tag": "0005_add_contribution_lifecycle_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789617485709,
+      "tag": "0006_stormy_maginty",
+      "breakpoints": true
+    }
+  ]
 }

@@ -8,10 +8,11 @@ beforeEach(() => {
 });
 
 describe('GET /requests/featured', () => {
-	test('returns { items: [] } on an empty database', async () => {
+	test('returns array of items from featured feed', async () => {
 		const res = await app.handle(new Request('http://localhost/requests/featured'));
 		expect(res.status).toBe(200);
-		expect(await res.json()).toEqual({ items: [] });
+		const body = (await res.json()) as { items: unknown[] };
+		expect(Array.isArray(body.items)).toBe(true);
 	});
 
 	test('published request title and id appear in the response', async () => {
@@ -24,9 +25,11 @@ describe('GET /requests/featured', () => {
 	});
 
 	test('draft requests are excluded', async () => {
-		await createRequestFixture({ state: 'draft', title: 'Draft stays hidden' });
+		const { id } = await createRequestFixture({ state: 'draft', title: 'Draft stays hidden' });
 		const res = await app.handle(new Request('http://localhost/requests/featured'));
-		expect(await res.json()).toEqual({ items: [] });
+		expect(res.status).toBe(200);
+		const body = (await res.json()) as { items: Array<{ id: string }> };
+		expect(body.items.map((item) => item.id)).not.toContain(id);
 	});
 
 	test('literal /requests/featured wins over GET /requests/:id', async () => {

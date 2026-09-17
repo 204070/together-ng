@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import { getDatabase, sql } from '@together/db';
-import { MockRedisService } from '../lib/redis';
+import { eq, getDatabase, requests } from '@together/db';
+import { MockRedisService } from '../../lib/redis';
 import {
 	createCategory,
 	createRequestFixture,
 	makeTestApp,
 	unique,
 	userAuth,
-} from '../testing/helpers';
-import { setFeedRedis } from './feed';
+} from '../../testing/helpers';
+import { setFeedRedis } from './services';
 
 let app: ReturnType<typeof makeTestApp>;
 
@@ -108,6 +108,47 @@ describe('GET /requests/featured', () => {
 		expect(item?.voteCount).toBe(1);
 	});
 
+	test('ranking is not pure recency — 7 days old with 10 votes ranks above 1 hour old with 0 votes', async () => {
+		const category = await createCategory(unique('rank-vote-cat'));
+		const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+		const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+
+		const olderPopular = await createRequestFixture({
+			state: 'published',
+			category,
+			title: 'Older popular request',
+		});
+
+		const newerZeroVotes = await createRequestFixture({
+			state: 'published',
+			category,
+			title: 'Newer zero-vote request',
+		});
+
+		// Update createdAt and voteCount using Drizzle query builder
+		await getDatabase()
+			.update(requests)
+			.set({ createdAt: sevenDaysAgo, voteCount: 10 })
+			.where(eq(requests.id, olderPopular.id));
+
+		await getDatabase()
+			.update(requests)
+			.set({ createdAt: oneHourAgo, voteCount: 0 })
+			.where(eq(requests.id, newerZeroVotes.id));
+
+		const res = await app.handle(
+			new Request(`http://localhost/requests/featured?categoryId=${category.id}`),
+		);
+		expect(res.status).toBe(200);
+		const body = (await res.json()) as { items: Array<{ id: string; voteCount: number }> };
+		expect(body.items.length).toBeGreaterThanOrEqual(2);
+		const olderIndex = body.items.findIndex((i) => i.id === olderPopular.id);
+		const newerIndex = body.items.findIndex((i) => i.id === newerZeroVotes.id);
+		expect(olderIndex).toBeLessThan(newerIndex);
+		expect(body.items[olderIndex].voteCount).toBe(10);
+		expect(body.items[newerIndex].voteCount).toBe(0);
+	});
+
 	test('pagination respects page and limit params', async () => {
 		const category = await createCategory(unique('page-cat'));
 		for (let i = 0; i < 5; i++) {
@@ -143,9 +184,10 @@ describe('GET /requests/featured', () => {
 			title: 'Newer request',
 		});
 
-		await getDatabase().execute(
-			sql`UPDATE requests SET created_at = created_at - interval '1 hour' WHERE id = ${older.id}`,
-		);
+		await getDatabase()
+			.update(requests)
+			.set({ createdAt: new Date(Date.now() - 3600 * 1000) })
+			.where(eq(requests.id, older.id));
 
 		const res = await app.handle(
 			new Request(`http://localhost/requests/featured?sort=newest&categoryId=${category.id}`),
@@ -198,7 +240,7 @@ describe('GET /requests/featured', () => {
 		expect(body.items[1].voteCount).toBe(1);
 	});
 
-	test('filter by categoryId', async () => {
+	test('filter by categoryId and category slug', async () => {
 		const category = await createCategory(unique('cat-filter'));
 		const { id: catReq } = await createRequestFixture({
 			state: 'published',
@@ -219,6 +261,14 @@ describe('GET /requests/featured', () => {
 		const body = (await res.json()) as { items: Array<{ id: string; categoryId: number }> };
 		expect(body.items.map((i) => i.id)).toContain(catReq);
 		expect(body.items.map((i) => i.id)).not.toContain(otherReq);
+
+		// Also test by slug
+		const resSlug = await app.handle(
+			new Request(`http://localhost/requests/featured?category=${category.slug}`),
+		);
+		const bodySlug = (await resSlug.json()) as { items: Array<{ id: string; categoryId: number }> };
+		expect(bodySlug.items.map((i) => i.id)).toContain(catReq);
+		expect(bodySlug.items.map((i) => i.id)).not.toContain(otherReq);
 	});
 
 	test('filter by modality', async () => {
@@ -290,30 +340,41 @@ describe('GET /requests/featured', () => {
 		expect(body.items.map((i) => i.id)).not.toContain(otherId);
 	});
 
-	test('combines multiple filters', async () => {
-		const category = await createCategory(unique('combo-filter'));
+	test('combines multiple filters (intersection)', async () => {
+		const category = await createCategory(unique('technology'));
 		const { id: matchId } = await createRequestFixture({
 			state: 'published',
 			category,
 			modality: 'online',
 			helpType: 'learn',
-			title: 'Matches all',
+			title: 'Matches all criteria',
 		});
 		const { id: wrongModId } = await createRequestFixture({
 			state: 'published',
 			category,
 			modality: 'in_person',
+			helpType: 'learn',
 			title: 'Wrong modality',
+		});
+		const otherCat = await createCategory(unique('books'));
+		const { id: wrongCatId } = await createRequestFixture({
+			state: 'published',
+			category: otherCat,
+			modality: 'online',
+			helpType: 'learn',
+			title: 'Wrong category',
 		});
 
 		const res = await app.handle(
 			new Request(
-				`http://localhost/requests/featured?categoryId=${category.id}&modality=online&helpType=learn`,
+				`http://localhost/requests/featured?category=${category.slug}&online=true&sort=most_supported`,
 			),
 		);
 		const body = (await res.json()) as { items: Array<{ id: string; title: string }> };
-		expect(body.items.map((i) => i.id)).toContain(matchId);
-		expect(body.items.map((i) => i.id)).not.toContain(wrongModId);
+		const ids = body.items.map((i) => i.id);
+		expect(ids).toContain(matchId);
+		expect(ids).not.toContain(wrongModId);
+		expect(ids).not.toContain(wrongCatId);
 	});
 
 	test('default sort is vote-weighted', async () => {
@@ -404,33 +465,40 @@ describe('GET /categories/:slug/requests', () => {
 		expect(body.pagination.total).toBe(0);
 	});
 
-	test('returns requests for a specific category', async () => {
-		const category = await createCategory(unique('tech-support'));
-		const { id: catReq } = await createRequestFixture({
+	test('returns requests for a specific category with zero leakage between categories', async () => {
+		const catA = await createCategory(unique('tech-a'));
+		const { id: reqA } = await createRequestFixture({
 			state: 'published',
-			category,
-			title: 'Tech help needed',
+			category: catA,
+			title: 'Category A request',
 		});
 
-		const otherCategory = await createCategory(unique('other-cat'));
-		const { id: otherReq } = await createRequestFixture({
+		const catB = await createCategory(unique('edu-b'));
+		const { id: reqB } = await createRequestFixture({
 			state: 'published',
-			category: otherCategory,
-			title: 'Different category',
+			category: catB,
+			title: 'Category B request',
 		});
 
-		const res = await app.handle(
-			new Request(`http://localhost/categories/${category.slug}/requests`),
-		);
-		const body = (await res.json()) as {
+		const resA = await app.handle(new Request(`http://localhost/categories/${catA.slug}/requests`));
+		const bodyA = (await resA.json()) as {
 			items: Array<{ id: string }>;
 			category: { slug: string };
 			pagination: { total: number };
 		};
-		expect(body.category.slug).toBe(category.slug);
-		expect(body.items.map((i) => i.id)).toContain(catReq);
-		expect(body.items.map((i) => i.id)).not.toContain(otherReq);
-		expect(body.pagination.total).toBeGreaterThanOrEqual(1);
+		expect(bodyA.category.slug).toBe(catA.slug);
+		expect(bodyA.items.map((i) => i.id)).toContain(reqA);
+		expect(bodyA.items.map((i) => i.id)).not.toContain(reqB);
+
+		const resB = await app.handle(new Request(`http://localhost/categories/${catB.slug}/requests`));
+		const bodyB = (await resB.json()) as {
+			items: Array<{ id: string }>;
+			category: { slug: string };
+			pagination: { total: number };
+		};
+		expect(bodyB.category.slug).toBe(catB.slug);
+		expect(bodyB.items.map((i) => i.id)).toContain(reqB);
+		expect(bodyB.items.map((i) => i.id)).not.toContain(reqA);
 	});
 
 	test('excludes draft requests in category feed', async () => {
@@ -669,6 +737,39 @@ describe('GET /requests/search', () => {
 		expect(body.items.map((i) => i.id)).toContain(id);
 	});
 
+	test('search supports english stemming (laptop matches laptops, electronics help matches stemmed content)', async () => {
+		const uniqueTag = unique('stem');
+		const { id: laptopReq } = await createRequestFixture({
+			state: 'published',
+			title: `Refurbished laptops for students ${uniqueTag}`,
+			goal: 'Need laptops for computer science class',
+			barrier: 'Limited budget',
+			helpNeeded: 'Donated laptops',
+		});
+
+		const { id: electroReq } = await createRequestFixture({
+			state: 'published',
+			title: `Need electronic helper for lab ${uniqueTag}`,
+			goal: 'Repair lab equipment',
+			barrier: 'Lack of components',
+			helpNeeded: 'Electronics help needed',
+		});
+
+		// Querying singular "laptop" should match plural "laptops"
+		const resSingular = await app.handle(
+			new Request(`http://localhost/requests/search?q=laptop+${uniqueTag}`),
+		);
+		const bodySingular = (await resSingular.json()) as { items: Array<{ id: string }> };
+		expect(bodySingular.items.map((i) => i.id)).toContain(laptopReq);
+
+		// Querying "electronics help" matches stemmed content
+		const resElectro = await app.handle(
+			new Request(`http://localhost/requests/search?q=electronics+help+${uniqueTag}`),
+		);
+		const bodyElectro = (await resElectro.json()) as { items: Array<{ id: string }> };
+		expect(bodyElectro.items.map((i) => i.id)).toContain(electroReq);
+	});
+
 	test('search excludes draft requests', async () => {
 		const searchTerm = unique('draftonly');
 		const { id } = await createRequestFixture({
@@ -714,34 +815,36 @@ describe('GET /requests/search', () => {
 		expect(body.items.map((i) => i.id)).not.toContain(id);
 	});
 
-	test('search with category slug filter', async () => {
-		const searchTerm = unique('catsearch');
-		const category = await createCategory(unique('cat-search'));
-		const { id: matchId } = await createRequestFixture({
+	test('search with category slug filter per Section 12.3', async () => {
+		const searchTerm = unique('pycat');
+		const techCategory = await createCategory(unique('technology'));
+		const { id: techPython } = await createRequestFixture({
 			state: 'published',
-			category,
-			title: `${searchTerm} coding help`,
-			goal: 'Learn to code',
-			barrier: 'No mentor',
-			helpNeeded: 'Coding tutor',
+			category: techCategory,
+			title: `Beginner python tutoring ${searchTerm}`,
+			goal: 'Learn python fundamentals',
+			barrier: 'No coding experience',
+			helpNeeded: 'Python tutor',
 		});
 
-		const otherCategory = await createCategory(unique('other-cat'));
-		const { id: otherId } = await createRequestFixture({
+		const gardeningCategory = await createCategory(unique('gardening'));
+		const { id: otherReq } = await createRequestFixture({
 			state: 'published',
-			category: otherCategory,
-			title: `${searchTerm} general coding`,
-			goal: 'General coding',
-			barrier: 'Time',
-			helpNeeded: 'Pair programmer',
+			category: gardeningCategory,
+			title: `General python snake handling ${searchTerm}`,
+			goal: 'Snake care',
+			barrier: 'None',
+			helpNeeded: 'Keeper',
 		});
 
 		const res = await app.handle(
-			new Request(`http://localhost/requests/search?q=${searchTerm}&category=${category.slug}`),
+			new Request(
+				`http://localhost/requests/search?q=beginner+python+${searchTerm}&category=${techCategory.slug}`,
+			),
 		);
 		const body = (await res.json()) as { items: Array<{ id: string; categoryId: number }> };
-		expect(body.items.map((i) => i.id)).toContain(matchId);
-		expect(body.items.map((i) => i.id)).not.toContain(otherId);
+		expect(body.items.map((i) => i.id)).toContain(techPython);
+		expect(body.items.map((i) => i.id)).not.toContain(otherReq);
 	});
 
 	test('search with nonexistent category returns empty', async () => {
@@ -971,9 +1074,10 @@ describe('GET /requests/search', () => {
 			helpNeeded: 'New help',
 		});
 
-		await getDatabase().execute(
-			sql`UPDATE requests SET created_at = created_at - interval '1 hour' WHERE id = ${older.id}`,
-		);
+		await getDatabase()
+			.update(requests)
+			.set({ createdAt: new Date(Date.now() - 3600 * 1000) })
+			.where(eq(requests.id, older.id));
 
 		const res = await app.handle(
 			new Request(

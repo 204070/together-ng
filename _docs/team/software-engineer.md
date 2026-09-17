@@ -60,7 +60,7 @@ Definition of done:
 - Tests are written for the new behaviour, and the whole suite passes -
   `bun run test`, not just the package you touched, since a change to
   `packages/schemas` or `packages/db` can break another app silently
-- `bunx biome check .` is clean
+- `bun run lint` is clean
 - A new setting has a new env var and a line in `.env.example` - never a
   hardcoded value or a checked-in secret
 - The work is committed

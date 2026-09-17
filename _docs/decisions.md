@@ -30,8 +30,8 @@ sequentially generated files. See the wave rule in `_docs/PROCESS.md`.
 
 ## D3. Lint and format: Biome, one tool, one command
 
-Biome checks both lint and format in one command: `bunx biome check .`.
-`bunx biome check --write .` fixes what it can. One tool, one config,
+Biome checks both lint and format in one command: `bun run lint` (`biome check .`).
+`bun run check` (`biome check --write .`) fixes what it can. One tool, one config,
 nothing to keep in sync between a linter and a formatter.
 
 ## D4. Worktree database naming and lifecycle
@@ -99,7 +99,7 @@ and `AGENTS.md`.
 
 ## D9. CI is a real, independent gate - not a restatement of QA
 
-A GitHub Actions workflow runs `bun run test`, `bunx biome check .`, and the
+A GitHub Actions workflow runs `bun run test`, `bun run lint`, and the
 migration-drift check (D2) on every push and every pull request. Branch
 protection on `main` requires that workflow to pass before a merge is
 possible, regardless of what any agent's report says.

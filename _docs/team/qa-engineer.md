@@ -42,7 +42,7 @@ How you check, on this project:
   it yourself in a browser
 - `bun run db:generate`, then `git status packages/db/migrations` - a
   schema change with no committed migration to match is a FAIL
-- `bunx biome check .`
+- `bun run lint`
 - A new setting means a new env var and a line in `.env.example`. A
   hardcoded value or a checked-in secret is a FAIL even if every
   criterion passes

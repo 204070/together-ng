@@ -248,7 +248,7 @@ Branches merge one at a time, never in parallel, in dependency order:
 
 1. Rebase the branch on current main
 2. Run the whole suite, the linter, and the migration check again, in
-   the worktree, after the rebase: `bun run test`, `bunx biome check .`,
+   the worktree, after the rebase: `bun run test`, `bun run lint`,
    and `bun run db:generate` followed by `git status packages/db/migrations`
    to confirm nothing new and uncommitted came out of it
 3. If the branch touches auth or value-bearing logic (`_docs/decisions.md`,

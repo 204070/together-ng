@@ -198,18 +198,19 @@ export async function getFeaturedRequests(
 		category: category?.id ? category : null,
 	}));
 
-	const [{ count }] = await db
+	const [countRow] = await db
 		.select({ count: sql<number>`count(*)::int` })
 		.from(requests)
 		.where(and(...conditions));
+	const total = countRow?.count ?? 0;
 
 	return {
 		items,
 		pagination: {
 			page,
 			limit,
-			total: count,
-			totalPages: Math.ceil(count / limit),
+			total,
+			totalPages: Math.ceil(total / limit),
 		},
 	};
 }
@@ -275,10 +276,11 @@ export async function getCategoryRequests(
 		},
 	}));
 
-	const [{ count }] = await db
+	const [countRow] = await db
 		.select({ count: sql<number>`count(*)::int` })
 		.from(requests)
 		.where(and(...conditions));
+	const total = countRow?.count ?? 0;
 
 	return {
 		category: {
@@ -291,8 +293,8 @@ export async function getCategoryRequests(
 		pagination: {
 			page,
 			limit,
-			total: count,
-			totalPages: Math.ceil(count / limit),
+			total,
+			totalPages: Math.ceil(total / limit),
 		},
 	};
 }
@@ -377,10 +379,11 @@ export async function searchRequests(
 		category: category?.id ? category : null,
 	}));
 
-	const [{ count }] = await db
+	const [countRow] = await db
 		.select({ count: sql<number>`count(*)::int` })
 		.from(requests)
 		.where(and(...conditions));
+	const total = countRow?.count ?? 0;
 
 	return {
 		items,
@@ -388,8 +391,8 @@ export async function searchRequests(
 		pagination: {
 			page,
 			limit,
-			total: count,
-			totalPages: Math.ceil(count / limit),
+			total,
+			totalPages: Math.ceil(total / limit),
 		},
 	};
 }

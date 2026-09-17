@@ -166,11 +166,50 @@ After registration you land on `/onboarding`. The flow has 3 steps:
 3. Click **"Publish"** to make the request live
 4. **Expected:** You see a "Request published!" toast, then you're redirected to the request detail page at `/requests/<id>`
 
-### 6. Viewing the Feed
+### 6. Discovery Feeds, Search, and Filtering
 
-1. Go to **http://localhost:5000/**
-2. **Expected:** The published request appears in the feed list with its title and vote count
-3. Click the request title to view its detail page
+The discovery experience enables browsing, category filtering, keyword search, and multi-facet filtering for community requests.
+
+#### 6.1 Featured Feed (Homepage)
+1. Open **http://localhost:5000/** (unauthenticated or signed in)
+2. **Expected:** The homepage displays the Featured feed with community request cards in vote-weighted rank order (higher supported requests appear before newer zero-vote requests).
+3. Each request card displays:
+   - **Title** linking to `/requests/<id>`
+   - **Goal snippet** (or help needed summary)
+   - **Category badge** (e.g., Technology, Education)
+   - **Location or modality badge** (e.g., "Online", "In person", or city name like "Lagos")
+   - **Vote count** (e.g., "14 votes")
+   - **State badge** ("Published" or "Receiving Responses" — draft/archived requests are hidden)
+4. Click **"View request →"** or the request title to navigate to `/requests/<id>`.
+
+#### 6.2 Category Feeds
+1. Navigate to a category feed directly via URL (e.g. **http://localhost:5000/categories/technology**).
+2. **Expected:** The page header shows category breadcrumbs, category title ("Technology"), and description.
+3. Only requests published in that category are shown. No requests from other categories appear.
+4. **Empty Category Test:** Navigate to an empty category (e.g. `/categories/gardening` if no requests exist).
+   - **Expected:** An empty state appears with "No requests yet", a helpful prompt, an **"Ask for help"** button pointing to `/requests/new`, and a **"Browse all requests"** button pointing to `/`.
+
+#### 6.3 Search with Stemming
+1. In the search input on the homepage, type a keyword such as `laptop` and click **"Search"** (or press Enter).
+2. **Expected:** The URL updates to `/?q=laptop`. The results include requests containing "laptop" and stemmed variations like "laptops".
+3. Search uses English full-text search (`tsvector` + GIN) and trigram matching (`pg_trgm`).
+4. **Empty Search Test:** Search for a non-existent phrase (e.g., `xyzunknown999`).
+   - **Expected:** An explicit empty state displays "No results for 'xyzunknown999'", a **"Clear search"** button, and a **"Browse featured requests"** button.
+
+#### 6.4 Combinable Filters
+1. On the homepage or search results, locate the filter bar below the search form.
+2. Select a **Category** (e.g., "Technology").
+3. Select a **Modality** (e.g., "Online").
+4. Select a **Type of help** (e.g., "Learn skill").
+5. Enter a **Location** (e.g., "Lagos").
+6. Change **Sort by** (e.g., "Most supported", "Newest", or "Still open").
+7. **Expected:** URL search parameters update automatically (e.g., `?category=technology&modality=online&helpType=learn&sort=newest`) without a full page reload. The feed returns the **intersection** of all selected filters.
+8. Click **"Reset filters"** (or **"Clear"** on search) to reset back to default parameters.
+
+#### 6.5 Pagination
+1. When more than 20 requests match the active feed or query, pagination controls appear at the bottom.
+2. Click **"Load more"** (or navigate to `?page=2`).
+3. **Expected:** Page 2 results are displayed without duplicate cards, and pagination status shows "Page 2 of N".
 
 ### 7. Voting on a Request
 
@@ -332,6 +371,8 @@ At each state, different actions are available:
 | Mark notification read | PATCH | `/notifications/:id` |
 | Mark all read | POST | `/notifications/read-all` |
 | Featured feed | GET | `/requests/featured` |
+| Category feed | GET | `/categories/:id/requests` |
+| Search requests | GET | `/requests/search` |
 | Health check | GET | `/health` |
 
 ---

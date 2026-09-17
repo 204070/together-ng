@@ -10,7 +10,7 @@ import { createAuthRouter } from './modules/auth/routes';
 import { type AppEnv, createAuthServices } from './modules/auth/services';
 import { createContributionRouter } from './modules/contributions/routes';
 import { createContributionServices } from './modules/contributions/services';
-import { createFeedRouter } from './modules/feed';
+import { createFeedRouter } from './modules/feed/routes';
 import { createNotificationRouter } from './modules/notifications/routes';
 import { createProfileRouter } from './modules/profiles/routes';
 import { createProfileServices } from './modules/profiles/services';

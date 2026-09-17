@@ -40,12 +40,122 @@ async function incomingRefreshToken(): Promise<string | undefined> {
 	return decodeURIComponent(token);
 }
 
-export const getFeaturedFn = createServerFn({ method: 'GET' }).handler(async () => {
-	const api = createApiClient(await apiBaseUrl());
-	const { data, error } = await api.requests.featured.get();
-	if (error !== null || data === null) throw new Error('Feed unavailable');
-	return data;
-});
+export interface FeedFilterParams {
+	sort?: string;
+	categoryId?: string;
+	category?: string;
+	modality?: string;
+	online?: string | boolean;
+	helpType?: string;
+	location?: string;
+	page?: string | number;
+	limit?: string | number;
+}
+
+export interface CategoryFeedParams extends FeedFilterParams {
+	slug: string;
+}
+
+export interface SearchRequestsParams extends FeedFilterParams {
+	q: string;
+}
+
+export interface FeaturedQueryWire {
+	sort?: string;
+	categoryId?: string;
+	category?: string;
+	modality?: string;
+	online?: string;
+	helpType?: string;
+	location?: string;
+	page?: string;
+	limit?: string;
+}
+
+export interface SearchQueryWire extends FeaturedQueryWire {
+	q: string;
+}
+
+function buildQueryParams(data: FeedFilterParams): FeaturedQueryWire {
+	const query: FeaturedQueryWire = {};
+	if (data.sort) query.sort = String(data.sort);
+	if (data.categoryId) query.categoryId = String(data.categoryId);
+	if (data.category) query.category = String(data.category);
+	if (data.modality) query.modality = String(data.modality);
+	if (data.online !== undefined && data.online !== '') query.online = String(data.online);
+	if (data.helpType) query.helpType = String(data.helpType);
+	if (data.location?.trim()) query.location = data.location.trim();
+	if (data.page !== undefined && data.page !== '') query.page = String(data.page);
+	if (data.limit !== undefined && data.limit !== '') query.limit = String(data.limit);
+	return query;
+}
+
+export const getFeaturedFn = createServerFn({ method: 'GET' })
+	.validator((input?: unknown) => {
+		const parsed = (
+			input && typeof input === 'object' && 'data' in input
+				? (input as { data: unknown }).data
+				: input
+		) as FeedFilterParams | undefined;
+		return parsed ?? {};
+	})
+	.handler(async ({ data }) => {
+		const api = createApiClient(await apiBaseUrl());
+		const query = buildQueryParams(data);
+		const { data: resData, error } = await api.requests.featured.get({
+			query: (Object.keys(query).length > 0 ? query : undefined) as never,
+		});
+		if (error !== null || resData === null) throw new Error('Feed unavailable');
+		return resData;
+	});
+
+export const getCategoryFeedFn = createServerFn({ method: 'GET' })
+	.validator((input: unknown) => {
+		const parsed = (
+			input && typeof input === 'object' && 'data' in input
+				? (input as { data: unknown }).data
+				: input
+		) as CategoryFeedParams;
+		if (!parsed || typeof parsed.slug !== 'string' || parsed.slug === '') {
+			throw new Error('Category slug is required');
+		}
+		return parsed;
+	})
+	.handler(async ({ data }) => {
+		const api = createApiClient(await apiBaseUrl());
+		const query = buildQueryParams(data);
+		const res = await api.categories({ id: data.slug }).requests.get({
+			query: (Object.keys(query).length > 0 ? query : undefined) as never,
+		});
+		if (res.error !== null || res.data === null) {
+			throw new Error('Category feed unavailable');
+		}
+		return res.data;
+	});
+
+export const searchRequestsFn = createServerFn({ method: 'GET' })
+	.validator((input: unknown) => {
+		const parsed = (
+			input && typeof input === 'object' && 'data' in input
+				? (input as { data: unknown }).data
+				: input
+		) as SearchRequestsParams;
+		if (!parsed || typeof parsed.q !== 'string') {
+			throw new Error('Search query is required');
+		}
+		return parsed;
+	})
+	.handler(async ({ data }) => {
+		const api = createApiClient(await apiBaseUrl());
+		const query: SearchQueryWire = { q: data.q, ...buildQueryParams(data) };
+		const res = await api.requests.search.get({
+			query: query as never,
+		});
+		if (res.error !== null || res.data === null) {
+			throw new Error('Search unavailable');
+		}
+		return res.data;
+	});
 
 export const getAuthUserFn = createServerFn({ method: 'GET' }).handler(async () => {
 	const authorization = await incomingAuth();

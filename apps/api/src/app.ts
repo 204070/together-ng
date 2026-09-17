@@ -7,6 +7,8 @@ import { createVoteWsRouter } from './lib/vote-ws';
 import { createAdminRouter } from './modules/admin/routes';
 import { createAuthRouter } from './modules/auth/routes';
 import { type AppEnv, createAuthServices } from './modules/auth/services';
+import { createContributionRouter } from './modules/contributions/routes';
+import { createContributionServices } from './modules/contributions/services';
 import { createFeedRouter } from './modules/feed';
 import { createNotificationRouter } from './modules/notifications/routes';
 import { createProfileRouter } from './modules/profiles/routes';
@@ -34,6 +36,12 @@ export function makeApp(env: AppEnv = {}) {
 		authStore: authServices.store,
 		now: authServices.now,
 		matching: env.matching,
+	});
+
+	const contributionServices = createContributionServices(env, {
+		db,
+		authStore: authServices.store,
+		now: authServices.now,
 	});
 
 	const app = new Elysia()
@@ -69,6 +77,7 @@ export function makeApp(env: AppEnv = {}) {
 		.use(createRequestRouter(requestServices))
 		.use(createOfferRouter(requestServices))
 		.use(createVoteRouter(requestServices))
+		.use(createContributionRouter(contributionServices))
 		.use(createVoteWsRouter())
 		.use(
 			createNotificationRouter(

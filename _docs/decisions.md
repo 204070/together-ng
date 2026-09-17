@@ -225,3 +225,41 @@ Reason: In-process `Map` state (`voteSubscribers`) cannot scale horizontally acr
 Short-lived 6-digit OTP codes (5-minute TTL, 3-attempt limit) are hashed using HMAC-SHA256 and verified using constant-time comparison (`timingSafeEqual`). Passwords strictly continue to use Argon2id via `Bun.password.hash`.
 
 Reason: Argon2id is intentionally CPU- and memory-expensive to resist offline brute-force attacks against long-term passwords. Applying Argon2id to ephemeral 6-digit numeric codes burns 50–200ms of CPU per verification, causing CPU starvation during signup/login surges. HMAC-SHA256 with a server secret completes in microseconds, protecting the database against read-compromise while maintaining high throughput. Binds #52.
+
+## D23. Exclusive Drizzle Query Builder: Zero raw SQL, schema-first compile-time type safety
+
+All database queries across stores, services, routes, and workers must strictly use the Drizzle ORM query builder (`db.select()`, `db.insert()`, `db.update()`, `db.delete()`) and typed operators (`eq`, `and`, `or`, `inArray`, `notInArray`, `desc`, `asc`, etc.) re-exported from `@together/db`. Raw SQL tagged templates (`sql\`...\``) and raw query strings are strictly forbidden for application logic and queries.
+
+Reason: Raw SQL creates schema drift where database schema updates fail silently at compile time and only explode at runtime. It forces brittle, repetitive manual column mapping (`snake_case` to `camelCase`), breaks query composition, and introduces subtle bugs from JavaScript operator confusion (e.g. using `&&` instead of Drizzle's `and()`, which drops query predicates silently). Drizzle query builder enforces schema-first type safety, automatically maps column names, and validates query structures at build time. Specialized raw SQL fragments are permitted only inside Drizzle's `sql` helper for PostgreSQL-specific constructs (e.g., `tsvector`, full-text search rankings, vector distance calculations) where no builder method exists. Settled in #39.
+
+## D24. Unified database connection pool: Single client lifecycle, zero redundant pools
+
+The application, background workers, and service factories share a single Drizzle database instance (`Db`) backed by `node-postgres` (`pg.Pool`), initialized via `packages/db/src/client.ts`. Service factories accept `{ db: Db }` as a dependency. The legacy `Sql` client (`postgres.js` tagged template client), `createClient()`, and `env.sql` plumbing are deprecated and removed.
+
+Reason: Creating separate connection pools for raw `sql` and Drizzle `db` doubled connection consumption, quickly exhausting PostgreSQL connection pool limits (capped at 10 connections) and leaving idle connection pools sitting in production memory. In addition, service factories and individual test suites must never manage or terminate the shared pool lifecycle. Connection pool shutdown (`getPool().end()`) is owned exclusively by the process entrypoint (`apps/api/src/index.ts`, worker runners, or the global test harness). Binds #40.
+
+## D25. API architecture: Centralized authentication boundary, decoupled authorization, and uniform HTTP errors
+
+Protected API routes authenticate strictly through the centralized perimeter guard `createAuthGuard` or helper `requireActiveActor` / `requireActiveUser` (`apps/api/src/lib/authentication.ts`). Route handlers receive the verified `actor` (`userId`, `sessionId`) from context and perform domain authorization (resource ownership, permissions, and role checks); handlers must never parse JWTs, re-verify tokens, or execute redundant database queries to confirm active account status.
+
+All domain modules (`apps/api/src/modules/<domain>/`) follow a three-tier separation:
+1. `routes.ts`: HTTP transport layer only. Binds Elysia route endpoints, enforces TypeBox wire validation schemas, checks actor authorization, and delegates to services.
+2. `services.ts`: Business logic and orchestration, decoupled from HTTP frameworks.
+3. `store.ts`: Database query persistence layer using Drizzle query builder.
+
+All HTTP and application errors must throw `HttpError` (`apps/api/src/lib/errors.ts`) or its standard factory helpers (`unauthorizedError`, `forbiddenError`, `notFoundError`, `conflictError`, `badRequestError`). Elysia's root `onError` handles mapping `HttpError` into standard JSON payloads (`{ error: { code, message, details } }`). Ad-hoc error classes, custom JSON error shapes, and manual status code setting for errors are prohibited. Binds #31.
+
+## D26. Test isolation: Transaction rollback pattern over table truncation
+
+Test suites use transaction rollback isolation via global `tests/setup.ts`: in `beforeEach`, a connection is acquired from `getPool()`, begins a transaction (`BEGIN`), binds a transaction-scoped Drizzle instance (`setDatabase(txDb)`), and in `afterEach` executes `ROLLBACK` and releases the connection. Tests do not recreate databases or run migrations per test file; schema migrations execute once globally in `tests/setup.ts`.
+
+Consequences:
+- **No per-file pool teardown:** Test files must never call `getPool().end()` in `afterAll`. Global pool lifecycle is owned by `tests/setup.ts`.
+- **Postgres 25P02 prevention (aborted transaction blocks):** In PostgreSQL, when a statement fails with a constraint violation (e.g. `23505 unique_violation`), the entire transaction is marked aborted (`25P02: current transaction is aborted, commands ignored until end of transaction block`). To prevent normal validation tests (such as duplicate email/phone registration) from aborting the test transaction, application code must perform pre-flight existence checks (`findByEmail`, `findByPhone`) before `insert()`. For tests explicitly asserting raw database constraint errors, wrap the query in an explicit `SAVEPOINT` / `ROLLBACK TO SAVEPOINT` block.
+- **Worker test isolation (`__SKIP_TX_ISOLATION__`):** Background workers run on independent database connections outside the test runner's transaction and cannot see uncommitted data from `BEGIN ... ROLLBACK`. Worker test suites must opt out of transaction rollback isolation by setting `(globalThis as any).__SKIP_TX_ISOLATION__ = true` at the file top and use deterministic table truncation (`TRUNCATE`) in `beforeEach`. Binds #42.
+
+## D27. Fast test fixtures: Lightweight token synthesis over crypto hashing, centralized factories
+
+Test suites must never invoke Argon2id password hashing or call HTTP login endpoints to obtain authentication tokens. Tests must generate test JWTs using `createToken()` from `apps/api/src/testing/helpers.ts`, which synthesizes valid HS256 tokens in <1ms via HMAC-SHA256 Web Crypto. Fixed mock hashes (`DEFAULT_PASSWORD_HASH`) must be used for password database seeds.
+
+All entity generation in tests must use centralized test helper factories (`createUser`, `createCategory`, `createSkill`, `addCapability`, `setPrefs` in `apps/api/src/testing/helpers.ts`) rather than duplicated raw inserts or ad-hoc test seeds. Binds #42.

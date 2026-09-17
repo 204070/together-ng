@@ -128,6 +128,7 @@ describe('GET /requests/featured', () => {
 			category,
 			title: 'Older request',
 		});
+		await new Promise((r) => setTimeout(r, 10));
 		const newer = await createRequestFixture({
 			state: 'published',
 			category,
@@ -917,6 +918,7 @@ describe('GET /requests/search', () => {
 			barrier: 'Old barrier',
 			helpNeeded: 'Old help',
 		});
+		await new Promise((r) => setTimeout(r, 10));
 		await createRequestFixture({
 			state: 'published',
 			category,

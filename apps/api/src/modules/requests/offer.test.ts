@@ -244,7 +244,6 @@ describe('GET /requests/:id/offers', () => {
 		expect(body.offers.map((o) => o.message).sort()).toEqual(['Offer 1', 'Offer 2']);
 	});
 
-
 	test('contributor sees only their own offers', async () => {
 		const { id: requestId } = await createRequestFixture({ state: 'published' });
 		const contributor1 = await userAuth();

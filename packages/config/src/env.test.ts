@@ -27,6 +27,13 @@ describe('@together/config env', () => {
 		expect(parsed.ADMIN_PORT).toBe(5100);
 		expect(parsed.NODE_ENV).toBe('development');
 		expect(parsed.OTP_PROVIDER).toBe('mock');
+		expect(parsed.STORAGE_PROVIDER).toBe('mock');
+		expect(parsed.STORAGE_BUCKET).toBe('together-uploads');
+		expect(parsed.STORAGE_ENDPOINT).toBe('');
+		expect(parsed.STORAGE_ACCESS_KEY_ID).toBe('');
+		expect(parsed.STORAGE_SECRET_ACCESS_KEY).toBe('');
+		expect(parsed.STORAGE_REGION).toBe('us-east-1');
+		expect(parsed.STORAGE_PUBLIC_URL).toBe('');
 		expect(parsed.TERMII_API_KEY).toBe('');
 		expect(parsed.TERMII_SENDER_ID).toBe('');
 	});
@@ -98,6 +105,18 @@ describe('@together/config env', () => {
 		}
 	});
 
+	test('STORAGE_PROVIDER=azure throws as "not a declared literal" and names the default mock', async () => {
+		const mod = await freshConfig();
+		try {
+			mod.loadEnv({ ...VALID, STORAGE_PROVIDER: 'azure' });
+		} catch (error) {
+			const message = (error as Error).message;
+			expect(message).toContain('STORAGE_PROVIDER');
+			expect(message).toContain('not a declared literal');
+			expect(message).toContain('mock');
+		}
+	});
+
 	test('PORT=abc throws with "wrong type" and names the default 4000', async () => {
 		const mod = await freshConfig();
 		try {
@@ -157,6 +176,7 @@ describe('@together/config env', () => {
 				'ADMIN_PORT',
 				'NODE_ENV',
 				'OTP_PROVIDER',
+				'STORAGE_PROVIDER',
 				'DATABASE_URL',
 				'JWT_SECRET',
 				'TERMII_API_KEY',

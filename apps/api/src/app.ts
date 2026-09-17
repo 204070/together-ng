@@ -11,6 +11,7 @@ import { createFeedRouter } from './modules/feed';
 import { createNotificationRouter } from './modules/notifications/routes';
 import { createProfileRouter } from './modules/profiles/routes';
 import { createProfileServices } from './modules/profiles/services';
+import { createOfferRouter } from './modules/requests/offer';
 import { createRequestRouter } from './modules/requests/routes';
 import { createRequestServices, type RequestServices } from './modules/requests/services';
 import { createVoteRouter } from './modules/requests/vote';
@@ -66,6 +67,7 @@ export function makeApp(env: AppEnv = {}) {
 		.use(createProfileRouter(profileServices))
 		.use(createTaxonomyRouter(authServices))
 		.use(createRequestRouter(requestServices))
+		.use(createOfferRouter(requestServices))
 		.use(createVoteRouter(requestServices))
 		.use(createVoteWsRouter())
 		.use(

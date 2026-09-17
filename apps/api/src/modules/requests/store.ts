@@ -6,6 +6,8 @@ import {
 	eq,
 	inArray,
 	type Request,
+	type RequestResponse,
+	requestResponses,
 	requests,
 	sql,
 	votes,
@@ -78,6 +80,7 @@ export class RequestStore {
 				patch.helpNeeded !== undefined ? (patch.helpNeeded as string) : existing.helpNeeded,
 			categoryId:
 				patch.categoryId !== undefined ? (patch.categoryId as number | null) : existing.categoryId,
+			state: (patch.state as Request['state']) ?? existing.state,
 			modality:
 				patch.modality !== undefined ? (patch.modality as Request['modality']) : existing.modality,
 			helpType:
@@ -198,6 +201,90 @@ export class RequestStore {
 
 		return result;
 	}
+
+	// ── Offer / Response methods ──────────────────────────────────────────
+
+	async createOffer(
+		requestId: string,
+		contributorId: string,
+		input: { message: string; anonymous?: boolean; modality?: string },
+	): Promise<RequestResponse> {
+		const rows = await this.db
+			.insert(requestResponses)
+			.values({
+				requestId,
+				contributorId,
+				message: input.message,
+				anonymous: input.anonymous ?? false,
+				modality: (input.modality as RequestResponse['modality']) ?? null,
+			})
+			.returning();
+		const row = rows[0];
+		if (!row) throw new Error('Failed to create offer');
+		return row;
+	}
+
+	async findOfferById(id: string): Promise<RequestResponse | undefined> {
+		const rows = await this.db
+			.select()
+			.from(requestResponses)
+			.where(eq(requestResponses.id, id))
+			.limit(1);
+		return rows[0];
+	}
+
+	async findOfferByContributor(
+		requestId: string,
+		contributorId: string,
+	): Promise<RequestResponse | undefined> {
+		const rows = await this.db
+			.select()
+			.from(requestResponses)
+			.where(
+				and(
+					eq(requestResponses.requestId, requestId),
+					eq(requestResponses.contributorId, contributorId),
+				),
+			)
+			.limit(1);
+		return rows[0];
+	}
+
+	async listOffersForRequest(requestId: string): Promise<RequestResponse[]> {
+		return this.db
+			.select()
+			.from(requestResponses)
+			.where(eq(requestResponses.requestId, requestId))
+			.orderBy(requestResponses.createdAt);
+	}
+
+	async listOffersByContributor(contributorId: string): Promise<RequestResponse[]> {
+		return this.db
+			.select()
+			.from(requestResponses)
+			.where(eq(requestResponses.contributorId, contributorId))
+			.orderBy(requestResponses.createdAt);
+	}
+
+	async countOffersForRequest(requestId: string): Promise<number> {
+		const rows = await this.db
+			.select({ count: sql<number>`count(*)::int` })
+			.from(requestResponses)
+			.where(eq(requestResponses.requestId, requestId));
+		return rows[0]?.count ?? 0;
+	}
+
+	async updateOfferStatus(
+		id: string,
+		status: 'accepted' | 'declined' | 'withdrawn',
+	): Promise<RequestResponse | undefined> {
+		const rows = await this.db
+			.update(requestResponses)
+			.set({ status, updatedAt: new Date() })
+			.where(eq(requestResponses.id, id))
+			.returning();
+		return rows[0];
+	}
 }
 
 export function toResponse(row: Request) {
@@ -223,6 +310,20 @@ export function toResponse(row: Request) {
 		closedAt: row.closedAt ? row.closedAt.toISOString() : null,
 		closedReason: row.closedReason,
 		underReview: row.underReview,
+		createdAt: row.createdAt.toISOString(),
+		updatedAt: row.updatedAt.toISOString(),
+	};
+}
+
+export function toOfferResponse(row: RequestResponse, opts?: { hideContributor?: boolean }) {
+	return {
+		id: row.id,
+		requestId: row.requestId,
+		contributorId: opts?.hideContributor ? null : row.contributorId,
+		message: row.message,
+		anonymous: row.anonymous,
+		modality: row.modality,
+		status: row.status,
 		createdAt: row.createdAt.toISOString(),
 		updatedAt: row.updatedAt.toISOString(),
 	};

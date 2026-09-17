@@ -23,5 +23,23 @@ export const RequestResponseCreate = Type.Object(
 	{ additionalProperties: false },
 );
 
+export const OfferCreate = Type.Object(
+	{
+		message: Type.String({ minLength: 1, maxLength: 2000 }),
+		anonymous: Type.Optional(Type.Boolean()),
+		modality: Type.Optional(modality),
+	},
+	{ additionalProperties: false },
+);
+
+export const OfferAction = Type.Object(
+	{
+		note: Type.Optional(Type.String({ maxLength: 2000 })),
+	},
+	{ additionalProperties: false },
+);
+
 export type ResponseStatusType = Static<typeof ResponseStatus>;
 export type RequestResponseCreateType = Static<typeof RequestResponseCreate>;
+export type OfferCreateType = Static<typeof OfferCreate>;
+export type OfferActionType = Static<typeof OfferAction>;

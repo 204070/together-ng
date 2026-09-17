@@ -203,11 +203,11 @@ export function createRequestRouter(services: RequestServices) {
 								'RATE_LIMITED',
 								undefined,
 								lim.retryAfterSeconds,
-							'Too many requests',
-						);
-					const row = await store.findRequestById(params.id);
-					if (!row) throw notFound();
-					if (row.authorId !== userId) throw notOwner();
+								'Too many requests',
+							);
+						const row = await store.findRequestById(params.id);
+						if (!row) throw notFound();
+						if (row.authorId !== userId) throw notOwner();
 						const isDraft = row.state === 'draft';
 						const isEditable = isDraft || EDITABLE_STATES.has(row.state);
 						if (!isEditable) throw cannotEditInState(row.state);

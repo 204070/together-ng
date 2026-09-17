@@ -1,4 +1,4 @@
-import type { RedisConnection } from './redis';
+import type { RedisConnection, RedisService } from './redis';
 
 export interface RateLimitDecision {
 	allowed: boolean;
@@ -48,22 +48,41 @@ export class FixedWindowRateLimiter {
 
 export class RedisRateLimiter {
 	constructor(
-		private readonly redis: RedisConnection,
+		private readonly redis: RedisService | RedisConnection,
 		private readonly windowMs: number,
 		private readonly maxHits: number,
+		private readonly clock: Clock = systemClock,
 	) {}
 
 	async check(key: string): Promise<RateLimitDecision> {
-		const now = Date.now();
+		const now = this.clock.now();
 		const windowKey = `ratelimit:${key}:${Math.floor(now / this.windowMs)}`;
 		const ttlSeconds = Math.ceil(this.windowMs / 1000);
 
 		try {
-			const count = await this.redis.send('INCR', windowKey);
-			if (Number(count) === 1) {
-				await this.redis.send('EXPIRE', windowKey, String(ttlSeconds));
+			let currentCount: number;
+			if ('incrWithExpire' in this.redis && typeof this.redis.incrWithExpire === 'function') {
+				currentCount = await this.redis.incrWithExpire(windowKey, ttlSeconds);
+			} else if ('eval' in this.redis && typeof this.redis.eval === 'function') {
+				const LUA_INCR_EXPIRE = `
+local current = redis.call('INCR', KEYS[1])
+local ttl = redis.call('TTL', KEYS[1])
+if ttl == -1 then
+    redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
+return current
+`;
+				const res = await this.redis.eval<number>(LUA_INCR_EXPIRE, [windowKey], [ttlSeconds]);
+				currentCount = Number(res);
+			} else {
+				// Fallback for legacy objects
+				const count = await this.redis.send('INCR', windowKey);
+				if (Number(count) === 1) {
+					await this.redis.send('EXPIRE', windowKey, String(ttlSeconds));
+				}
+				currentCount = Number(count);
 			}
-			const currentCount = Number(count);
+
 			const resetAt = (Math.floor(now / this.windowMs) + 1) * this.windowMs;
 			if (currentCount > this.maxHits) {
 				return {

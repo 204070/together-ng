@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { FixedWindowRateLimiter, RedisRateLimiter } from './rate-limit';
-import type { RedisConnection } from './redis';
+import { MockRedisService, type RedisConnection } from './redis';
 
 describe('FixedWindowRateLimiter', () => {
 	test('allows up to maxHits within a window, then blocks with retry info', () => {
@@ -51,17 +51,41 @@ describe('FixedWindowRateLimiter', () => {
 	});
 });
 
-describe('RedisRateLimiter', () => {
+describe('RedisRateLimiter (legacy mock compatibility)', () => {
 	function createMockRedis(): RedisConnection & { calls: string[][] } {
 		const state = new Map<string, { value: string; expiresAt: number }>();
 		const calls: string[][] = [];
 		return {
 			calls,
 			connected: true,
+			isConnected: true,
 			close() {},
-			async send(...args: string[]) {
-				calls.push(args);
-				const [cmd, ...rest] = args;
+			get: async () => null,
+			set: async () => 'OK',
+			del: async () => 0,
+			exists: async () => 0,
+			expire: async () => 1,
+			ttl: async () => -1,
+			incr: async () => 1,
+			incrWithExpire: async (key: string, ttl: number) => {
+				const existing = state.get(key);
+				const now = Date.now();
+				if (!existing || now > existing.expiresAt) {
+					state.set(key, { value: '1', expiresAt: now + ttl * 1000 });
+					return 1;
+				}
+				const next = Number(existing.value) + 1;
+				existing.value = String(next);
+				return next;
+			},
+			eval: async () => 1,
+			publish: async () => 0,
+			subscribe: async () => async () => {},
+			unsubscribe: async () => {},
+			async send(...args: (string | number | (string | number)[])[]) {
+				const flat = args.flat().map(String);
+				calls.push(flat);
+				const [cmd, ...rest] = flat;
 				if (cmd === 'INCR') {
 					const key = rest[0] ?? '';
 					const existing = state.get(key);
@@ -85,7 +109,7 @@ describe('RedisRateLimiter', () => {
 			},
 			async sendRaw(line: string) {
 				const parts = line.split(' ').filter(Boolean);
-				return this.send(parts[0] ?? '', ...parts.slice(1));
+				return String(await this.send(parts[0] ?? '', ...parts.slice(1)));
 			},
 		};
 	}
@@ -126,11 +150,69 @@ describe('RedisRateLimiter', () => {
 
 	test('falls back to allowed on Redis error', async () => {
 		const redis = createMockRedis();
+		redis.incrWithExpire = async () => {
+			throw new Error('Connection refused');
+		};
 		redis.send = async () => {
 			throw new Error('Connection refused');
 		};
 		const limiter = new RedisRateLimiter(redis, 60_000, 1);
 		const result = await limiter.check('k');
 		expect(result.allowed).toBe(true);
+	});
+});
+
+describe('RedisRateLimiter with MockRedisService (atomic operations & TTL safety)', () => {
+	test('uses atomic incrWithExpire and sets TTL on creation to prevent leakage', async () => {
+		const redis = new MockRedisService();
+		let simulatedNow = 1_000_000;
+		const limiter = new RedisRateLimiter(redis, 60_000, 3, { now: () => simulatedNow });
+
+		// First check sets atomic TTL
+		const res1 = await limiter.check('client:42');
+		expect(res1.allowed).toBe(true);
+
+		const windowKey = `ratelimit:client:42:${Math.floor(simulatedNow / 60_000)}`;
+		// Confirm key exists and has TTL set immediately (prevents TTL leakage)
+		const ttl = await redis.ttl(windowKey);
+		expect(ttl).toBeGreaterThan(0);
+
+		// Subsequent checks within limit
+		expect((await limiter.check('client:42')).allowed).toBe(true);
+		expect((await limiter.check('client:42')).allowed).toBe(true);
+
+		// 4th check exceeds limit
+		const blocked = await limiter.check('client:42');
+		expect(blocked.allowed).toBe(false);
+		expect(blocked.retryAfterSeconds).toBe(20);
+
+		// Advance window past resetAt
+		simulatedNow += 20_000;
+		const nextWindowRes = await limiter.check('client:42');
+		expect(nextWindowRes.allowed).toBe(true);
+	});
+
+	test('independent keys do not interfere', async () => {
+		const redis = new MockRedisService();
+		const limiter = new RedisRateLimiter(redis, 60_000, 2);
+
+		expect((await limiter.check('user:A')).allowed).toBe(true);
+		expect((await limiter.check('user:A')).allowed).toBe(true);
+		expect((await limiter.check('user:A')).allowed).toBe(false);
+
+		expect((await limiter.check('user:B')).allowed).toBe(true);
+		expect((await limiter.check('user:B')).allowed).toBe(true);
+	});
+
+	test('handles redis exceptions safely by falling back to allowed', async () => {
+		const redis = new MockRedisService();
+		redis.incrWithExpire = async () => {
+			throw new Error('Redis node unavailable');
+		};
+		const limiter = new RedisRateLimiter(redis, 60_000, 5);
+
+		const res = await limiter.check('fallback-test');
+		expect(res.allowed).toBe(true);
+		expect(res.retryAfterSeconds).toBe(0);
 	});
 });

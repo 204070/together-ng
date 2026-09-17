@@ -201,3 +201,27 @@ severity as a hardcoded secret.
 Every migration is generated with an explicit name - bun run db:generate --name add_request_matches_table, not a bare bun run db:generate left to produce something like 0007_absurd_black_widow.sql.
 
 Reason: D2 already means every migration in the project lands in one shared, sequential history, written by whichever issue happens to touch schema next. In that history, a filename is the only thing that tells someone what a given step did without opening it - 0007_absurd_black_widow means nothing on a rebase, in a conflict, or six months later when something needs a down migration written by hand; 0007_add_request_matches_table means something at a glance. Pick a name that describes the schema change itself (add_lending_value_threshold_column, drop_unused_badge_icon_column), not the issue title verbatim - issue titles describe a feature, not necessarily what the migration does.
+
+## D19. Background worker architecture: BullMQ over pg-boss, isolated runner process
+
+Background jobs (request matching and notification dispatch) migrate from pg-boss (Postgres-backed) to BullMQ (Redis-backed). Workers run in an isolated entrypoint (`apps/api/src/worker/runner.ts`) separate from the Elysia HTTP server process.
+
+Reason: pg-boss stores all jobs, state transitions, and locks inside Postgres (`pgboss.job`), and each queue instance polls Postgres constantly. Because the database pool is capped (10 connections), concurrent matching transactions and notification queries choke the database and starve HTTP handlers under traffic surges. BullMQ moves all queue state, polling, and locks to Redis (already present in Compose), operating with sub-millisecond in-memory latencies and consuming zero Postgres connections. Decoupling the worker process prevents heavy candidate scoring from starving the API event loop. Binds #48.
+
+## D20. Redis and S3 driver strategy: Native Bun primitives behind decoupled service interfaces
+
+Production Redis and S3 implementations utilize native Bun primitives (`Bun.redis` and `Bun.s3`) behind decoupled service interfaces (`RedisService` and `FileStorage`), backed by in-memory mock implementations for testing.
+
+Reason: Bun provides native Zig/C++ implementations for Redis and S3 that outperform third-party Node packages and hand-rolled TCP socket parsers while adding zero npm dependencies. Wrapping them in clean interfaces preserves decoupling, avoids vendor lock-in, and enforces D17 (external providers remain strictly mockable in test suites). Binds #49 and #50.
+
+## D21. Real-time WebSockets: Native Elysia/Bun topics with Redis Pub/Sub multi-instance scaling
+
+WebSocket topic subscriptions use native Elysia/Bun topic primitives (`ws.subscribe`), backed by Redis Pub/Sub (`vote_updates` channel) for multi-instance broadcast.
+
+Reason: In-process `Map` state (`voteSubscribers`) cannot scale horizontally across multiple API containers behind a load balancer. Native uWebSockets topics eliminate manual subscriber set management and connection leak risks at the C++ layer, while Redis Pub/Sub fans out updates across all API instances without introducing heavy message brokers (Kafka/RabbitMQ). Binds #51.
+
+## D22. Ephemeral OTP security: HMAC-SHA256 over Argon2id
+
+Short-lived 6-digit OTP codes (5-minute TTL, 3-attempt limit) are hashed using HMAC-SHA256 and verified using constant-time comparison (`timingSafeEqual`). Passwords strictly continue to use Argon2id via `Bun.password.hash`.
+
+Reason: Argon2id is intentionally CPU- and memory-expensive to resist offline brute-force attacks against long-term passwords. Applying Argon2id to ephemeral 6-digit numeric codes burns 50–200ms of CPU per verification, causing CPU starvation during signup/login surges. HMAC-SHA256 with a server secret completes in microseconds, protecting the database against read-compromise while maintaining high throughput. Binds #52.

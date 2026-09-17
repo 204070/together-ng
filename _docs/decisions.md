@@ -263,3 +263,12 @@ Consequences:
 Test suites must never invoke Argon2id password hashing or call HTTP login endpoints to obtain authentication tokens. Tests must generate test JWTs using `createToken()` from `apps/api/src/testing/helpers.ts`, which synthesizes valid HS256 tokens in <1ms via HMAC-SHA256 Web Crypto. Fixed mock hashes (`DEFAULT_PASSWORD_HASH`) must be used for password database seeds.
 
 All entity generation in tests must use centralized test helper factories (`createUser`, `createCategory`, `createSkill`, `addCapability`, `setPrefs` in `apps/api/src/testing/helpers.ts`) rather than duplicated raw inserts or ad-hoc test seeds. Binds #42.
+
+## D28. Feed and query optimization: Denormalized vote counts, composite indexes, and Redis feed caching
+
+To eliminate dynamic aggregation bottlenecks and full table scans on high-traffic read paths:
+1. **Denormalized request vote counts:** The `requests` table stores a denormalized `vote_count` column (`integer('vote_count').notNull().default(0)`). Voting mutations (`addVote` and `removeVote`) atomically update `requests.vote_count` using SQL expressions within the same database transaction as the vote record creation or deletion (`onConflictDoNothing()`). Feed and search queries read `requests.vote_count` directly, avoiding costly dynamic `COUNT(*)` subqueries or joins on `votes`.
+2. **Targeted composite indexes:**
+   - `requests(state, created_at DESC)` optimizes state-filtered feed pagination without in-memory sort passes.
+   - `notifications(user_id, type, created_at)` accelerates worker dispatch queries and notification queries without multi-index scans.
+3. **Featured feed caching:** The `/requests/featured` feed endpoint caches responses in Redis with a short TTL (30 seconds) via `RedisService` (`MockRedisService` in test environments per D17). Cache keys incorporate sorting, pagination parameters, and all applied filters (`feed:featured:...`). Cache misses populate the cache transparently, and Redis errors degrade gracefully to direct database queries. Binds #53.

@@ -1,3 +1,4 @@
+import { env as configEnv } from '@together/config';
 import type { S3Client, S3Options } from 'bun';
 
 export interface FileStorage {
@@ -175,42 +176,52 @@ export interface FileStorageOptions {
 }
 
 export function createFileStorage(options: FileStorageOptions = {}): FileStorage {
-	const provider = options.provider ?? process.env.STORAGE_PROVIDER ?? 'mock';
+	const provider =
+		options.provider ?? process.env.STORAGE_PROVIDER ?? configEnv?.STORAGE_PROVIDER ?? 'mock';
 
 	if (provider === 's3') {
 		const bucket =
 			options.bucket ??
 			process.env.STORAGE_BUCKET ??
+			configEnv?.STORAGE_BUCKET ??
 			process.env.S3_BUCKET ??
 			process.env.AWS_BUCKET ??
 			'';
 		const endpoint =
 			options.endpoint ??
 			process.env.STORAGE_ENDPOINT ??
+			configEnv?.STORAGE_ENDPOINT ??
 			process.env.S3_ENDPOINT ??
 			process.env.AWS_ENDPOINT;
 		const accessKeyId =
 			options.accessKeyId ??
 			process.env.STORAGE_ACCESS_KEY_ID ??
+			configEnv?.STORAGE_ACCESS_KEY_ID ??
 			process.env.S3_ACCESS_KEY_ID ??
 			process.env.AWS_ACCESS_KEY_ID;
 		const secretAccessKey =
 			options.secretAccessKey ??
 			process.env.STORAGE_SECRET_ACCESS_KEY ??
+			configEnv?.STORAGE_SECRET_ACCESS_KEY ??
 			process.env.S3_SECRET_ACCESS_KEY ??
 			process.env.AWS_SECRET_ACCESS_KEY;
 		const sessionToken =
 			options.sessionToken ??
 			process.env.STORAGE_SESSION_TOKEN ??
+			configEnv?.STORAGE_SESSION_TOKEN ??
 			process.env.S3_SESSION_TOKEN ??
 			process.env.AWS_SESSION_TOKEN;
 		const region =
 			options.region ??
 			process.env.STORAGE_REGION ??
+			configEnv?.STORAGE_REGION ??
 			process.env.S3_REGION ??
 			process.env.AWS_REGION;
 		const publicUrlBase =
-			options.publicUrlBase ?? process.env.STORAGE_PUBLIC_URL ?? process.env.S3_PUBLIC_URL;
+			options.publicUrlBase ??
+			process.env.STORAGE_PUBLIC_URL ??
+			configEnv?.STORAGE_PUBLIC_URL ??
+			process.env.S3_PUBLIC_URL;
 
 		return new BunS3FileStorage({
 			bucket,

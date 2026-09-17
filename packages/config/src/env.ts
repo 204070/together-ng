@@ -17,6 +17,15 @@ const EnvSchema = Type.Object({
 	TERMII_API_KEY: Type.String({ default: '' }),
 	TERMII_SENDER_ID: Type.String({ default: '' }),
 	REDIS_URL: Type.String({ default: '' }),
+	STORAGE_PROVIDER: Type.Union([Type.Literal('mock'), Type.Literal('s3')], {
+		default: 'mock',
+	}),
+	STORAGE_BUCKET: Type.String({ default: 'together-uploads' }),
+	STORAGE_ENDPOINT: Type.String({ default: '' }),
+	STORAGE_ACCESS_KEY_ID: Type.String({ default: '' }),
+	STORAGE_SECRET_ACCESS_KEY: Type.String({ default: '' }),
+	STORAGE_REGION: Type.String({ default: 'us-east-1' }),
+	STORAGE_PUBLIC_URL: Type.String({ default: '' }),
 });
 
 export type ConfigEnv = Static<typeof EnvSchema>;

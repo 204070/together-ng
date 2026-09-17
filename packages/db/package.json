@@ -13,7 +13,7 @@
 		"db:generate": "bun run ../../scripts/pin-env.ts drizzle-kit generate && bun ./scripts/ensure-extensions.ts",
 		"db:migrate": "bun run ../../scripts/pin-env.ts bun ./src/migrate.ts",
 		"db:seed": "bun run ../../scripts/pin-env.ts bun ./src/seed.ts",
-		"test": "bun run ../../scripts/pin-env.ts bun test",
+		"test": "bun test",
 		"lint": "biome check .",
 		"typecheck": "tsc --noEmit"
 	},

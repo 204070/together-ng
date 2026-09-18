@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { Elysia } from 'elysia';
-import { MockRedisService } from './redis';
+import { MockRedisService } from '../infra/redis';
 import {
 	broadcastVoteToClients,
 	cleanupVoteWs,

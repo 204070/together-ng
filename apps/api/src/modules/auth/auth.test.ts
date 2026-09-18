@@ -1,7 +1,8 @@
 import { describe, expect, setSystemTime, test } from 'bun:test';
-import { count, eq, getDatabase } from '@together/db';
-import { otpTokens, profiles, sessions, users } from '@together/db/schema';
 import { makeApp } from '../../app';
+import { resetTestConfig, setTestConfig } from '../../config';
+import { count, eq, getDatabase } from '../../infra/database';
+import { otpTokens, profiles, sessions, users } from '../../infra/database/schema';
 import type { MockOtpSender } from './otp-sender';
 import type { AuthServices } from './services';
 import { generateOtpCode, hashOtpCode, verifyOtpCode } from './tokens';
@@ -21,9 +22,6 @@ function senderOf(app: App): MockOtpSender {
 function mkApp(): App {
 	return makeApp({
 		db: getDatabase(),
-		otpProvider: 'mock',
-		isProduction: false,
-		jwtSecret: JWT_SECRET,
 	});
 }
 
@@ -415,25 +413,25 @@ describe('POST /auth/login', () => {
 	});
 
 	test('refresh cookie is Secure in production', async () => {
-		const app = makeApp({
-			db: getDatabase(),
-			otpProvider: 'mock',
-			isProduction: true,
-			jwtSecret: JWT_SECRET,
-		});
-		const phone = '+2348012345678';
-		const { otpCode } = await register(app, {
-			email: 'user@x.com',
-			password: 'password123',
-			phone,
-		});
-		await postJson(app, '/auth/verify-otp', { phone, code: otpCode });
+		setTestConfig({ isProduction: true });
+		try {
+			const app = mkApp();
+			const phone = '+2348012345678';
+			const { otpCode } = await register(app, {
+				email: 'user@x.com',
+				password: 'password123',
+				phone,
+			});
+			await postJson(app, '/auth/verify-otp', { phone, code: otpCode });
 
-		const res = await postJson(app, '/auth/login', {
-			email: 'user@x.com',
-			password: 'password123',
-		});
-		expect(res.headers.get('set-cookie') ?? '').toContain('Secure');
+			const res = await postJson(app, '/auth/login', {
+				email: 'user@x.com',
+				password: 'password123',
+			});
+			expect(res.headers.get('set-cookie') ?? '').toContain('Secure');
+		} finally {
+			resetTestConfig();
+		}
 	});
 
 	test('wrong password and unknown email return the same 401 body', async () => {

@@ -129,7 +129,7 @@ a `.env` file, by design - that is what lets containers and CI ship no
 
 Two things guard against that:
 
-- `@together/config`'s `loadEnv()` (`_docs/decisions.md`, D6) loads the
+- The API's `loadEnv()` (`apps/api/src/lib/config/loadEnv.ts`, `_docs/decisions.md`, D6) loads the
   worktree's `.env` with `override: true`, so in-process runtime and migration
   scripts automatically use the worktree's assigned database and ports, even
   if the parent terminal exported ambient variables. It stands down when no
@@ -139,7 +139,7 @@ Two things guard against that:
   A worktree's `.env.test` isolates its `together_wt<issue>_test` database.
 
 The setup is not complete until
-`bun -e "import { loadEnv, env } from '@together/config'; loadEnv(); console.log(env.DATABASE_URL)"`
+`bun -e "import { loadEnv } from './apps/api/src/lib/config/loadEnv'; loadEnv(); console.log(process.env.DATABASE_URL)"`
 prints the worktree's own database URL. Check it before an agent starts,
 not after it reports a mysterious failure.
 

@@ -9,7 +9,7 @@ import {
 	sql,
 	type User,
 	users,
-} from '@together/db';
+} from '../../infra/database';
 
 export class AuthStore {
 	constructor(private readonly db: Db) {}

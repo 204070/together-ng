@@ -41,8 +41,8 @@ bun install
 ### 3. Set up the database
 
 ```bash
-bun run --filter @together/db db:migrate
-bun run --filter @together/db db:seed
+bun run --filter @together/api db:migrate
+bun run --filter @together/api db:seed
 ```
 
 Migrations create all tables. Seed populates 17 categories (Education, Technology, Science, etc.) that you'll select when creating requests and profiles.
@@ -382,7 +382,7 @@ At each state, different actions are available:
 | Problem | Fix |
 |---|---|
 | "Feed unavailable" on homepage | Ensure the API is running on port 4000. Check `docker compose ps` for Postgres/Redis. |
-| Categories don't load in onboarding | Run `bun run --filter @together/db db:seed` to populate categories. |
+| Categories don't load in onboarding | Run `bun run --filter @together/api db:seed` to populate categories. |
 | Registration fails silently | Check API server logs for error messages. |
 | Cannot vote on own request | This is expected — use a second account. |
 | OTP code not working | In development, check API terminal output for the mock OTP code. It's typically `000000`. |

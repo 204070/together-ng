@@ -16,7 +16,6 @@
 	},
 	"devDependencies": {
 		"@testing-library/react": "^16.3.3",
-		"@together/config": "workspace:*",
 		"@types/react": "^19",
 		"@types/react-dom": "^19",
 		"jsdom": "^30.0.1",

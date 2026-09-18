@@ -1,4 +1,4 @@
-import { env } from '@together/config';
+import { getApiConfig, type OtpConfig } from '../../config';
 
 export interface OtpSender {
 	sendOtp(phone: string, code: string): Promise<void>;
@@ -41,9 +41,10 @@ export class TermiiOtpSender implements OtpSender {
 	}
 }
 
-export function createOtpSender(provider: string): OtpSender {
-	if (provider === 'termii') {
-		return new TermiiOtpSender(env.TERMII_API_KEY, env.TERMII_SENDER_ID);
+export function createOtpSender(): OtpSender {
+	const { otp } = getApiConfig();
+	if (otp.provider === 'termii') {
+		return new TermiiOtpSender(otp.termii.apiKey, otp.termii.senderId);
 	}
 	return new MockOtpSender();
 }

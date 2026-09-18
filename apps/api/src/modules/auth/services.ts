@@ -1,6 +1,7 @@
-import type { Db } from '@together/db';
+import { getApiConfig } from '../../config';
+import type { Db } from '../../infra/database';
 import { FixedWindowRateLimiter } from '../../lib/rate-limit';
-import type { OtpSender } from './otp-sender';
+import { createOtpSender, type OtpSender } from './otp-sender';
 import { AuthStore } from './store';
 
 export const LOGIN_WINDOW_MS = 60_000;
@@ -25,9 +26,7 @@ export interface AuthServices {
 
 export interface AuthServicesConfig {
 	db: Db;
-	jwtSecret: string;
-	isProduction: boolean;
-	otpSender: OtpSender;
+	otpSender?: OtpSender;
 	limiters?: {
 		login: FixedWindowRateLimiter;
 		otpSend: FixedWindowRateLimiter;
@@ -36,12 +35,13 @@ export interface AuthServicesConfig {
 }
 
 export function createAuthServices(config: AuthServicesConfig): AuthServices {
+	const apiConfig = getApiConfig();
 	return {
 		db: config.db,
 		store: new AuthStore(config.db),
-		jwtSecret: config.jwtSecret,
-		isProduction: config.isProduction,
-		otpSender: config.otpSender,
+		jwtSecret: apiConfig.jwtSecret,
+		isProduction: apiConfig.isProduction,
+		otpSender: config.otpSender ?? createOtpSender(),
 		limiters: config.limiters ?? {
 			login: new FixedWindowRateLimiter(LOGIN_WINDOW_MS, LOGIN_MAX_HITS),
 			otpSend: new FixedWindowRateLimiter(OTP_SEND_WINDOW_MS, OTP_SEND_MAX_HITS),

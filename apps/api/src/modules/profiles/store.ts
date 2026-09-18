@@ -6,7 +6,7 @@ import {
 	type Profile,
 	profiles,
 	sql,
-} from '@together/db';
+} from '../../infra/database';
 
 export class ProfileStore {
 	constructor(private readonly db: Db) {}

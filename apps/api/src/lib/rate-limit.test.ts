@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
+import { MockRedisService, type RedisConnection } from '../infra/redis';
 import { FixedWindowRateLimiter, RedisRateLimiter } from './rate-limit';
-import { MockRedisService, type RedisConnection } from './redis';
 
 describe('FixedWindowRateLimiter', () => {
 	test('allows up to maxHits within a window, then blocks with retry info', () => {

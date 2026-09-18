@@ -73,7 +73,7 @@ spawn subshells and override variables. This introduced unnecessary process
 wrapping and duplicate custom `.env` parsers.
 
 The architecture now handles this cleanly and natively:
-1. `@together/config`'s `loadEnv()` loads the working directory's `.env`
+1. The API's `loadEnv()` (in `apps/api/src/lib/config/loadEnv.ts`) loads the working directory's `.env`
    file (if present) with `override: true` so worktree databases and ports
    supersede any ambient shell variables directly in-process. In CI and
    containers where no `.env` file exists, ambient environment variables are

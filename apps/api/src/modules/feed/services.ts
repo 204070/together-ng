@@ -1,5 +1,6 @@
-import type { Db } from '@together/db';
-import { createRedisService, MockRedisService, type RedisService } from '../../lib/redis';
+import { getApiConfig } from '../../config';
+import type { Db } from '../../infra/database';
+import { createRedisService, MockRedisService, type RedisService } from '../../infra/redis';
 import {
 	type CategoryFeedResponse,
 	type FeedResponse,
@@ -19,10 +20,11 @@ let defaultRedis: RedisService | null = null;
 
 export function getFeedRedis(): RedisService {
 	if (!defaultRedis) {
-		if (process.env.NODE_ENV === 'test') {
+		const config = getApiConfig();
+		if (config.isTest) {
 			defaultRedis = new MockRedisService();
 		} else {
-			defaultRedis = createRedisService();
+			defaultRedis = createRedisService(config.redisUrl);
 		}
 	}
 	return defaultRedis;

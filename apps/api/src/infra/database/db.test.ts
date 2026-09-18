@@ -1,11 +1,9 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import { env, loadEnv } from '@together/config';
 import { Pool } from 'pg';
+import { getApiConfig } from '../../lib/config';
 import { CATEGORIES, migrate, seedCategories } from './index';
 
-loadEnv();
-
-const databaseUrl = env.DATABASE_URL;
+const databaseUrl = getApiConfig().database.url;
 
 describe('database schema and migrations', () => {
 	const pool = new Pool({ connectionString: databaseUrl, max: 10 });

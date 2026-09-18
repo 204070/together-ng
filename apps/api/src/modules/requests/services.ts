@@ -1,4 +1,3 @@
-import type { NewNotification } from '@together/db';
 import type {
 	OfferAction,
 	OfferCreate,
@@ -6,9 +5,9 @@ import type {
 	RequestPatch,
 	Static,
 } from '@together/schemas';
+import type { NewNotification } from '../../infra/database';
 import { HttpError } from '../../lib/errors';
 import type { RateLimitDecision } from '../../lib/rate-limit';
-import type { RedisService } from '../../lib/redis';
 import { publishVoteUpdate } from '../../lib/vote-ws';
 import type { MatchingService } from '../../worker/matching';
 import type { NotificationService } from '../notifications/services';
@@ -556,7 +555,7 @@ export class RequestService {
 		return toOfferResponse(declined);
 	}
 
-	async vote(requestId: string, userId: string, redis?: RedisService) {
+	async vote(requestId: string, userId: string) {
 		await this.checkRateLimit(`vote:${userId}`);
 		const row = await this.store.findRequestById(requestId);
 		if (!row) throw notFound();
@@ -574,11 +573,11 @@ export class RequestService {
 		if (!inserted) throw duplicateVote();
 
 		const voteCount = await this.store.countVotes(requestId);
-		await publishVoteUpdate(requestId, voteCount, redis);
+		await publishVoteUpdate(requestId, voteCount);
 		return { voteCount, hasVoted: true };
 	}
 
-	async removeVote(requestId: string, userId: string, redis?: RedisService) {
+	async removeVote(requestId: string, userId: string) {
 		await this.checkRateLimit(`vote:${userId}`);
 		const row = await this.store.findRequestById(requestId);
 		if (!row) throw notFound();
@@ -590,7 +589,7 @@ export class RequestService {
 		if (!removed) throw voteNotFound();
 
 		const voteCount = await this.store.countVotes(requestId);
-		await publishVoteUpdate(requestId, voteCount, redis);
+		await publishVoteUpdate(requestId, voteCount);
 		return { voteCount, hasVoted: false };
 	}
 }

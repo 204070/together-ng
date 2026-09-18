@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const migrationsDir = resolve(import.meta.dir, '../drizzle');
+const migrationsDir = resolve(import.meta.dir, '../src/infra/database/migrations');
 
 const EXTENSIONS = ['vector', 'pg_trgm'];
 

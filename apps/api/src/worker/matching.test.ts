@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import type { makeApp } from '../app';
 import {
 	and,
 	asc,
@@ -13,8 +14,7 @@ import {
 	outcomeConfirmations,
 	requestMatches,
 	sql,
-} from '@together/db';
-import type { makeApp } from '../app';
+} from '../infra/database';
 import { createMatchingQueue, MATCHING_QUEUE } from '../queue';
 import {
 	addCapability,

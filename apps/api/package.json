@@ -6,18 +6,25 @@
 	"dependencies": {
 		"@elysiajs/eden": "^1.4.9",
 		"@elysiajs/jwt": "^1.4.2",
-		"@together/config": "workspace:*",
-		"@together/db": "workspace:*",
 		"@together/schemas": "workspace:*",
 		"bullmq": "^5.41.0",
-		"elysia": "^1.4.30"
+		"dotenv": "^16.4.7",
+		"drizzle-orm": "^0.45.2",
+		"elysia": "^1.4.30",
+		"pg": "^8.16.0"
 	},
-	"devDependencies": {},
+	"devDependencies": {
+		"@types/pg": "^8.15.4",
+		"drizzle-kit": "^0.31.10"
+	},
 	"scripts": {
 		"dev": "bun run src/index.ts",
 		"worker": "bun run src/worker/runner.ts",
 		"build": "bun build ./src/index.ts --outdir ./dist",
 		"start": "bun run ./dist/index.js",
+		"db:generate": "drizzle-kit generate && bun ./scripts/ensure-extensions.ts",
+		"db:migrate": "bun ./src/infra/database/migrate.ts",
+		"db:seed": "bun ./src/infra/database/seed.ts",
 		"lint": "biome check .",
 		"typecheck": "tsc --noEmit",
 		"test": "bun test"

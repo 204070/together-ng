@@ -1,4 +1,4 @@
-import type { RedisConnection, RedisService } from './redis';
+import type { RedisConnection, RedisService } from '../infra/redis';
 
 export interface RateLimitDecision {
 	allowed: boolean;

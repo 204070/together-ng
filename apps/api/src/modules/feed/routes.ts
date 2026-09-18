@@ -1,6 +1,6 @@
-import type { Db } from '@together/db';
 import { Elysia, t } from 'elysia';
-import type { RedisService } from '../../lib/redis';
+import type { Db } from '../../infra/database';
+import type { RedisService } from '../../infra/redis';
 import type { AuthServices } from '../auth/services';
 import { createFeedService, FeedService } from './services';
 

@@ -1,5 +1,6 @@
-import { describe, expect, mock, test } from 'bun:test';
+import { afterAll, describe, expect, mock, test } from 'bun:test';
 import type { S3Client } from 'bun';
+import { resetTestConfig, setTestConfig } from '../config';
 import {
 	BunS3FileStorage,
 	buildAttachmentKey,
@@ -9,8 +10,6 @@ import {
 	createFileStorage,
 	fileStorage,
 	MockFileStorage,
-	MockPhotoStorage,
-	photoStorage,
 } from './storage';
 
 describe('MockFileStorage', () => {
@@ -222,46 +221,53 @@ describe('BunS3FileStorage', () => {
 });
 
 describe('createFileStorage selection', () => {
-	const originalEnv = process.env.STORAGE_PROVIDER;
-
-	test('defaults to MockFileStorage when STORAGE_PROVIDER is not set (D17)', () => {
-		delete process.env.STORAGE_PROVIDER;
-		const storage = createFileStorage();
-		expect(storage).toBeInstanceOf(MockFileStorage);
-	});
-
-	test('selects MockFileStorage when STORAGE_PROVIDER=mock', () => {
-		process.env.STORAGE_PROVIDER = 'mock';
+	test('defaults to MockFileStorage when STORAGE_PROVIDER is mock (D17)', () => {
+		setTestConfig({
+			storage: {
+				provider: 'mock',
+				bucket: 'test-bucket',
+				region: 'us-east-1',
+			},
+		});
 		const storage = createFileStorage();
 		expect(storage).toBeInstanceOf(MockFileStorage);
 	});
 
 	test('selects BunS3FileStorage when STORAGE_PROVIDER=s3', () => {
-		process.env.STORAGE_PROVIDER = 's3';
-		process.env.STORAGE_BUCKET = 'env-bucket';
+		setTestConfig({
+			storage: {
+				provider: 's3',
+				bucket: 'env-bucket',
+				region: 'us-east-1',
+			},
+		});
 		const storage = createFileStorage();
 		expect(storage).toBeInstanceOf(BunS3FileStorage);
-		delete process.env.STORAGE_BUCKET;
 	});
 
-	test('allows explicit provider override in options', () => {
-		const mockStorage = createFileStorage({ provider: 'mock' });
-		expect(mockStorage).toBeInstanceOf(MockFileStorage);
-
-		const s3Storage = createFileStorage({
-			provider: 's3',
-			bucket: 'custom-bucket',
-			client: {} as unknown as S3Client,
+	test('switches storage provider based on central config', () => {
+		setTestConfig({
+			storage: {
+				provider: 'mock',
+				bucket: 'test-bucket',
+				region: 'us-east-1',
+			},
 		});
-		expect(s3Storage).toBeInstanceOf(BunS3FileStorage);
+		expect(createFileStorage()).toBeInstanceOf(MockFileStorage);
+
+		setTestConfig({
+			storage: {
+				provider: 's3',
+				bucket: 'custom-bucket',
+				region: 'us-east-1',
+			},
+		});
+		expect(createFileStorage()).toBeInstanceOf(BunS3FileStorage);
 	});
 
-	// Restore env
-	if (originalEnv !== undefined) {
-		process.env.STORAGE_PROVIDER = originalEnv;
-	} else {
-		delete process.env.STORAGE_PROVIDER;
-	}
+	afterAll(() => {
+		resetTestConfig();
+	});
 });
 
 describe('Key generation helpers', () => {
@@ -298,16 +304,5 @@ describe('Key generation helpers', () => {
 	test('buildFileKey creates generic key with given prefix', () => {
 		const key = buildFileKey('documents', 'doc-789', '.txt');
 		expect(key).toMatch(/^documents\/doc-789\/[0-9a-f-]+\.txt$/);
-	});
-});
-
-describe('Backwards compatibility exports', () => {
-	test('MockPhotoStorage is alias of MockFileStorage', () => {
-		const storage = new MockPhotoStorage();
-		expect(storage).toBeInstanceOf(MockFileStorage);
-	});
-
-	test('photoStorage is alias of fileStorage', () => {
-		expect(photoStorage).toBe(fileStorage);
 	});
 });

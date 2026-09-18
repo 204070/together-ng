@@ -72,9 +72,9 @@ An issue may enter a wave only when all of these hold:
 
 - Every issue it depends on is closed and merged into main
 - No other issue in the same wave adds a migration. All schema lives in
-  one `packages/db` migration history, so two issues that both add
-  migrations in the same wave conflict at merge no matter which tables
-  they touch (`_docs/decisions.md`, D2)
+  one `apps/api/src/infra/database` migration history, so two issues that
+  both add migrations in the same wave conflict at merge no matter which
+  tables they touch (`_docs/decisions.md`, D2)
 - The orchestrator has read its Constraints section and knows which
   shared files it will touch (`_docs/decisions.md`, D8)
 
@@ -116,7 +116,7 @@ credentials, and see D17 for why none of them should be called for real
 during a test run anyway.
 
 The database part is not optional. `.env` is git-ignored and
-`packages/db/src/client.ts` reads it, so each worktree gets its own
+`apps/api/src/infra/database/client.ts` reads it, so each worktree gets its own
 development and test databases. Two worktrees sharing one `DATABASE_URL`
 will run migrations or truncate tables underneath each other, and the
 failures look like impossible bugs in the code rather than what they are.
@@ -246,7 +246,7 @@ Branches merge one at a time, never in parallel, in dependency order:
 1. Rebase the branch on current main
 2. Run the whole suite, the linter, and the migration check again, in
    the worktree, after the rebase: `bun run test`, `bun run lint`,
-   and `bun run db:generate` followed by `git status packages/db/migrations`
+   and `bun run db:generate` followed by `git status apps/api/src/infra/database/migrations`
    to confirm nothing new and uncommitted came out of it
 3. If the branch touches auth or value-bearing logic (`_docs/decisions.md`,
    D9), the orchestrator opens a pull request from that branch against
@@ -334,7 +334,7 @@ stale copy on origin is superseded the moment main moves, and a stale
 branch costs nothing while a blocked push costs the whole run.
 
 Conflicts concentrate in a few shared files - `packages/schemas/src/index.ts`,
-`packages/db/src/schema.ts`, `apps/web/src/router.tsx`,
+`apps/api/src/infra/database/schema/`, `apps/web/src/router.tsx`,
 `apps/admin/src/router.tsx`, `AGENTS.md`, `.env.example`
 (`_docs/decisions.md`, D8). The orchestrator resolves them at
 integration. An engineer who finds a conflict is looking at a stale

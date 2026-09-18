@@ -8,7 +8,7 @@ You implement one groomed task at a time.
 - Write tests for what you built - `bun test` for logic in `apps/api` and
   `packages/*`, Vitest + Testing Library for components in `apps/web` or
   `apps/admin` (`_docs/decisions.md`, D1)
-- A schema change goes through packages/db and ships a generated migration in the same commit as the code that needs it - never a hand-edited migration file, and always named explicitly: bun run db:generate --name <description>, never a bare bun run db:generate left to produce an auto-generated name (_docs/decisions.md, D18)
+- A schema change goes through `apps/api/src/infra/database/` and ships a generated migration in the same commit as the code that needs it - never a hand-edited migration file, and always named explicitly: `bun run db:generate --name <description>`, never a bare `bun run db:generate` left to produce an auto-generated name (`_docs/decisions.md`, D18)
 - Maintain clean 3-tier module boundaries (_docs/decisions.md, D25, D29): route files (`routes.ts`) are HTTP transport only (parameter unpacking, auth checks, delegating to service, status codes). Never put business logic, state machine checks, raw DB queries (like `db.insert(notifications)`), or text algorithms in route controllers. Put domain workflows and notifications in services (`services.ts`), and queries in stores (`store.ts`)
 - Centralize wire validation (_docs/decisions.md, D29): never duplicate `collectIssues` or manual schema verification in route files. Use `apps/api/src/lib/validation.ts` helpers (`validateSchema`, `collectValidationIssues`). Never use magic numbers for TypeBox error codes
 - Separate perimeter auth from domain services (_docs/decisions.md, D29): domain services must not take or expose perimeter auth concerns (`findUserById`, `jwtSecret`). Pass domain services to routers, and pass perimeter auth context (`auth: { findUserById, jwtSecret }`) to routers for mounting auth guards
@@ -64,7 +64,7 @@ Definition of done:
 - Every acceptance criterion in the issue is implemented
 - Tests are written for the new behaviour, and the whole suite passes -
   `bun run test`, not just the package you touched, since a change to
-  `packages/schemas` or `packages/db` can break another app silently
+  `packages/schemas` or `apps/api/src/infra/database` can break other apps silently
 - `bun run lint` is clean
 - Clean 3-tier boundary maintained: no business logic or raw SQL queries in route files (_docs/decisions.md, D25, D29)
 - A new setting has a new env var and a line in `.env.example` - never a

@@ -18,10 +18,10 @@ worth it to avoid forcing React component tests through a runner that isn't
 built for them. `bun run test` at the repo root fans out to both via
 Turborepo, so nobody has to remember which package uses which.
 
-## D2. Migrations live in one place: `packages/db`
+## D2. Migrations live in one place: `apps/api/src/infra/database`
 
-All schema and migrations live in `packages/db`, managed by Drizzle Kit, as a
-single migration history.
+All schema and migrations live in `apps/api/src/infra/database/`, managed by
+Drizzle Kit, as a single migration history.
 
 Consequence: **at most one issue per wave may add a migration.** Two issues
 that both add migrations in the same wave will conflict at merge regardless
@@ -99,8 +99,9 @@ merged and stable. A task that touches these before then gets pushed to a
 The files most likely to collide across parallel branches, and therefore the
 ones the orchestrator reads each issue's Constraints section for before
 placing it in a wave: `packages/schemas/src/index.ts`,
-`packages/db/src/schema.ts` (and anything under `packages/db/migrations`, see
-D2), `apps/web/src/router.tsx`, `apps/admin/src/router.tsx`, `.env.example`,
+`apps/api/src/infra/database/schema/` (and anything under
+`apps/api/src/infra/database/migrations/`, see D2),
+`apps/web/src/router.tsx`, `apps/admin/src/router.tsx`, `.env.example`,
 and `AGENTS.md`.
 
 ## D9. CI is a real, independent gate - not a restatement of QA
@@ -124,7 +125,7 @@ than waiting for CI. CI is the backstop for when it doesn't.
 
 **Sensitive-path review is two tiers, not one.** An issue whose Constraints
 or actual diff touches private/contact fields anywhere in
-`packages/schemas` or `packages/db/src/schema.ts`, or admin/moderation
+`packages/schemas` or `apps/api/src/infra/database/schema/`, or admin/moderation
 actions (`apps/admin`, anything that should write to `audit_log`), gets a
 checklist pass before merge: no private field added to a public response
 shape, no admin or moderation action that skips `audit_log`. This is
@@ -191,8 +192,8 @@ Emails are stored lowercased and trimmed (normalization happens at registration 
 No test - `bun test` or `vitest`, local or in CI - makes a live call to the
 Claude API, the SMS/WhatsApp aggregator, the email provider, or object
 storage. Every one of these is mocked or stubbed at the boundary
-(`packages/db`'s test setup and `apps/api`'s test fixtures own these mocks
-so every app's suite gets them the same way).
+(`apps/api`'s test setup and test fixtures own these mocks
+so every suite gets them the same way).
 
 Reason: these are exactly the features D7 defers until later, but the
 decision is cheap to make now, before any test that could violate it exists.
@@ -234,13 +235,13 @@ Reason: Argon2id is intentionally CPU- and memory-expensive to resist offline br
 
 ## D23. Exclusive Drizzle Query Builder: Zero raw SQL, schema-first compile-time type safety
 
-All database queries across stores, services, routes, and workers must strictly use the Drizzle ORM query builder (`db.select()`, `db.insert()`, `db.update()`, `db.delete()`) and typed operators (`eq`, `and`, `or`, `inArray`, `notInArray`, `desc`, `asc`, etc.) re-exported from `@together/db`. Raw SQL tagged templates (`sql\`...\``) and raw query strings are strictly forbidden for application logic and queries.
+All database queries across stores, services, routes, and workers must strictly use the Drizzle ORM query builder (`db.select()`, `db.insert()`, `db.update()`, `db.delete()`) and typed operators (`eq`, `and`, `or`, `inArray`, `notInArray`, `desc`, `asc`, etc.) re-exported from `apps/api/src/infra/database`. Raw SQL tagged templates (`sql\`...\``) and raw query strings are strictly forbidden for application logic and queries.
 
 Reason: Raw SQL creates schema drift where database schema updates fail silently at compile time and only explode at runtime. It forces brittle, repetitive manual column mapping (`snake_case` to `camelCase`), breaks query composition, and introduces subtle bugs from JavaScript operator confusion (e.g. using `&&` instead of Drizzle's `and()`, which drops query predicates silently). Drizzle query builder enforces schema-first type safety, automatically maps column names, and validates query structures at build time. Specialized raw SQL fragments are permitted only inside Drizzle's `sql` helper for PostgreSQL-specific constructs (e.g., `tsvector`, full-text search rankings, vector distance calculations) where no builder method exists. Settled in #39.
 
 ## D24. Unified database connection pool: Single client lifecycle, zero redundant pools
 
-The application, background workers, and service factories share a single Drizzle database instance (`Db`) backed by `node-postgres` (`pg.Pool`), initialized via `packages/db/src/client.ts`. Service factories accept `{ db: Db }` as a dependency. The legacy `Sql` client (`postgres.js` tagged template client), `createClient()`, and `env.sql` plumbing are deprecated and removed.
+The application, background workers, and service factories share a single Drizzle database instance (`Db`) backed by `node-postgres` (`pg.Pool`), initialized via `apps/api/src/infra/database/client.ts`. Service factories accept `{ db: Db }` as a dependency. The legacy `Sql` client (`postgres.js` tagged template client), `createClient()`, and `env.sql` plumbing are deprecated and removed.
 
 Reason: Creating separate connection pools for raw `sql` and Drizzle `db` doubled connection consumption, quickly exhausting PostgreSQL connection pool limits (capped at 10 connections) and leaving idle connection pools sitting in production memory. In addition, service factories and individual test suites must never manage or terminate the shared pool lifecycle. Connection pool shutdown (`getPool().end()`) is owned exclusively by the process entrypoint (`apps/api/src/index.ts`, worker runners, or the global test harness). Binds #40.
 

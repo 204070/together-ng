@@ -117,7 +117,7 @@ describe('CategoryStep', () => {
 
 	test('shows search input when more than 10 categories', () => {
 		const manyCategories = Array.from({ length: 15 }, (_, i) => ({
-			...mockCategories[0],
+			...mockCategories[0]!,
 			id: i + 1,
 			name: `Category ${i + 1}`,
 		}));
@@ -136,7 +136,7 @@ describe('CategoryStep', () => {
 	test('search filters categories', () => {
 		cleanup();
 		const manyCategories = Array.from({ length: 15 }, (_, i) => ({
-			...mockCategories[0],
+			...mockCategories[0]!,
 			id: i + 1,
 			name: `Category ${i + 1}`,
 		}));
@@ -158,7 +158,7 @@ describe('CategoryStep', () => {
 	test('no match message shown when search has no results', () => {
 		cleanup();
 		const manyCategories = Array.from({ length: 15 }, (_, i) => ({
-			...mockCategories[0],
+			...mockCategories[0]!,
 			id: i + 1,
 			name: `Category ${i + 1}`,
 		}));
@@ -192,7 +192,7 @@ describe('CategoryStep', () => {
 	});
 
 	test('shows retired category warning', () => {
-		const retiredCategory = { ...mockCategories[0], retiredAt: '2024-06-01T00:00:00Z' };
+		const retiredCategory = { ...mockCategories[0]!, retiredAt: '2024-06-01T00:00:00Z' };
 		render(
 			<CategoryStep
 				categories={[retiredCategory]}
@@ -325,11 +325,11 @@ describe('INITIAL_WIZARD_DATA', () => {
 describe('WIZARD_STEPS', () => {
 	test('has 6 steps in correct order', () => {
 		expect(WIZARD_STEPS.length).toBe(6);
-		expect(WIZARD_STEPS[0].key).toBe('category');
-		expect(WIZARD_STEPS[1].key).toBe('goal');
-		expect(WIZARD_STEPS[2].key).toBe('barrier');
-		expect(WIZARD_STEPS[3].key).toBe('helpNeeded');
-		expect(WIZARD_STEPS[4].key).toBe('optionalDetails');
-		expect(WIZARD_STEPS[5].key).toBe('preview');
+		expect(WIZARD_STEPS[0]!.key).toBe('category');
+		expect(WIZARD_STEPS[1]!.key).toBe('goal');
+		expect(WIZARD_STEPS[2]!.key).toBe('barrier');
+		expect(WIZARD_STEPS[3]!.key).toBe('helpNeeded');
+		expect(WIZARD_STEPS[4]!.key).toBe('optionalDetails');
+		expect(WIZARD_STEPS[5]!.key).toBe('preview');
 	});
 });

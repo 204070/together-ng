@@ -30,7 +30,7 @@ async function createContributionFixture(
 			status: status as 'accepted' | 'in_progress' | 'completed' | 'cancelled',
 		})
 		.returning();
-	return row.id;
+	return row!.id;
 }
 
 describe('GET /contributions/:id', () => {
@@ -245,7 +245,7 @@ describe('POST /contributions/:id/complete', () => {
 				),
 			);
 		expect(notification).toBeDefined();
-		expect(notification.title).toBe('Contribution completed');
+		expect(notification!.title).toBe('Contribution completed');
 	});
 
 	test('unauthenticated user gets 401', async () => {
@@ -463,7 +463,7 @@ describe('POST /contributions/:id/confirm', () => {
 			.from(contributorConfirmations)
 			.where(eq(contributorConfirmations.contributionId, contributionId));
 		expect(confirmation).toBeDefined();
-		expect(confirmation.completedAsAgreed).toBe(true);
+		expect(confirmation!.completedAsAgreed).toBe(true);
 	});
 });
 
@@ -660,7 +660,7 @@ describe('POST /contributions/:id/outcome', () => {
 			.from(outcomeConfirmations)
 			.where(eq(outcomeConfirmations.contributionId, contributionId));
 		expect(outcome).toBeDefined();
-		expect(outcome.response).toBe('yes_significantly');
+		expect(outcome!.response).toBe('yes_significantly');
 	});
 });
 

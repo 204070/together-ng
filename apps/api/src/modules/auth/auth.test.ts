@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, setSystemTime, test } from 'bun:test';
 import { count, eq, getDatabase } from '@together/db';
 import { otpTokens, profiles, sessions, users } from '@together/db/schema';
 import { makeApp } from '../../app';
@@ -18,13 +18,12 @@ function senderOf(app: App): MockOtpSender {
 	return servicesOf(app).otpSender as MockOtpSender;
 }
 
-function mkApp(now?: () => Date): App {
+function mkApp(): App {
 	return makeApp({
 		db: getDatabase(),
 		otpProvider: 'mock',
 		isProduction: false,
 		jwtSecret: JWT_SECRET,
-		now,
 	});
 }
 
@@ -285,19 +284,23 @@ describe('OTP send and verify', () => {
 
 	test('code past the 5-minute TTL returns 410 OTP_EXPIRED', async () => {
 		const base = new Date('2026-01-01T00:00:00Z');
-		let now = base;
-		const app = mkApp(() => now);
+		setSystemTime(base);
+		try {
+			const app = mkApp();
 
-		const { body, otpCode } = await register(app, {
-			email: 'user@x.com',
-			password: 'password123',
-			phone: '+2348012345678',
-		});
+			const { body, otpCode } = await register(app, {
+				email: 'user@x.com',
+				password: 'password123',
+				phone: '+2348012345678',
+			});
 
-		now = new Date(base.getTime() + 301_000);
-		const res = await postJson(app, '/auth/verify-otp', { phone: body.phone, code: otpCode });
-		expect(res.status).toBe(410);
-		expect((await readBody(res)).error).toBe('OTP_EXPIRED');
+			setSystemTime(new Date(base.getTime() + 301_000));
+			const res = await postJson(app, '/auth/verify-otp', { phone: body.phone, code: otpCode });
+			expect(res.status).toBe(410);
+			expect((await readBody(res)).error).toBe('OTP_EXPIRED');
+		} finally {
+			setSystemTime();
+		}
 	});
 
 	test('a code with 5 wrong attempts is bricked', async () => {

@@ -207,8 +207,8 @@ describe('POST /requests/:id/offers', () => {
 				and(eq(requestResponses.requestId, requestId), eq(requestResponses.contributorId, user.id)),
 			);
 		expect(result).toBeDefined();
-		expect(result.message).toBe('Test offer');
-		expect(result.status).toBe('pending');
+		expect(result!.message).toBe('Test offer');
+		expect(result!.status).toBe('pending');
 	});
 });
 
@@ -272,7 +272,7 @@ describe('GET /requests/:id/offers', () => {
 		expect(res.status).toBe(200);
 		const body = (await res.json()) as { offers: Array<Record<string, unknown>>; total: number };
 		expect(body.offers).toHaveLength(1);
-		expect(body.offers[0].message).toBe('Offer 1');
+		expect(body.offers[0]!.message).toBe('Offer 1');
 		expect(body.total).toBe(1);
 	});
 
@@ -424,7 +424,7 @@ describe('POST /requests/:id/offers/:offerId/accept', () => {
 				),
 			);
 		expect(notification).toBeDefined();
-		expect(notification.title).toBe('Your offer was accepted');
+		expect(notification!.title).toBe('Your offer was accepted');
 	});
 
 	test('non-owner cannot accept an offer', async () => {
@@ -562,7 +562,7 @@ describe('POST /requests/:id/offers/:offerId/decline', () => {
 				),
 			);
 		expect(notification).toBeDefined();
-		expect(notification.title).toBe('Your offer was declined');
+		expect(notification!.title).toBe('Your offer was declined');
 	});
 
 	test('non-owner cannot decline an offer', async () => {
@@ -682,8 +682,8 @@ describe('Offer flow integration', () => {
 		expect(listBody.offers).toHaveLength(2);
 
 		// Accept one, decline the other
-		const offer1 = listBody.offers[0];
-		const offer2 = listBody.offers[1];
+		const offer1 = listBody.offers[0]!;
+		const offer2 = listBody.offers[1]!;
 
 		await app.handle(
 			new Request(`http://localhost/requests/${requestId}/offers/${offer1.id}/accept`, {

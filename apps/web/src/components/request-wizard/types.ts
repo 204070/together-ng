@@ -50,7 +50,7 @@ export interface DraftResponse {
 	underReview: boolean;
 	createdAt: string;
 	updatedAt: string;
-	qualityHints: string[];
+	qualityHints?: string[];
 }
 
 export interface PreviewData {

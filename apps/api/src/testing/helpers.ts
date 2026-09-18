@@ -8,7 +8,7 @@ import {
 	users,
 } from '@together/db/schema';
 import { makeApp } from '../app';
-import type { AppEnv } from '../modules/auth/services';
+import type { AppEnv } from '../env';
 
 export const DEFAULT_PASSWORD = 'password123';
 export const DEFAULT_PASSWORD_HASH =

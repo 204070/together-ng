@@ -14,16 +14,16 @@ import { OnboardingPage } from '../routes/onboarding';
 
 afterEach(() => cleanup());
 
-function renderOnboarding(authData: { user: unknown; profile: unknown }) {
+function renderOnboarding(authData: unknown) {
 	// Create a route tree with OnboardingPage that passes auth as props
 	const { createRootRoute, createRoute } = require('@tanstack/react-router');
 	const rootRoute = createRootRoute({
-		component: () => <OnboardingPage auth={authData} />,
+		component: () => <OnboardingPage auth={authData as never} />,
 	});
 	const onbRoute = createRoute({
 		getParentRoute: () => rootRoute,
 		path: '/onboarding',
-		component: () => <OnboardingPage auth={authData} />,
+		component: () => <OnboardingPage auth={authData as never} />,
 	});
 	const router = createRouter({
 		routeTree: rootRoute.addChildren([onbRoute]),

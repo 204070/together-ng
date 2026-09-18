@@ -5,13 +5,13 @@ import { registerFn, sendOtpFn, verifyOtpFn } from '../../lib/server';
 
 export const Route = createFileRoute('/auth/register')({
 	component: RegisterPage,
-	validateSearch: (search: Record<string, unknown>) => ({
-		returnUrl: typeof search.returnUrl === 'string' ? search.returnUrl : '/onboarding',
+	validateSearch: (search: Record<string, unknown>): { returnUrl?: string } => ({
+		returnUrl: typeof search.returnUrl === 'string' ? search.returnUrl : undefined,
 	}),
 });
 
 function RegisterPage() {
-	const { returnUrl } = Route.useSearch();
+	const { returnUrl = '/onboarding' } = Route.useSearch();
 	const navigate = useNavigate();
 	const [method, setMethod] = useState<'email' | 'phone'>('email');
 

@@ -79,6 +79,32 @@ export class NotificationStore {
 			.set({ readAt: new Date() })
 			.where(and(eq(notifications.userId, userId), isNull(notifications.readAt)));
 	}
+
+	async create(entry: {
+		userId: string;
+		requestId?: string | null;
+		type: string;
+		title: string;
+		body?: string | null;
+		data?: Record<string, unknown> | null;
+	}): Promise<NotificationRow | undefined> {
+		const [row] = await this.db
+			.insert(notifications)
+			.values({
+				userId: entry.userId,
+				requestId: entry.requestId ?? null,
+				type: entry.type as typeof notifications.$inferInsert.type,
+				title: entry.title,
+				body: entry.body ?? null,
+				data: entry.data ?? null,
+				createdAt: new Date(),
+			})
+			.onConflictDoNothing({
+				target: [notifications.requestId, notifications.userId],
+			})
+			.returning();
+		return row ? toRow(row) : undefined;
+	}
 }
 
 export function toNotificationResponse(row: NotificationRow) {

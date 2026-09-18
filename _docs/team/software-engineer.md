@@ -9,6 +9,12 @@ You implement one groomed task at a time.
   `packages/*`, Vitest + Testing Library for components in `apps/web` or
   `apps/admin` (`_docs/decisions.md`, D1)
 - A schema change goes through packages/db and ships a generated migration in the same commit as the code that needs it - never a hand-edited migration file, and always named explicitly: bun run db:generate --name <description>, never a bare bun run db:generate left to produce an auto-generated name (_docs/decisions.md, D18)
+- Maintain clean 3-tier module boundaries (_docs/decisions.md, D25, D29): route files (`routes.ts`) are HTTP transport only (parameter unpacking, auth checks, delegating to service, status codes). Never put business logic, state machine checks, raw DB queries (like `db.insert(notifications)`), or text algorithms in route controllers. Put domain workflows and notifications in services (`services.ts`), and queries in stores (`store.ts`)
+- Centralize wire validation (_docs/decisions.md, D29): never duplicate `collectIssues` or manual schema verification in route files. Use `apps/api/src/lib/validation.ts` helpers (`validateSchema`, `collectValidationIssues`). Never use magic numbers for TypeBox error codes
+- Separate perimeter auth from domain services (_docs/decisions.md, D29): domain services must not take or expose perimeter auth concerns (`findUserById`, `jwtSecret`). Pass domain services to routers, and pass perimeter auth context (`auth: { findUserById, jwtSecret }`) to routers for mounting auth guards
+- Never expose or invoke connection pool teardown (`getPool().end()`) in domain services (_docs/decisions.md, D24, D29): the database pool lifecycle is managed globally by the runtime or test runner
+- Keep router dependencies minimal (_docs/decisions.md, D29): inject `{ db: Db }` or specific services instead of broad aggregates like `AuthServices` when only database access is needed
+- Use standard `Date` APIs (`new Date()`, `Date.now()`) rather than plumbing synthetic clock functions (`now?: () => Date`, `services.now()`) through services and handlers (_docs/decisions.md, D29). Test time-dependent behavior using Bun's built-in `setSystemTime()`
 - If what you're building calls the Claude API, the SMS/WhatsApp
   aggregator, the email provider, or object storage, mock it at the
   boundary in tests - never a live call, in any suite, ever
@@ -24,8 +30,7 @@ orchestrator sets it up and tells you where it is.
 
 - Everything you do happens inside that directory. Other worktrees and
   the main checkout are read-only to you
-- Run scripts the way the worktree is set up to run them - through
-  `scripts/pin-env.ts` (`bun run scripts/pin-env.ts bun test`, and so on)
+- Run scripts using the workspace package scripts (`bun run test`, `bun run dev`, etc.)
   so the worktree's own database and ports are always the ones in use,
   even if the shell also has a `DATABASE_URL` exported
 - `apps/api` runs on the worktree's assigned `PORT`, `apps/web` on
@@ -61,6 +66,7 @@ Definition of done:
   `bun run test`, not just the package you touched, since a change to
   `packages/schemas` or `packages/db` can break another app silently
 - `bun run lint` is clean
+- Clean 3-tier boundary maintained: no business logic or raw SQL queries in route files (_docs/decisions.md, D25, D29)
 - A new setting has a new env var and a line in `.env.example` - never a
   hardcoded value or a checked-in secret
 - The work is committed

@@ -1,12 +1,11 @@
-import { and, categories, eq, isNull, skills } from '@together/db';
+import { and, categories, type Db, eq, isNull, skills } from '@together/db';
 import { Category, Skill, Type } from '@together/schemas';
 import { Elysia } from 'elysia';
-import type { AuthServices } from '../auth/services';
 
 const CategoryList = Type.Array(Category);
 const SkillList = Type.Array(Skill);
 
-export function createTaxonomyRouter(services: AuthServices) {
+export function createTaxonomyRouter(services: { db: Db }) {
 	return new Elysia()
 		.get(
 			'/categories',

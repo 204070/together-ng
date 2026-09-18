@@ -173,7 +173,7 @@ describe('PATCH /requests/:id (published/receiving_responses editing)', () => {
 				),
 			);
 		expect(notification).toBeDefined();
-		expect(notification.title).toBe('Request updated');
+		expect(notification!.title).toBe('Request updated');
 	});
 
 	test('minor edit does not notify responders', async () => {
@@ -361,7 +361,7 @@ describe('POST /requests/:id/close', () => {
 				),
 			);
 		expect(notification).toBeDefined();
-		expect(notification.title).toBe('Request closed');
+		expect(notification!.title).toBe('Request closed');
 	});
 
 	test('non-existent request returns 404', async () => {
@@ -505,7 +505,7 @@ describe('POST /requests/:id/cancel', () => {
 				),
 			);
 		expect(notification).toBeDefined();
-		expect(notification.title).toBe('Request cancelled');
+		expect(notification!.title).toBe('Request cancelled');
 	});
 
 	test('non-existent request returns 404', async () => {

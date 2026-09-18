@@ -1,35 +1,25 @@
-declare global {
-	namespace Bun {
-		interface RedisClientOptions {
-			autoReconnect?: boolean;
-			maxRetries?: number;
-			idleTimeout?: number;
-			connectionTimeout?: number;
-			enableAutoPipelining?: boolean;
-		}
+export interface NativeRedisClientOptions {
+	autoReconnect?: boolean;
+	maxRetries?: number;
+	idleTimeout?: number;
+	connectionTimeout?: number;
+	enableAutoPipelining?: boolean;
+}
 
-		class RedisClient {
-			constructor(url?: string, options?: RedisClientOptions);
-			get(key: string): Promise<string | null>;
-			set(key: string, value: string, ...args: unknown[]): Promise<string | null>;
-			del(...keys: string[]): Promise<number>;
-			exists(...keys: string[]): Promise<number>;
-			expire(key: string, seconds: number): Promise<number>;
-			ttl(key: string): Promise<number>;
-			incr(key: string): Promise<number>;
-			publish(channel: string, message: string): Promise<number>;
-			subscribe(
-				channel: string,
-				callback: (message: string, channel: string) => void,
-			): Promise<void>;
-			unsubscribe(channel?: string): Promise<void>;
-			send(command: string, args?: (string | number)[]): Promise<unknown>;
-			close(): void;
-			duplicate(): Promise<RedisClient> | RedisClient;
-		}
-
-		const redis: RedisClient | undefined;
-	}
+export interface NativeRedisClient {
+	get(key: string): Promise<string | null>;
+	set(key: string, value: string, ...args: unknown[]): Promise<string | null>;
+	del(...keys: string[]): Promise<number>;
+	exists(...keys: string[]): Promise<number>;
+	expire(key: string, seconds: number): Promise<number>;
+	ttl(key: string): Promise<number>;
+	incr(key: string): Promise<number>;
+	publish(channel: string, message: string): Promise<number>;
+	subscribe(channel: string, callback: (message: string, channel: string) => void): Promise<void>;
+	unsubscribe(channel?: string): Promise<void>;
+	send(command: string, args?: (string | number)[]): Promise<unknown>;
+	close(): void;
+	duplicate(): Promise<NativeRedisClient> | NativeRedisClient;
 }
 
 export interface SetOptions {
@@ -77,13 +67,18 @@ export interface BunRedisOptions {
 	connectionTimeout?: number;
 }
 
+type NativeRedisConstructor = new (
+	url?: string,
+	options?: NativeRedisClientOptions,
+) => NativeRedisClient;
+
 export class BunRedisService implements RedisService {
-	private readonly pool: Bun.RedisClient[] = [];
-	private subscriberClient: Bun.RedisClient | null = null;
+	private readonly pool: NativeRedisClient[] = [];
+	private subscriberClient: NativeRedisClient | null = null;
 	private poolIndex = 0;
 	private readonly poolSize: number;
 	private readonly url: string;
-	private readonly clientOptions: Bun.RedisClientOptions;
+	private readonly clientOptions: NativeRedisClientOptions;
 	private isClosed = false;
 	private readonly subscribers = new Map<string, Set<PubSubHandler>>();
 
@@ -106,16 +101,19 @@ export class BunRedisService implements RedisService {
 		}
 	}
 
-	private getRedisConstructor(): typeof Bun.RedisClient {
-		const bunGlobal = (globalThis as unknown as { Bun?: { RedisClient?: typeof Bun.RedisClient } })
-			.Bun;
+	private getRedisConstructor(): NativeRedisConstructor {
+		const bunGlobal = (
+			globalThis as unknown as {
+				Bun?: { RedisClient?: NativeRedisConstructor };
+			}
+		).Bun;
 		if (bunGlobal?.RedisClient) {
 			return bunGlobal.RedisClient;
 		}
 		throw new Error('Native Bun.redis / Bun.RedisClient is not available in this environment');
 	}
 
-	private getClient(): Bun.RedisClient {
+	private getClient(): NativeRedisClient {
 		if (this.isClosed || this.pool.length === 0) {
 			throw new Error('RedisService is closed or uninitialized');
 		}
@@ -127,7 +125,7 @@ export class BunRedisService implements RedisService {
 		return client;
 	}
 
-	private getSubscriberClient(): Bun.RedisClient {
+	private getSubscriberClient(): NativeRedisClient {
 		if (!this.subscriberClient) {
 			const RedisCtor = this.getRedisConstructor();
 			this.subscriberClient = new RedisCtor(this.url, this.clientOptions);
@@ -161,7 +159,7 @@ export class BunRedisService implements RedisService {
 			if (options.nx) args.push('NX');
 			if (options.xx) args.push('XX');
 		}
-		const res = await this.getClient().send('SET', args);
+		const res = await this.getClient().send('SET', args.map(String));
 		return (res as 'OK' | string | null) ?? null;
 	}
 
@@ -193,7 +191,7 @@ export class BunRedisService implements RedisService {
 	}
 
 	async eval<T = unknown>(script: string, keys: string[], args: (string | number)[]): Promise<T> {
-		const flatArgs: (string | number)[] = [script, keys.length, ...keys, ...args];
+		const flatArgs: string[] = [script, String(keys.length), ...keys, ...args.map(String)];
 		const res = await this.getClient().send('EVAL', flatArgs);
 		return res as T;
 	}
@@ -561,8 +559,4 @@ export class MockRedisService implements RedisService {
 
 export function createRedisService(options?: BunRedisOptions | string): RedisService {
 	return new BunRedisService(options);
-}
-
-export async function createRedisConnection(redisUrl: string): Promise<RedisService> {
-	return new BunRedisService({ url: redisUrl });
 }

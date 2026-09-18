@@ -78,7 +78,7 @@ describe('RedisRateLimiter (legacy mock compatibility)', () => {
 				existing.value = String(next);
 				return next;
 			},
-			eval: async () => 1,
+			eval: (async () => 1) as never,
 			publish: async () => 0,
 			subscribe: async () => async () => {},
 			unsubscribe: async () => {},

@@ -10,9 +10,9 @@
 		"./schema": "./src/schema/index.ts"
 	},
 	"scripts": {
-		"db:generate": "bun run ../../scripts/pin-env.ts drizzle-kit generate && bun ./scripts/ensure-extensions.ts",
-		"db:migrate": "bun run ../../scripts/pin-env.ts bun ./src/migrate.ts",
-		"db:seed": "bun run ../../scripts/pin-env.ts bun ./src/seed.ts",
+		"db:generate": "drizzle-kit generate && bun ./scripts/ensure-extensions.ts",
+		"db:migrate": "bun ./src/migrate.ts",
+		"db:seed": "bun ./src/seed.ts",
 		"test": "bun test",
 		"lint": "biome check .",
 		"typecheck": "tsc --noEmit"

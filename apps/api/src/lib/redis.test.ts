@@ -1,10 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import {
-	BunRedisService,
-	createRedisConnection,
-	createRedisService,
-	MockRedisService,
-} from './redis';
+import { BunRedisService, createRedisService, MockRedisService } from './redis';
 
 describe('MockRedisService', () => {
 	test('get and set basic key-values', async () => {
@@ -182,7 +177,7 @@ describe('BunRedisService architecture', () => {
 		expect(svc.connected).toBe(true);
 		svc.close();
 
-		const conn = await createRedisConnection('redis://localhost:6379');
+		const conn = createRedisService('redis://localhost:6379');
 		expect(conn.connected).toBe(true);
 		conn.close();
 	});

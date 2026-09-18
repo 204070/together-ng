@@ -70,7 +70,7 @@ export const Route = createFileRoute('/categories/$categorySlug')({
 
 export function CategoryPage() {
 	const { categoryFeed, categories, slug, searchParams } = Route.useLoaderData();
-	const navigate = useNavigate();
+	const navigate = Route.useNavigate();
 
 	if (!categoryFeed || categoryFeed.error === 'CATEGORY_NOT_FOUND') {
 		return (
@@ -196,7 +196,7 @@ export function CategoryPage() {
 								type="button"
 								onClick={() =>
 									navigate({
-										search: (prev: Record<string, unknown>) => ({
+										search: (prev) => ({
 											...prev,
 											page: Math.max(1, (categoryFeed.pagination.page ?? 1) - 1),
 										}),
@@ -213,7 +213,7 @@ export function CategoryPage() {
 								type="button"
 								onClick={() =>
 									navigate({
-										search: (prev: Record<string, unknown>) => ({
+										search: (prev) => ({
 											...prev,
 											page: (categoryFeed.pagination.page ?? 1) + 1,
 										}),

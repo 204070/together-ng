@@ -1,17 +1,18 @@
 import { jwt } from '@elysiajs/jwt';
-import type { Db } from '@together/db';
 import { Elysia, t } from 'elysia';
 import { type JwtVerifier, requireActiveActor } from '../../lib/authentication';
-import { NotificationStore, toNotificationResponse } from './store';
+import type { NotificationService } from './services';
+import { toNotificationResponse } from './store';
 
 export interface NotificationRouterOptions {
 	jwtSecret: string;
 	findUserById: (id: string) => Promise<{ status: string; deletedAt: Date | null } | undefined>;
 }
 
-export function createNotificationRouter(env: { db: Db }, options: NotificationRouterOptions) {
-	const store = new NotificationStore(env.db);
-
+export function createNotificationRouter(
+	service: NotificationService,
+	options: NotificationRouterOptions,
+) {
 	return new Elysia()
 		.use(jwt({ name: 'jwt', secret: options.jwtSecret, exp: '15m' }))
 		.derive(async ({ headers, jwt: verifier }) => {
@@ -35,12 +36,7 @@ export function createNotificationRouter(env: { db: Db }, options: NotificationR
 					set.status = 401;
 					return { error: 'UNAUTHORIZED', message: 'Authentication required' };
 				}
-				const notifications = await store.findByUserId(actor.userId);
-				const unreadCount = await store.countUnread(actor.userId);
-				return {
-					notifications: notifications.map(toNotificationResponse),
-					unreadCount,
-				};
+				return service.listForUser(actor.userId);
 			},
 			{},
 		)
@@ -51,7 +47,7 @@ export function createNotificationRouter(env: { db: Db }, options: NotificationR
 					set.status = 401;
 					return { error: 'UNAUTHORIZED', message: 'Authentication required' };
 				}
-				const existing = await store.findByIdAndUser(params.id, actor.userId);
+				const existing = await service.getByIdAndUser(params.id, actor.userId);
 				if (!existing) {
 					set.status = 404;
 					return { error: 'NOT_FOUND', message: 'Notification not found' };
@@ -59,9 +55,9 @@ export function createNotificationRouter(env: { db: Db }, options: NotificationR
 				const b = body as { read?: boolean };
 				let updated = existing;
 				if (b.read === true) {
-					updated = (await store.markRead(params.id, actor.userId)) ?? existing;
+					updated = (await service.markRead(params.id, actor.userId)) ?? existing;
 				} else if (b.read === false) {
-					updated = (await store.markUnread(params.id, actor.userId)) ?? existing;
+					updated = (await service.markUnread(params.id, actor.userId)) ?? existing;
 				}
 				return toNotificationResponse(updated);
 			},
@@ -77,7 +73,7 @@ export function createNotificationRouter(env: { db: Db }, options: NotificationR
 					set.status = 401;
 					return { error: 'UNAUTHORIZED', message: 'Authentication required' };
 				}
-				await store.markAllRead(actor.userId);
+				await service.markAllRead(actor.userId);
 				set.status = 204;
 				return undefined;
 			},

@@ -129,20 +129,17 @@ a `.env` file, by design - that is what lets containers and CI ship no
 
 Two things guard against that:
 
-- Commands are run with the database named explicitly:
-  `DATABASE_URL=postgres://postgres:postgres@localhost:5432/together_wt<issue> bun run test`
-- Each worktree's scripts run through `scripts/pin-env.ts`
-  (`_docs/decisions.md`, D6), wired into `package.json` as the first word
-  of every script that touches the database - `"test": "bun run
-  scripts/pin-env.ts bun test"` and so on. It loads that worktree's `.env`
-  and force-sets `DATABASE_URL` and the port vars before the real command
-  runs, so a forgotten prefix costs nothing. It stands down when no `.env`
-  file is present, which is how it tells a local worktree from a
-  container - Compose sets `DATABASE_URL` on purpose there and ships no
-  `.env` at all
+- `@together/config`'s `loadEnv()` (`_docs/decisions.md`, D6) loads the
+  worktree's `.env` with `override: true`, so in-process runtime and migration
+  scripts automatically use the worktree's assigned database and ports, even
+  if the parent terminal exported ambient variables. It stands down when no
+  `.env` file is present (containers, CI).
+- Test suites load `.env.test` via Bun's native `--env-file=.env.test` flag
+  wired into root `package.json` (`"test": "bun --env-file=.env.test run ..."`).
+  A worktree's `.env.test` isolates its `together_wt<issue>_test` database.
 
 The setup is not complete until
-`bun run scripts/pin-env.ts bun -e "console.log(process.env.DATABASE_URL)"`
+`bun -e "import { loadEnv, env } from '@together/config'; loadEnv(); console.log(env.DATABASE_URL)"`
 prints the worktree's own database URL. Check it before an agent starts,
 not after it reports a mysterious failure.
 
@@ -374,10 +371,3 @@ Rules
 - QA must verify before merge. If the engineer makes additional commits
   after QA's initial pass, QA must re-verify those changes before merge.
   The orchestrator must not merge without a QA PASS on the final state
-
-Process Violations
-
-- 2026-09-17: Issue #10 merged without QA on final commits. Engineer made
-  3 additional commits after initial QA PASS (sort default fix, timestamp
-  collision fix, test robustness fix). Orchestrator merged without
-  re-running QA. Retroactive QA confirmed PASS.

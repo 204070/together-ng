@@ -1,10 +1,4 @@
-import {
-	checkLoginWithOtp,
-	checkLoginWithPassword,
-	checkRegisterRequest,
-	checkVerifyOtpRequest,
-	type UserPrivateType,
-} from '@together/schemas';
+import type { UserPrivateType } from '@together/schemas';
 import {
 	emailTakenError,
 	invalidCredentialsError,
@@ -30,6 +24,12 @@ import {
 	REFRESH_TTL_SECONDS,
 	verifyOtpCode,
 } from './tokens';
+import {
+	validateLoginWithOtp,
+	validateLoginWithPassword,
+	validateRegisterRequest,
+	validateVerifyOtpRequest,
+} from './validation';
 import { toUserPrivate } from './wire';
 
 export function clientIpFrom(request: Request): string {
@@ -93,7 +93,7 @@ async function issueOtp(
 ): Promise<string> {
 	const code = generateOtpCode();
 	const codeHash = hashOtpCode(code, services.jwtSecret);
-	const expiresAt = new Date(services.now().getTime() + OTP_TTL_SECONDS * 1000);
+	const expiresAt = new Date(Date.now() + OTP_TTL_SECONDS * 1000);
 	await services.store.deleteOtpsForPhone(input.phone);
 	await services.store.insertOtp({
 		userId: input.userId,
@@ -115,7 +115,7 @@ export async function registerUser(
 	const value: Record<string, unknown> = { ...input };
 	if (email !== undefined) value.email = email;
 	else delete value.email;
-	const issues = checkRegisterRequest(value);
+	const issues = validateRegisterRequest(value);
 	if (Object.keys(issues).length > 0) throw validationError(issues);
 
 	if (typeof email === 'string' && email !== '') {
@@ -171,7 +171,7 @@ export async function consumeOtp(
 	if (otp === undefined) throw invalidOtpError();
 	if (otp.attempts >= 5) throw otpAttemptsExceededError();
 	if (otp.usedAt !== null) throw otpAlreadyUsedError();
-	if (otp.expiresAt.getTime() <= services.now().getTime()) throw otpExpiredError();
+	if (otp.expiresAt.getTime() <= Date.now()) throw otpExpiredError();
 	const isValid = otp.codeHash.startsWith('$argon2id$')
 		? await Bun.password.verify(code, otp.codeHash)
 		: verifyOtpCode(code, otp.codeHash, services.jwtSecret);
@@ -187,7 +187,7 @@ export async function verifyOtp(
 	services: AuthServices,
 	input: { phone: string; code: string },
 ): Promise<void> {
-	const issues = checkVerifyOtpRequest(input);
+	const issues = validateVerifyOtpRequest(input);
 	if (Object.keys(issues).length > 0) throw validationError(issues);
 	const { userId } = await consumeOtp(services, input.phone, input.code);
 	await services.store.setPhoneVerified(userId);
@@ -199,7 +199,7 @@ async function issueSession(
 	signAccessToken: AccessTokenSigner,
 ): Promise<IssuedSession> {
 	const refreshToken = generateRefreshToken();
-	const expiresAt = new Date(services.now().getTime() + REFRESH_TTL_SECONDS * 1000);
+	const expiresAt = new Date(Date.now() + REFRESH_TTL_SECONDS * 1000);
 	const session = await services.store.insertSession({
 		userId: user.id,
 		refreshHash: hashRefreshToken(refreshToken),
@@ -215,7 +215,7 @@ export async function loginWithPassword(
 	signAccessToken: AccessTokenSigner,
 ): Promise<IssuedSession> {
 	const email = typeof input.email === 'string' ? input.email.trim().toLowerCase() : input.email;
-	const issues = checkLoginWithPassword({ email, password: input.password });
+	const issues = validateLoginWithPassword({ email, password: input.password });
 	if (Object.keys(issues).length > 0) throw validationError(issues);
 
 	const limiter = services.limiters.login.check(`login:${input.ip}:${email}`);
@@ -240,7 +240,7 @@ export async function loginWithOtp(
 	input: { phone: unknown; code: unknown; ip: string },
 	signAccessToken: AccessTokenSigner,
 ): Promise<IssuedSession> {
-	const issues = checkLoginWithOtp({ phone: input.phone, code: input.code });
+	const issues = validateLoginWithOtp({ phone: input.phone, code: input.code });
 	if (Object.keys(issues).length > 0) throw validationError(issues);
 
 	const phone = input.phone as string;
@@ -265,7 +265,7 @@ export async function refreshWithToken(
 	const refreshHash = hashRefreshToken(rawRefreshToken);
 	const session = await services.store.findSessionByRefreshHash(refreshHash);
 	if (session === undefined) throw unauthorizedError();
-	if (session.expiresAt.getTime() <= services.now().getTime()) {
+	if (session.expiresAt.getTime() <= Date.now()) {
 		await services.store.deleteSessionById(session.id);
 		throw unauthorizedError();
 	}

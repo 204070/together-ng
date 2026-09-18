@@ -61,24 +61,30 @@ to bind or silently talk to the first worktree's server. A port derived from
 the issue number means two worktrees can run their dev servers at the same
 time without anyone having to notice or negotiate.
 
-## D6. `scripts/pin-env.ts` pins the database before anything else runs
+## D6. In-process environment override and `.env.test` isolation
 
 A real environment variable beats a `.env` file, by design - that's what
-lets containers and CI ship no `.env` at all. Left alone, that means an
-exported `DATABASE_URL` in the shell that launched a session silently
-shadows every worktree's own `.env` and puts all of them back on one
-database.
+lets containers and CI ship no `.env` at all. Left alone in local multi-worktree
+development, an exported `DATABASE_URL` in the shell that launched a session
+could silently shadow a worktree's own `.env`.
 
-`scripts/pin-env.ts` is the guard: a tracked script that loads the working
-directory's `.env` file, if one exists, and force-applies its values over
-the process's existing environment before running whatever command follows
-it. If no `.env` file is present - which is how it tells a worktree from a
-container - it does nothing and the ambient environment (Compose's, in CI)
-is left alone.
+Earlier iterations used an external wrapper script (`scripts/pin-env.ts`) to
+spawn subshells and override variables. This introduced unnecessary process
+wrapping and duplicate custom `.env` parsers.
 
-Every `package.json` script that touches the database is defined in terms of
-it (`"test": "bun run scripts/pin-env.ts bun test"`, and so on), so a
-forgotten `DATABASE_URL=...` prefix on the command line costs nothing.
+The architecture now handles this cleanly and natively:
+1. `@together/config`'s `loadEnv()` loads the working directory's `.env`
+   file (if present) with `override: true` so worktree databases and ports
+   supersede any ambient shell variables directly in-process. In CI and
+   containers where no `.env` file exists, ambient environment variables are
+   preserved untouched.
+2. Test suites run natively against `.env.test` via Bun's built-in
+   `--env-file=.env.test` flag (`bun run test`), maintaining test isolation.
+3. Vite applications (`apps/web` and `apps/admin`) resolve their ports using
+   Vite's native `loadEnv` helper directly in their configuration files.
+4. All `package.json` scripts execute native CLI commands (`bun test`, `vite`,
+   `bun ./src/migrate.ts`, `drizzle-kit generate`) without custom wrapper
+   scripts.
 
 ## D7. AI-assisted features wait for the deterministic loop
 
@@ -272,3 +278,70 @@ To eliminate dynamic aggregation bottlenecks and full table scans on high-traffi
    - `requests(state, created_at DESC)` optimizes state-filtered feed pagination without in-memory sort passes.
    - `notifications(user_id, type, created_at)` accelerates worker dispatch queries and notification queries without multi-index scans.
 3. **Featured feed caching:** The `/requests/featured` feed endpoint caches responses in Redis with a short TTL (30 seconds) via `RedisService` (`MockRedisService` in test environments per D17). Cache keys incorporate sorting, pagination parameters, and all applied filters (`feed:featured:...`). Cache misses populate the cache transparently, and Redis errors degrade gracefully to direct database queries. Binds #53.
+
+## D29. Clean architecture boundaries: Transport validation, domain services, and clock semantics
+
+To maintain architectural integrity, prevent duplicated code smells, and enforce clear separation of concerns across the stack:
+
+1. **Centralized wire validation and error mapping:**
+   - Duplicating validation logic or ad-hoc issue collectors (`collectIssues`) across route files is prohibited.
+   - Core TypeBox validation utilities (`validateSchema`, `collectValidationIssues`, `validationFields`, `fieldCode`, `normalizePath`) are centralized in `apps/api/src/lib/validation.ts`.
+   - Magic integer error codes (`tt === 45`, etc.) are forbidden; all schema validation uses TypeBox's standard `ValueErrorType` enum.
+   - Route- or transport-specific input validation logic (e.g. auth flow branches) must be encapsulated in the module's own validation module (e.g. `apps/api/src/modules/auth/validation.ts`), never placed in the shared schema library (`packages/schemas`) or inlined into route controllers.
+
+2. **Decoupled domain services and fat-controller prohibition:**
+   - Route handlers (`routes.ts`) are strictly HTTP transport: they parse input params/body, enforce authentication, call domain service methods, and set HTTP response status codes.
+   - Route handlers must NEVER:
+     - Contain business logic or state machine transition logic.
+     - Execute raw database queries or mutations (e.g. `db.insert(notifications)`).
+     - Implement domain algorithms (e.g. similarity comparisons, Levenshtein distance).
+   - Domain services (`services.ts`) own the domain logic: state validation, business rules, notification dispatch, and store/worker orchestration.
+   - Helper algorithms (e.g. text similarity) belong to dedicated module utilities (e.g. `similarity.ts`).
+
+3. **Standard timestamp semantics over clock plumbing:**
+   - Passing synthetic clock closures (`now?: () => Date`, `services.now()`) across factories, route controllers, and service interfaces is prohibited.
+   - Application code uses standard JavaScript `Date` APIs (`new Date()`, `Date.now()`).
+   - Time-dependent tests use Bun's built-in `setSystemTime()` to mock system time deterministically without threading synthetic clock callbacks throughout production code.
+
+4. **Perimeter authentication separation from domain services:**
+   - Domain services (`RequestService`, `ContributionService`, `ProfileService`, `FeedService`) must NOT depend on or carry HTTP perimeter authentication concerns (`findUserById`, `jwtSecret`, `requireActiveActor`).
+   - Perimeter authentication concerns belong strictly to the Elysia HTTP transport layer via route auth guards (`createAuthGuard`, `requireActiveActor`).
+   - Routers accept the domain service instance (for business operations) and a perimeter auth context (`auth: { findUserById, jwtSecret }`) to configure auth guards.
+
+5. **Prohibition of connection pool teardown (`getPool().end()`) in domain services:**
+   - Domain services must NEVER expose or invoke `close: () => getPool().end()`.
+   - The PostgreSQL connection pool lifecycle is shared and owned by the top-level application or test runner environment (per D24 and D26). Exposing pool shutdown inside service instances creates severe connection teardown bugs and leaks infrastructure lifecycle into domain boundaries.
+
+6. **Minimal router dependency injection:**
+   - Routers that only require database access (e.g. `createTaxonomyRouter`) must accept `{ db: Db }` rather than full auth aggregates (`AuthServices`).
+   - Routers and services must accept only the dependencies they actually need (Interface Segregation Principle).
+
+7. **Elysia route schema validation over manual in-service `validateSchema`:**
+   - Routes define TypeBox validation schemas directly in Elysia route options (`{ body: Schema, params: ... }`).
+   - Elysia automatically parses and validates incoming payloads before handlers execute, with schema violations mapped uniformly to 400 / 422 errors by the root error handler.
+   - Domain service methods receive strongly-typed input payloads (`Static<typeof Schema>`) and do not perform duplicate payload schema validation.
+
+8. **Centralized application environment configuration (`AppEnv`):**
+   - Application environment interfaces (`AppEnv`) are centralized in `apps/api/src/env.ts`, declaring the runtime configuration accepted by `makeApp`.
+   - Domain modules (`modules/auth/services.ts`) must never define or re-export `AppEnv`; domain service factories declare exact, dedicated config types.
+
+9. **Abstracted Redis services and decoupled rate limiters:**
+   - Obsolete raw Redis connection factories (`createRedisConnection`) and tight coupling to direct connection objects are prohibited.
+   - Redis operations utilize the decoupled `RedisService` interface backed by `createRedisService`.
+   - Domain services (`RequestService`) consume the abstract `AsyncRateLimiter` interface, decoupled from specific storage backends.
+
+10. **Dedicated `NotificationService` and idempotent notification storage:**
+    - Notification creation, queries, and status updates are centralized in a dedicated `NotificationService` (`apps/api/src/modules/notifications/services.ts`) and `NotificationStore`.
+    - Domain services (`ContributionService`, `RequestService`) receive `NotificationService` via dependency injection, eliminating duplicated `db.insert(notifications)` logic across modules.
+    - `NotificationStore.create` employs `.onConflictDoNothing({ target: [notifications.requestId, notifications.userId] })` to guarantee idempotency and prevent PostgreSQL 25P02 transaction aborts during multi-step lifecycle operations.
+
+11. **Definite service factory contracts and prohibition of `databaseUrl` in services:**
+    - Domain services and service factories must NEVER accept `databaseUrl`, call `createDb()`, or employ fallback coalescing (`deps.db ?? env.db ?? createDb(databaseUrl)`).
+    - Database connection initialization is owned exclusively at the application bootstrap level (`makeApp`, `index.ts`), keeping domain service contracts strictly typed and free of infrastructure connection side-effects.
+
+12. **Strict Inversion of Control (IoC) and dependency decoupling in domain services:**
+    - High-level domain services (`RequestService`, `ProfileService`, `ContributionService`, `NotificationService`) depend exclusively on abstractions (interfaces and domain stores), never on concrete adapter singletons (e.g. `photoStorage`, `configEnv`) or internally instantiated dependencies (`new NotificationService(db)`).
+    - Services do not take `db: Db` if they do not execute raw queries directly; all database operations are encapsulated in their respective store classes (`RequestStore`, `ProfileStore`, `ContributionStore`, `NotificationStore`).
+    - Domain dependencies are required, not optional: `RequestService` requires `matching: MatchingService` without defensive `if (this.matching)` null checks or optionality flags.
+    - All concrete adapter instantiation (e.g., `createInlineMatchingService(db)`, `photoStorage`, `createOtpSender`, `RedisRateLimiter`, `FixedWindowRateLimiter`) is owned exclusively by the composition root (`makeApp` in `apps/api/src/app.ts`), which wires dependencies directly into service constructors.
+    - Nullish coalescing (`??`) in service constructors or factory options that masks missing dependencies or defaults to concrete implementations is prohibited. Type definitions must be definite and enforced at compile time.

@@ -184,4 +184,21 @@ describe('@together/config env', () => {
 			]),
 		);
 	});
+
+	test('loadEnv() overrides ambient process.env vars with values from .env', async () => {
+		const original = process.env.PORT;
+		try {
+			process.env.PORT = '9999';
+			const mod = await freshConfig();
+			mod.loadEnv();
+			// Repo .env has PORT=4000 or similar, which should override the ambient 9999
+			expect(mod.env.PORT).not.toBe(9999);
+		} finally {
+			if (original !== undefined) {
+				process.env.PORT = original;
+			} else {
+				delete process.env.PORT;
+			}
+		}
+	});
 });

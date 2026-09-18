@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 import { Header } from '../components/header';
+import type { AuthState } from '../lib/server';
 
 vi.mock('@tanstack/react-router', () => ({
 	Link: ({ to, children }: { to: string; children: React.ReactNode }) => (
@@ -12,10 +13,12 @@ describe('Header', () => {
 	test('renders "Ask for help" link for request creation', () => {
 		render(
 			<Header
-				auth={{
-					user: { id: '1', email: 'test@example.com' },
-					profile: { name: 'Test User', photoUrl: null },
-				}}
+				auth={
+					{
+						user: { id: '1', email: 'test@example.com' },
+						profile: { name: 'Test User', photoUrl: null },
+					} as unknown as AuthState
+				}
 			/>,
 		);
 		const link = screen.getByText('Ask for help');
@@ -26,10 +29,12 @@ describe('Header', () => {
 	test('does not render "New request" link', () => {
 		render(
 			<Header
-				auth={{
-					user: { id: '1', email: 'test@example.com' },
-					profile: { name: 'Test User', photoUrl: null },
-				}}
+				auth={
+					{
+						user: { id: '1', email: 'test@example.com' },
+						profile: { name: 'Test User', photoUrl: null },
+					} as unknown as AuthState
+				}
 			/>,
 		);
 		expect(screen.queryByText('New request')).toBeNull();

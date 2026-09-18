@@ -39,7 +39,7 @@ async function createContributionFixture(
 			status: status as 'accepted' | 'in_progress' | 'completed' | 'cancelled',
 		})
 		.returning();
-	return row.id;
+	return row!.id;
 }
 
 async function createOutcomeConfirmation(

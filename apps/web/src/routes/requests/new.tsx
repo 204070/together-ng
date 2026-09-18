@@ -2,6 +2,11 @@ import { createFileRoute, redirect, useSearch } from '@tanstack/react-router';
 import { RequestWizard } from '../../components/request-wizard';
 import { getAuthUserFn } from '../../lib/server';
 
+export interface NewRequestSearchParams {
+	step?: string;
+	draft?: string;
+}
+
 export const Route = createFileRoute('/requests/new')({
 	loader: async () => {
 		const auth = await getAuthUserFn();
@@ -13,15 +18,15 @@ export const Route = createFileRoute('/requests/new')({
 		}
 		return { auth };
 	},
-	validateSearch: (search: Record<string, unknown>) => ({
-		step: typeof search.step === 'string' ? search.step : 'category',
+	validateSearch: (search: Record<string, unknown>): NewRequestSearchParams => ({
+		step: typeof search.step === 'string' ? search.step : undefined,
 		draft: typeof search.draft === 'string' ? search.draft : undefined,
 	}),
 	component: NewRequestPage,
 });
 
 function NewRequestPage() {
-	const { step, draft } = useSearch({ from: '/requests/new' });
+	const { step = 'category', draft } = useSearch({ from: '/requests/new' });
 	return (
 		<section>
 			<h1>Create a request</h1>

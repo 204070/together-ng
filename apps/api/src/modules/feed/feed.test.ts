@@ -145,8 +145,8 @@ describe('GET /requests/featured', () => {
 		const olderIndex = body.items.findIndex((i) => i.id === olderPopular.id);
 		const newerIndex = body.items.findIndex((i) => i.id === newerZeroVotes.id);
 		expect(olderIndex).toBeLessThan(newerIndex);
-		expect(body.items[olderIndex].voteCount).toBe(10);
-		expect(body.items[newerIndex].voteCount).toBe(0);
+		expect(body.items[olderIndex]!.voteCount).toBe(10);
+		expect(body.items[newerIndex]!.voteCount).toBe(0);
 	});
 
 	test('pagination respects page and limit params', async () => {
@@ -234,10 +234,10 @@ describe('GET /requests/featured', () => {
 			),
 		);
 		const body = (await res.json()) as { items: Array<{ id: string; voteCount: number }> };
-		expect(body.items[0].id).toBe(highVotes.id);
-		expect(body.items[0].voteCount).toBe(3);
-		expect(body.items[1].id).toBe(lowVotes.id);
-		expect(body.items[1].voteCount).toBe(1);
+		expect(body.items[0]!.id).toBe(highVotes.id);
+		expect(body.items[0]!.voteCount).toBe(3);
+		expect(body.items[1]!.id).toBe(lowVotes.id);
+		expect(body.items[1]!.voteCount).toBe(1);
 	});
 
 	test('filter by categoryId and category slug', async () => {
@@ -404,8 +404,8 @@ describe('GET /requests/featured', () => {
 			new Request(`http://localhost/requests/featured?categoryId=${category.id}`),
 		);
 		const body = (await res.json()) as { items: Array<{ id: string; voteCount: number }> };
-		expect(body.items[0].id).toBe(morePopular.id);
-		expect(body.items[0].voteCount).toBe(3);
+		expect(body.items[0]!.id).toBe(morePopular.id);
+		expect(body.items[0]!.voteCount).toBe(3);
 	});
 
 	test('returns empty items when no requests match', async () => {
@@ -573,8 +573,8 @@ describe('GET /categories/:slug/requests', () => {
 			new Request(`http://localhost/categories/${category.slug}/requests?sort=most_supported`),
 		);
 		const body = (await res.json()) as { items: Array<{ id: string; voteCount: number }> };
-		expect(body.items[0].id).toBe(highVotes.id);
-		expect(body.items[0].voteCount).toBe(2);
+		expect(body.items[0]!.id).toBe(highVotes.id);
+		expect(body.items[0]!.voteCount).toBe(2);
 	});
 
 	test('filter by modality in category feed', async () => {
@@ -1004,7 +1004,7 @@ describe('GET /requests/search', () => {
 		const res = await app.handle(new Request(`http://localhost/requests/search?q=${searchTerm}`));
 		const body = (await res.json()) as { items: Array<{ relevance: number }> };
 		expect(body.items.length).toBeGreaterThanOrEqual(1);
-		expect(body.items[0].relevance).toBeGreaterThan(0);
+		expect(body.items[0]!.relevance).toBeGreaterThan(0);
 	});
 
 	test('search returns pagination metadata', async () => {
@@ -1086,7 +1086,7 @@ describe('GET /requests/search', () => {
 		);
 		const body = (await res.json()) as { items: Array<{ title: string }> };
 		expect(body.items.length).toBeGreaterThanOrEqual(2);
-		expect(body.items[0].title).toContain('Newer');
+		expect(body.items[0]!.title).toContain('Newer');
 	});
 
 	test('search sort=relevance is default', async () => {
@@ -1101,7 +1101,7 @@ describe('GET /requests/search', () => {
 
 		const res = await app.handle(new Request(`http://localhost/requests/search?q=${searchTerm}`));
 		const body = (await res.json()) as { items: Array<{ relevance: number }> };
-		expect(body.items[0].relevance).toBeGreaterThan(0);
+		expect(body.items[0]!.relevance).toBeGreaterThan(0);
 	});
 
 	test('search with no results returns empty', async () => {

@@ -48,6 +48,38 @@ const COMMON_FIELDS: FieldConfig[] = [
 	},
 ];
 
+// Default: show all common fields plus time commitment, duration, deadline, skill level, quantity, intended outcome
+const DEFAULT_CATEGORY_FIELDS: FieldConfig[] = [
+	...COMMON_FIELDS,
+	{
+		key: 'timeCommitment',
+		label: 'Time commitment',
+		type: 'text',
+		placeholder: 'e.g., 2 hours/week',
+	},
+	{ key: 'duration', label: 'Duration', type: 'text', placeholder: 'e.g., 3 months' },
+	{ key: 'deadline', label: 'Deadline', type: 'datetime-local' },
+	{
+		key: 'skillLevel',
+		label: 'Skill level',
+		type: 'select',
+		options: [
+			{ value: '', label: 'Not specified' },
+			{ value: 'beginner', label: 'Beginner' },
+			{ value: 'intermediate', label: 'Intermediate' },
+			{ value: 'advanced', label: 'Advanced' },
+		],
+	},
+	{ key: 'quantity', label: 'Quantity needed', type: 'text', placeholder: 'e.g., 1 laptop' },
+	{
+		key: 'intendedOutcome',
+		label: 'Intended outcome',
+		type: 'textarea',
+		placeholder: 'What do you hope to achieve?',
+		rows: 3,
+	},
+];
+
 const CATEGORY_FIELDS: Record<string, FieldConfig[]> = {
 	// Technology: modality, location, skill level, duration, deadline
 	technology: [
@@ -99,41 +131,11 @@ const CATEGORY_FIELDS: Record<string, FieldConfig[]> = {
 		{ key: 'quantity', label: 'Quantity needed', type: 'text', placeholder: 'e.g., 1 laptop' },
 		{ key: 'deadline', label: 'Deadline', type: 'datetime-local' },
 	],
-	// Default: show all common fields plus time commitment, duration, deadline, skill level, quantity, intended outcome
-	default: [
-		...COMMON_FIELDS,
-		{
-			key: 'timeCommitment',
-			label: 'Time commitment',
-			type: 'text',
-			placeholder: 'e.g., 2 hours/week',
-		},
-		{ key: 'duration', label: 'Duration', type: 'text', placeholder: 'e.g., 3 months' },
-		{ key: 'deadline', label: 'Deadline', type: 'datetime-local' },
-		{
-			key: 'skillLevel',
-			label: 'Skill level',
-			type: 'select',
-			options: [
-				{ value: '', label: 'Not specified' },
-				{ value: 'beginner', label: 'Beginner' },
-				{ value: 'intermediate', label: 'Intermediate' },
-				{ value: 'advanced', label: 'Advanced' },
-			],
-		},
-		{ key: 'quantity', label: 'Quantity needed', type: 'text', placeholder: 'e.g., 1 laptop' },
-		{
-			key: 'intendedOutcome',
-			label: 'Intended outcome',
-			type: 'textarea',
-			placeholder: 'What do you hope to achieve?',
-			rows: 3,
-		},
-	],
+	default: DEFAULT_CATEGORY_FIELDS,
 };
 
 function getFieldsForCategory(categoryId: number | null | undefined): FieldConfig[] {
-	if (categoryId === null || categoryId === undefined) return CATEGORY_FIELDS.default;
+	if (categoryId === null || categoryId === undefined) return DEFAULT_CATEGORY_FIELDS;
 	const slugMap: Record<number, string> = {
 		1: 'technology',
 		2: 'education',
@@ -141,7 +143,8 @@ function getFieldsForCategory(categoryId: number | null | undefined): FieldConfi
 		4: 'resources',
 	};
 	const slug = slugMap[categoryId];
-	return slug ? (CATEGORY_FIELDS[slug] ?? CATEGORY_FIELDS.default) : CATEGORY_FIELDS.default;
+	if (!slug) return DEFAULT_CATEGORY_FIELDS;
+	return CATEGORY_FIELDS[slug] ?? DEFAULT_CATEGORY_FIELDS;
 }
 
 export function OptionalDetailsStep({ data, onUpdate, categoryId }: OptionalDetailsStepProps) {
@@ -154,7 +157,7 @@ export function OptionalDetailsStep({ data, onUpdate, categoryId }: OptionalDeta
 				Add any additional details that will help others understand your request.
 			</p>
 			{fields.map((field) => {
-				const value = (data as Record<string, string | null>)[field.key] ?? '';
+				const value = (data as unknown as Record<string, string | null>)[field.key] ?? '';
 
 				if (field.type === 'select') {
 					return (

@@ -23,7 +23,7 @@ interface RequestWizardProps {
 }
 
 export function RequestWizard({ initialStep, initialDraftId }: RequestWizardProps) {
-	const navigate = useNavigate();
+	const navigate = useNavigate({ from: '/requests/new' });
 	const fetchCategories = useServerFn(getCategoriesFn);
 	const createDraft = useServerFn(createDraftFn);
 	const updateDraft = useServerFn(updateDraftFn);
@@ -182,15 +182,17 @@ export function RequestWizard({ initialStep, initialDraftId }: RequestWizardProp
 		if (!canAdvance) return;
 		setCompletedSteps((prev) => new Set([...prev, currentStep]));
 		const nextIndex = currentIndex + 1;
-		if (nextIndex < WIZARD_STEPS.length) {
-			updateStepInUrl(WIZARD_STEPS[nextIndex].key);
+		const nextStep = WIZARD_STEPS[nextIndex];
+		if (nextStep) {
+			updateStepInUrl(nextStep.key);
 		}
 	}, [canAdvance, currentStep, currentIndex, updateStepInUrl]);
 
 	const goBack = useCallback(() => {
 		const prevIndex = currentIndex - 1;
-		if (prevIndex >= 0) {
-			updateStepInUrl(WIZARD_STEPS[prevIndex].key);
+		const prevStep = WIZARD_STEPS[prevIndex];
+		if (prevStep) {
+			updateStepInUrl(prevStep.key);
 		}
 	}, [currentIndex, updateStepInUrl]);
 

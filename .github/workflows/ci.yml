@@ -56,6 +56,9 @@ jobs:
       - name: Lint and format
         run: bun run lint
 
+      - name: Typecheck
+        run: bun run typecheck
+
       - name: Migration drift
         run: |
           bun run --filter @together/db db:generate

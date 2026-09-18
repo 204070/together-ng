@@ -25,7 +25,12 @@ export async function requireAdmin(
 	return user;
 }
 
-export function createAdminRouter(services: AuthServices) {
+export interface AdminRouteServices {
+	store: { findUserById(id: string): Promise<UserRow | undefined> };
+	jwtSecret: string;
+}
+
+export function createAdminRouter(services: AdminRouteServices | AuthServices) {
 	return new Elysia()
 		.use(jwt({ name: 'jwt', secret: services.jwtSecret, exp: '15m' }))
 		.get(

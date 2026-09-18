@@ -208,7 +208,6 @@ export function createFileStorage(options: FileStorageOptions = {}): FileStorage
 		const sessionToken =
 			options.sessionToken ??
 			process.env.STORAGE_SESSION_TOKEN ??
-			configEnv?.STORAGE_SESSION_TOKEN ??
 			process.env.S3_SESSION_TOKEN ??
 			process.env.AWS_SESSION_TOKEN;
 		const region =

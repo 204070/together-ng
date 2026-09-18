@@ -44,9 +44,9 @@ function moduleDir(): string | undefined {
 
 function envFilePath(): string | undefined {
 	const candidates = [
-		resolve(moduleDir() ?? '.', '../../.env'),
-		resolve(process.cwd(), '../../.env'),
 		resolve(process.cwd(), '.env'),
+		resolve(process.cwd(), '../../.env'),
+		resolve(moduleDir() ?? '.', '../../.env'),
 	];
 	return candidates.find(existsSync);
 }
@@ -100,7 +100,7 @@ export function loadEnv(source?: Record<string, unknown>): ConfigEnv {
 	if (source === undefined) {
 		const envPath = envFilePath();
 		if (envPath !== undefined) {
-			loadDotenv({ path: envPath, quiet: true });
+			loadDotenv({ path: envPath, override: true, quiet: true });
 		}
 		source = process.env;
 	}

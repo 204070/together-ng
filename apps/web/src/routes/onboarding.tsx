@@ -38,39 +38,54 @@ export function OnboardingPage({ auth }: { auth: AuthState }) {
 	}
 
 	if (auth.profile) {
-		return <EditProfileFlow auth={auth} />;
+		return <EditProfileFlow profile={auth.profile} />;
 	}
 
 	return <NewProfileFlow auth={auth} />;
 }
 
-function EditProfileFlow({ auth }: { auth: AuthState }) {
+function EditProfileFlow({ profile }: { profile: NonNullable<AuthState['profile']> }) {
 	const navigate = useNavigate();
 	const updateProfile = useServerFn(updateProfileFn);
-	const profile = auth.profile ?? null;
 	const [step, setStep] = useState<1 | 2 | 3>(1);
 	const [error, setError] = useState<string | null>(null);
 	const [submitting, setSubmitting] = useState(false);
 	const [skipped, setSkipped] = useState(false);
 
-	const [formData, setFormData] = useState({
+	const defaultAvailability: OnboardingFormData['contributionAvailability'] = {
+		modality: 'both',
+		preferredArea: '',
+		willingToMentor: false,
+		willingToLend: false,
+		willingToAnswerQuestions: false,
+		willingToCollaborate: false,
+	};
+
+	const rawAvail = profile.contributionAvailability as
+		| Partial<OnboardingFormData['contributionAvailability']>
+		| null
+		| undefined;
+
+	const [formData, setFormData] = useState<OnboardingFormData>({
 		name: profile.name ?? '',
 		location: profile.location ?? '',
 		description: profile.description ?? '',
-		photoUrl: (profile as { photoUrl?: string | null }).photoUrl ?? '',
+		photoUrl: profile.photoUrl ?? '',
 		areasOfInterest: profile.areasOfInterest ?? [],
 		skills: profile.skills ?? [],
-		contributionAvailability: profile.contributionAvailability ?? {
-			modality: 'both' as const,
-			preferredArea: '',
-			willingToMentor: false,
-			willingToLend: false,
-			willingToAnswerQuestions: false,
-			willingToCollaborate: false,
-		},
+		contributionAvailability: rawAvail
+			? {
+					modality: rawAvail.modality ?? 'both',
+					preferredArea: rawAvail.preferredArea ?? '',
+					willingToMentor: rawAvail.willingToMentor ?? false,
+					willingToLend: rawAvail.willingToLend ?? false,
+					willingToAnswerQuestions: rawAvail.willingToAnswerQuestions ?? false,
+					willingToCollaborate: rawAvail.willingToCollaborate ?? false,
+				}
+			: defaultAvailability,
 	});
 
-	function updateField<K extends keyof typeof formData>(key: K, value: (typeof formData)[K]) {
+	function updateField<K extends keyof OnboardingFormData>(key: K, value: OnboardingFormData[K]) {
 		setFormData((prev) => ({ ...prev, [key]: value }));
 	}
 
@@ -152,15 +167,15 @@ function NewProfileFlow({ auth }: { auth: AuthState }) {
 	const [submitting, setSubmitting] = useState(false);
 	const [skipped, setSkipped] = useState(false);
 
-	const [formData, setFormData] = useState({
+	const [formData, setFormData] = useState<OnboardingFormData>({
 		name: auth.user?.email?.split('@')[0] ?? '',
 		location: '',
 		description: '',
 		photoUrl: '',
-		areasOfInterest: [] as number[],
-		skills: [] as number[],
+		areasOfInterest: [],
+		skills: [],
 		contributionAvailability: {
-			modality: 'both' as const,
+			modality: 'both',
 			preferredArea: '',
 			willingToMentor: false,
 			willingToLend: false,
@@ -169,7 +184,7 @@ function NewProfileFlow({ auth }: { auth: AuthState }) {
 		},
 	});
 
-	function updateField<K extends keyof typeof formData>(key: K, value: (typeof formData)[K]) {
+	function updateField<K extends keyof OnboardingFormData>(key: K, value: OnboardingFormData[K]) {
 		setFormData((prev) => ({ ...prev, [key]: value }));
 	}
 
@@ -397,7 +412,7 @@ function InterestSelector({
 
 		if (!skillsByCategory[categoryId]) {
 			try {
-				const skills = await getSkills(categoryId);
+				const skills = await getSkills({ data: categoryId });
 				setSkillsByCategory((prev) => ({
 					...prev,
 					[categoryId]: Array.isArray(skills) ? skills : [],
@@ -423,7 +438,7 @@ function InterestSelector({
 				delete next[categoryId];
 				return next;
 			});
-			const skills = await getSkills(categoryId);
+			const skills = await getSkills({ data: categoryId });
 			setSkillsByCategory((prev) => ({
 				...prev,
 				[categoryId]: Array.isArray(skills) ? skills : [],
@@ -491,7 +506,7 @@ function InterestSelector({
 						{formData.areasOfInterest.includes(cat.id) && skillsByCategory[cat.id] ? (
 							<fieldset>
 								<legend>{cat.name} skills</legend>
-								{skillsByCategory[cat.id].map((skill) => (
+								{skillsByCategory[cat.id]!.map((skill) => (
 									<label key={skill.id}>
 										<input
 											type="checkbox"

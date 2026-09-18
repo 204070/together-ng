@@ -1,4 +1,5 @@
 import { createServerFn } from '@tanstack/react-start';
+import type { ProfileCreateType, ProfilePatchType } from '@together/schemas';
 import { createApiClient } from './api';
 
 // All API access in loaders/mutations goes through these server functions so
@@ -336,7 +337,16 @@ export const getPreviewFn = createServerFn({ method: 'GET' })
 		const api = createApiClient(await apiBaseUrl());
 		const res = await api.requests({ id }).preview.get({ headers: { authorization } });
 		if (res.error !== null || res.data === null) throw new Error('Could not load preview');
-		return res.data;
+		const { missingFields, qualityHints, isPublishable, ...request } = res.data;
+		return {
+			request: {
+				...request,
+				qualityHints: qualityHints ?? [],
+			},
+			missingFields: missingFields ?? [],
+			qualityHints: qualityHints ?? [],
+			isPublishable,
+		};
 	});
 
 export const publishRequestFn = createServerFn({ method: 'POST' })
@@ -432,7 +442,7 @@ export const sendOtpFn = createServerFn({ method: 'POST' })
 	})
 	.handler(async ({ data }) => {
 		const api = createApiClient(await apiBaseUrl());
-		const res = await api.auth['otp-send'].post({ phone: data.phone });
+		const res = await api.auth.otp.send.post({ phone: data.phone });
 		if (res.error !== null || res.data === null) throw new Error('Could not send OTP');
 		return res.data;
 	});
@@ -463,10 +473,13 @@ export const createProfileFn = createServerFn({ method: 'POST' })
 			location: typeof value.location === 'string' ? value.location : null,
 			description: typeof value.description === 'string' ? value.description : null,
 			photoUrl: typeof value.photoUrl === 'string' ? value.photoUrl : null,
-			areasOfInterest: Array.isArray(value.areasOfInterest) ? value.areasOfInterest : [],
-			skills: Array.isArray(value.skills) ? value.skills : [],
-			resources: Array.isArray(value.resources) ? value.resources : [],
-			contributionAvailability: value.contributionAvailability ?? null,
+			areasOfInterest: Array.isArray(value.areasOfInterest)
+				? (value.areasOfInterest as number[])
+				: [],
+			skills: Array.isArray(value.skills) ? (value.skills as number[]) : [],
+			resources: Array.isArray(value.resources) ? (value.resources as string[]) : [],
+			contributionAvailability: (value.contributionAvailability ??
+				null) as ProfileCreateType['contributionAvailability'],
 			exactAddress: typeof value.exactAddress === 'string' ? value.exactAddress : null,
 		};
 	})
@@ -474,25 +487,23 @@ export const createProfileFn = createServerFn({ method: 'POST' })
 		const authorization = await incomingAuth();
 		if (authorization === undefined) throw new Error('Sign in to create a profile');
 		const api = createApiClient(await apiBaseUrl());
-		const res = await api.profiles.post(
-			{
-				name: data.name,
-				location: data.location,
-				description: data.description,
-				photoUrl: data.photoUrl,
-				areasOfInterest: data.areasOfInterest,
-				skills: data.skills,
-				resources: data.resources,
-				contributionAvailability: data.contributionAvailability,
-				exactAddress: data.exactAddress,
-			},
-			{ headers: { authorization } },
-		);
+		const payload: ProfileCreateType = {
+			name: data.name,
+			location: data.location,
+			description: data.description,
+			photoUrl: data.photoUrl,
+			areasOfInterest: data.areasOfInterest,
+			skills: data.skills,
+			resources: data.resources,
+			contributionAvailability: data.contributionAvailability,
+			exactAddress: data.exactAddress,
+		};
+		const res = await api.profiles.post(payload, { headers: { authorization } });
 		if (res.error !== null || res.data === null) throw new Error('Could not create profile');
 		return res.data;
 	});
 
-export const updateProfileFn = createServerFn({ method: 'PATCH' })
+export const updateProfileFn = createServerFn({ method: 'POST' })
 	.validator((input: unknown) => {
 		const value = input as { id?: unknown; [key: string]: unknown };
 		if (typeof value?.id !== 'string') throw new Error('Profile id is required');
@@ -502,10 +513,13 @@ export const updateProfileFn = createServerFn({ method: 'PATCH' })
 			location: typeof value.location === 'string' ? value.location : undefined,
 			description: typeof value.description === 'string' ? value.description : undefined,
 			photoUrl: typeof value.photoUrl === 'string' ? value.photoUrl : undefined,
-			areasOfInterest: Array.isArray(value.areasOfInterest) ? value.areasOfInterest : undefined,
-			skills: Array.isArray(value.skills) ? value.skills : undefined,
-			resources: Array.isArray(value.resources) ? value.resources : undefined,
-			contributionAvailability: value.contributionAvailability,
+			areasOfInterest: Array.isArray(value.areasOfInterest)
+				? (value.areasOfInterest as number[])
+				: undefined,
+			skills: Array.isArray(value.skills) ? (value.skills as number[]) : undefined,
+			resources: Array.isArray(value.resources) ? (value.resources as string[]) : undefined,
+			contributionAvailability:
+				value.contributionAvailability as ProfilePatchType['contributionAvailability'],
 			exactAddress: typeof value.exactAddress === 'string' ? value.exactAddress : undefined,
 		};
 	})
@@ -514,7 +528,8 @@ export const updateProfileFn = createServerFn({ method: 'PATCH' })
 		if (authorization === undefined) throw new Error('Sign in to update a profile');
 		const api = createApiClient(await apiBaseUrl());
 		const { id, ...patch } = data;
-		const res = await api.profiles({ id }).patch(patch, { headers: { authorization } });
+		const payload: ProfilePatchType = patch;
+		const res = await api.profiles({ id }).patch(payload, { headers: { authorization } });
 		if (res.error !== null || res.data === null) throw new Error('Could not update profile');
 		return res.data;
 	});

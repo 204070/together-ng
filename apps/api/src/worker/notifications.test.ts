@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
-import { type Db, desc, eq, getDatabase, getPool } from '@together/db';
-import { notificationDispatchLog, notifications, requestMatches } from '@together/db/schema';
 import type { makeApp } from '../app';
+import { getApiConfig } from '../config';
+import { type Db, desc, eq, getDatabase, getPool } from '../infra/database';
+import { notificationDispatchLog, notifications, requestMatches } from '../infra/database/schema';
 import { createMatchingQueue } from '../queue';
 import {
 	addCapability,
@@ -84,7 +85,7 @@ beforeAll(async () => {
 	db = getDatabase();
 	queue = createMatchingQueue({
 		connectionString: TEST_DATABASE_URL,
-		redisUrl: process.env.REDIS_URL,
+		redisUrl: getApiConfig().redisUrl,
 		db,
 	});
 	await queue.start();

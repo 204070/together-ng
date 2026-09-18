@@ -1,5 +1,5 @@
-import { env, loadEnv } from '@together/config';
-import { type Db, getPool, initDatabase } from '@together/db';
+import { getApiConfig } from '../config';
+import { type Db, getPool, initDatabase } from '../infra/database';
 import { createMatchingQueue } from '../queue';
 
 export interface WorkerRunnerOptions {
@@ -14,9 +14,9 @@ export interface WorkerRunner {
 }
 
 export function createWorkerRunner(options: WorkerRunnerOptions = {}): WorkerRunner {
-	loadEnv();
-	const db = options.db ?? initDatabase(env.DATABASE_URL);
-	const redisUrl = options.redisUrl ?? env.REDIS_URL;
+	const config = getApiConfig();
+	const db = options.db ?? initDatabase(config.databaseUrl);
+	const redisUrl = options.redisUrl ?? config.redisUrl;
 
 	const matchingQueue = createMatchingQueue({
 		db,

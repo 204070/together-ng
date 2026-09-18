@@ -1,5 +1,6 @@
-import { createDb, type Db, getDatabase } from '@together/db';
 import { type ConnectionOptions, Queue, QueueEvents, Worker } from 'bullmq';
+import { getApiConfig } from '../config';
+import { createDb, type Db, getDatabase } from '../infra/database';
 import { type MatchingService, recomputeMatches } from '../worker/matching';
 import {
 	dispatchNotifications,
@@ -15,7 +16,7 @@ export interface MatchingJobData {
 }
 
 export function parseRedisUrl(redisUrl?: string): ConnectionOptions {
-	const urlStr = redisUrl || process.env.REDIS_URL || 'redis://localhost:6379/0';
+	const urlStr = redisUrl || getApiConfig().redisUrl;
 	try {
 		const parsed = new URL(urlStr);
 		const db = parsed.pathname && parsed.pathname.length > 1 ? Number(parsed.pathname.slice(1)) : 0;
@@ -66,7 +67,7 @@ export function createJobQueue<TData extends object>(
 			? parseRedisUrl(options.redisUrl)
 			: options.connectionString?.startsWith('redis')
 				? parseRedisUrl(options.connectionString)
-				: parseRedisUrl(process.env.REDIS_URL));
+				: parseRedisUrl());
 
 	const bullQueue = new Queue(options.queue, {
 		connection,

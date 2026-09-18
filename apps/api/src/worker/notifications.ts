@@ -1,12 +1,12 @@
-import type { Db } from '@together/db';
-import { and, eq, gt, inArray, isNull, sql } from '@together/db';
+import type { Db } from '../infra/database';
+import { and, eq, gt, inArray, isNull, sql } from '../infra/database';
 import {
 	notificationDispatchLog,
 	notificationPreferences,
 	notifications,
 	requestMatches,
 	requests,
-} from '@together/db/schema';
+} from '../infra/database/schema';
 import type { FactorBreakdown } from './matching';
 
 // ---------------------------------------------------------------------------

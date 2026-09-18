@@ -38,8 +38,8 @@ bun install
 docker compose up -d
 
 # 3. Set up the database
-bun run --filter @together/db db:migrate
-bun run --filter @together/db db:seed
+bun run --filter @together/api db:migrate
+bun run --filter @together/api db:seed
 
 # 4. Start the dev servers
 bun run dev
@@ -69,7 +69,6 @@ Run from the root:
 bun run test
 
 # Run tests for a specific package
-bun run --filter @together/db test
 bun run --filter @together/api test
 ```
 

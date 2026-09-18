@@ -1,5 +1,5 @@
 import { treaty } from '@elysiajs/eden';
-import { env } from '@together/config';
 import type { App } from './app';
+import { getApiConfig } from './config';
 
-export const api = treaty<App>(`http://localhost:${env.PORT}`);
+export const api = treaty<App>(`http://localhost:${getApiConfig().port}`);

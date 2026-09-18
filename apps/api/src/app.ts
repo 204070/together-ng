@@ -1,12 +1,12 @@
-import { env as configEnv, loadEnv } from '@together/config';
-import { createDb, type Db } from '@together/db';
 import { Elysia } from 'elysia';
 import { ValidationError } from 'elysia/error';
+import { getApiConfig } from './config';
 import type { AppEnv } from './env';
+import { createDb, type Db } from './infra/database';
+import { createRedisService } from './infra/redis';
+import { createFileStorage, type FileStorage } from './infra/storage';
 import { HttpError } from './lib/errors';
 import { FixedWindowRateLimiter, RedisRateLimiter } from './lib/rate-limit';
-import { createRedisService } from './lib/redis';
-import { type PhotoStorage, photoStorage } from './lib/storage';
 import { validationFields } from './lib/validation';
 import { createVoteWsRouter } from './lib/vote-ws';
 import { createAdminRouter } from './modules/admin/routes';
@@ -41,18 +41,16 @@ import {
 	type MatchingService,
 } from './worker/matching';
 
-loadEnv();
-
 export function makeApp(env: AppEnv = {}) {
-	const db: Db = env.db ?? createDb(env.databaseUrl ?? configEnv.DATABASE_URL);
-	const redis = env.redisUrl ? createRedisService(env.redisUrl) : undefined;
+	const config = env.config ?? getApiConfig();
+	const db: Db = env.db ?? createDb(config.databaseUrl);
+	const redis =
+		env.redis ??
+		(!config.isTest && config.redisUrl ? createRedisService(config.redisUrl) : undefined);
 
-	const otpSender: OtpSender =
-		env.otpSender ?? createOtpSender(env.otpProvider ?? configEnv.OTP_PROVIDER);
+	const otpSender: OtpSender = env.otpSender ?? createOtpSender();
 	const authServices = createAuthServices({
 		db,
-		jwtSecret: env.jwtSecret ?? configEnv.JWT_SECRET,
-		isProduction: env.isProduction ?? configEnv.NODE_ENV === 'production',
 		otpSender,
 	});
 	const authContext = {
@@ -63,14 +61,13 @@ export function makeApp(env: AppEnv = {}) {
 	const notificationStore = new NotificationStore(db);
 	const notificationService = new NotificationService(notificationStore);
 
-	const photoStorageService: PhotoStorage = env.storage ?? photoStorage;
+	const fileStorageService: FileStorage = env.storage ?? createFileStorage();
 	const profileStore = new ProfileStore(db);
-	const profileService = new ProfileService(profileStore, photoStorageService);
+	const profileService = new ProfileService(profileStore, fileStorageService);
 
-	const requestLimiter: AsyncRateLimiter =
-		env.redisUrl && redis
-			? new RedisRateLimiter(redis, REQUEST_WINDOW_MS, REQUEST_MAX_HITS)
-			: new FixedWindowRateLimiter(REQUEST_WINDOW_MS, REQUEST_MAX_HITS);
+	const requestLimiter: AsyncRateLimiter = redis
+		? new RedisRateLimiter(redis, REQUEST_WINDOW_MS, REQUEST_MAX_HITS)
+		: new FixedWindowRateLimiter(REQUEST_WINDOW_MS, REQUEST_MAX_HITS);
 	const matchingService: MatchingService = env.matching ?? createInlineMatchingService(db);
 	const requestStore = new RequestStore(db);
 	const requestService = new RequestService(

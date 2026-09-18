@@ -1,7 +1,5 @@
-import { env, loadEnv } from '@together/config';
 import { Pool } from 'pg';
-
-loadEnv();
+import { getApiConfig } from '../../lib/config';
 
 export const CATEGORIES: { name: string; slug: string }[] = [
 	{ name: 'Education', slug: 'education' },
@@ -23,8 +21,9 @@ export const CATEGORIES: { name: string; slug: string }[] = [
 	{ name: 'Local knowledge', slug: 'local-knowledge' },
 ];
 
-export async function seedCategories(databaseUrl: string = env.DATABASE_URL): Promise<number> {
-	const pool = new Pool({ connectionString: databaseUrl, max: 1 });
+export async function seedCategories(databaseUrl?: string): Promise<number> {
+	const url = databaseUrl ?? getApiConfig().database.url;
+	const pool = new Pool({ connectionString: url, max: 1 });
 	const client = await pool.connect();
 	try {
 		let inserted = 0;

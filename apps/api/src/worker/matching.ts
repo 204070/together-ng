@@ -1,4 +1,5 @@
 import { jwt } from '@elysiajs/jwt';
+import { Elysia, t } from 'elysia';
 import {
 	and,
 	asc,
@@ -21,8 +22,7 @@ import {
 	skills,
 	sql,
 	users,
-} from '@together/db';
-import { Elysia, t } from 'elysia';
+} from '../infra/database';
 import type { JwtVerifier } from '../lib/authentication';
 import { HttpError } from '../lib/errors';
 import { requireAdmin } from '../modules/admin/routes';

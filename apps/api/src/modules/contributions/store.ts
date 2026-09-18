@@ -8,7 +8,7 @@ import {
 	type OutcomeConfirmation,
 	outcomeConfirmations,
 	requests,
-} from '@together/db';
+} from '../../infra/database';
 
 export class ContributionStore {
 	constructor(private readonly db: Db) {}

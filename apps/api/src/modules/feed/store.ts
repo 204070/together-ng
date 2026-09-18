@@ -10,7 +10,7 @@ import {
 	or,
 	requests,
 	sql,
-} from '@together/db';
+} from '../../infra/database';
 import { toResponse } from '../requests/store';
 
 export { and, asc, categories, desc, eq, inArray, or, requests, toResponse };

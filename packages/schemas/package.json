@@ -8,9 +8,6 @@
 	"dependencies": {
 		"@sinclair/typebox": "^0.34.32"
 	},
-	"devDependencies": {
-		"@together/config": "workspace:*"
-	},
 	"scripts": {
 		"lint": "biome check .",
 		"typecheck": "tsc --noEmit",

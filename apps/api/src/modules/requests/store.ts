@@ -11,7 +11,7 @@ import {
 	requests,
 	sql,
 	votes,
-} from '@together/db';
+} from '../../infra/database';
 
 export class RequestStore {
 	constructor(private readonly db: Db) {}

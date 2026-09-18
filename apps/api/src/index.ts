@@ -1,15 +1,14 @@
-import { env, loadEnv } from '@together/config';
-import { initDatabase } from '@together/db';
 import { makeApp } from './app';
+import { getApiConfig } from './config';
+import { initDatabase } from './infra/database';
 import { createMatchingQueue } from './queue';
 
-loadEnv();
+const config = getApiConfig();
+const port = config.port;
 
-const port = env.PORT;
-
-const db = initDatabase(env.DATABASE_URL);
+const db = initDatabase(config.databaseUrl);
 const matchingQueue = createMatchingQueue({
-	redisUrl: env.REDIS_URL,
+	redisUrl: config.redisUrl,
 	db,
 });
 
@@ -20,7 +19,7 @@ const serverApp = makeApp({
 
 serverApp
 	.listen(port, async () => {
-		if (env.NODE_ENV !== 'test') {
+		if (!config.isTest) {
 			console.log(`@together/api listening on http://localhost:${port}`);
 		}
 	})

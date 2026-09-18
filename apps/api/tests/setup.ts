@@ -1,3 +1,4 @@
+import { getApiConfig } from '../src/config';
 import {
 	type Db,
 	drizzle,
@@ -7,13 +8,14 @@ import {
 	migrate,
 	type PoolClient,
 	setDatabase,
-} from '@together/db';
-import * as schema from '@together/db/schema';
+} from '../src/infra/database';
+import * as schema from '../src/infra/database/schema';
 
 // Initialize database and ensure schema is migrated once for all test workers
-if (process.env.DATABASE_URL) {
-	initDatabase(process.env.DATABASE_URL);
-	await migrate(process.env.DATABASE_URL);
+const config = getApiConfig();
+if (config.databaseUrl) {
+	initDatabase(config.databaseUrl);
+	await migrate(config.databaseUrl);
 }
 
 let client: PoolClient | null = null;

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import { and, count, eq, getDatabase, sql } from '@together/db';
-import { votes } from '@together/db/schema';
+import { and, count, eq, getDatabase, sql } from '../../infra/database';
+import { votes } from '../../infra/database/schema';
 import { getVoteRedis, VOTE_UPDATES_CHANNEL } from '../../lib/vote-ws';
 import { createRequestFixture, createUser, makeTestApp, userAuth } from '../../testing/helpers';
 

@@ -1,10 +1,11 @@
 import { Elysia } from 'elysia';
+import { getApiConfig } from '../config';
 import {
 	createRedisService,
 	MockRedisService,
 	type RedisService,
 	type UnsubscribeFn,
-} from './redis';
+} from '../infra/redis';
 
 export const VOTE_UPDATES_CHANNEL = 'vote_updates';
 
@@ -33,10 +34,11 @@ let defaultRedisUnsub: UnsubscribeFn | null = null;
 
 export function getVoteRedis(): RedisService {
 	if (!defaultRedis) {
-		if (process.env.NODE_ENV === 'test') {
+		const config = getApiConfig();
+		if (config.isTest) {
 			defaultRedis = new MockRedisService();
 		} else {
-			defaultRedis = createRedisService();
+			defaultRedis = createRedisService(config.redisUrl);
 		}
 	}
 	return defaultRedis;

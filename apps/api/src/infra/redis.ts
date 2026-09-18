@@ -1,3 +1,5 @@
+import { getApiConfig } from '../config';
+
 export interface NativeRedisClientOptions {
 	autoReconnect?: boolean;
 	maxRetries?: number;
@@ -84,7 +86,7 @@ export class BunRedisService implements RedisService {
 
 	constructor(options: BunRedisOptions | string = {}) {
 		const opts: BunRedisOptions = typeof options === 'string' ? { url: options } : options;
-		this.url = opts.url ?? process.env.REDIS_URL ?? 'redis://127.0.0.1:6379';
+		this.url = opts.url ?? getApiConfig().redisUrl;
 		this.poolSize = Math.max(1, opts.poolSize ?? 5);
 		this.clientOptions = {
 			autoReconnect: opts.autoReconnect ?? true,

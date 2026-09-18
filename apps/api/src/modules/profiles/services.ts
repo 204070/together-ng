@@ -1,5 +1,5 @@
+import { buildPhotoKey, type FileStorage } from '../../infra/storage';
 import { HttpError } from '../../lib/errors';
-import { buildPhotoKey, type PhotoStorage } from '../../lib/storage';
 import type { ProfileRow, ProfileStore } from './store';
 
 function forbiddenError(): HttpError {
@@ -20,7 +20,7 @@ export interface ReputationData {
 	successfulContributions: number;
 }
 
-export function toPublic(row: ProfileRow, reputation: ReputationData, storage: PhotoStorage) {
+export function toPublic(row: ProfileRow, reputation: ReputationData, storage: FileStorage) {
 	const photoKey = row.profilePhotoKey;
 	const photoUrl =
 		photoKey === null
@@ -49,7 +49,7 @@ export function toPublic(row: ProfileRow, reputation: ReputationData, storage: P
 	};
 }
 
-export function toPrivate(row: ProfileRow, reputation: ReputationData, storage: PhotoStorage) {
+export function toPrivate(row: ProfileRow, reputation: ReputationData, storage: FileStorage) {
 	return {
 		...toPublic(row, reputation, storage),
 		exactAddress: row.exactAddress ?? null,
@@ -144,7 +144,7 @@ export function mapPatchBody(body: Record<string, unknown>): Partial<{
 export class ProfileService {
 	constructor(
 		public readonly store: ProfileStore,
-		public readonly storage: PhotoStorage,
+		public readonly storage: FileStorage,
 	) {}
 
 	async fetchReputation(userId: string): Promise<ReputationData> {
@@ -231,7 +231,7 @@ export class ProfileService {
 	}
 }
 
-export function createProfileService(store: ProfileStore, storage: PhotoStorage): ProfileService {
+export function createProfileService(store: ProfileStore, storage: FileStorage): ProfileService {
 	return new ProfileService(store, storage);
 }
 

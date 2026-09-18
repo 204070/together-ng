@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import { and, eq, getDatabase } from '@together/db';
+import { and, eq, getDatabase } from '../../infra/database';
 import {
 	contributions,
 	contributorConfirmations,
 	notifications,
 	outcomeConfirmations,
-} from '@together/db/schema';
+} from '../../infra/database/schema';
 import { createRequestFixture, makeTestApp, userAuth } from '../../testing/helpers';
 
 let app: ReturnType<typeof makeTestApp>;

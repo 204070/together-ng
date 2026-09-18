@@ -4,9 +4,6 @@
   "workspaces": {
     "": {
       "name": "together-ng",
-      "dependencies": {
-        "@together/config": "workspace:*",
-      },
       "devDependencies": {
         "@biomejs/biome": "2.5.13",
         "@types/bun": "^1.4.2",
@@ -27,7 +24,6 @@
       "devDependencies": {
         "@testing-library/jest-dom": "^7.0.1",
         "@testing-library/react": "^16.3.3",
-        "@together/config": "workspace:*",
         "@types/react": "^19.3.0",
         "@types/react-dom": "^19.3.0",
         "@vitejs/plugin-react": "^6.1.1",
@@ -42,11 +38,16 @@
       "dependencies": {
         "@elysiajs/eden": "^1.4.9",
         "@elysiajs/jwt": "^1.4.2",
-        "@together/config": "workspace:*",
-        "@together/db": "workspace:*",
         "@together/schemas": "workspace:*",
         "bullmq": "^5.41.0",
+        "dotenv": "^16.4.7",
+        "drizzle-orm": "^0.45.2",
         "elysia": "^1.4.30",
+        "pg": "^8.16.0",
+      },
+      "devDependencies": {
+        "@types/pg": "^8.15.4",
+        "drizzle-kit": "^0.31.10",
       },
     },
     "apps/web": {
@@ -65,36 +66,10 @@
       },
       "devDependencies": {
         "@testing-library/react": "^16.3.3",
-        "@together/config": "workspace:*",
         "@types/react": "^19",
         "@types/react-dom": "^19",
         "jsdom": "^30.0.1",
         "vitest": "^5.0.0",
-      },
-    },
-    "packages/config": {
-      "name": "@together/config",
-      "version": "0.0.0",
-      "dependencies": {
-        "@together/schemas": "workspace:*",
-        "dotenv": "^17.4.2",
-      },
-      "devDependencies": {
-        "@types/node": "^22.20.2",
-      },
-    },
-    "packages/db": {
-      "name": "@together/db",
-      "version": "0.0.0",
-      "dependencies": {
-        "@together/config": "workspace:*",
-        "drizzle-orm": "^0.45.2",
-        "pg": "^8.16.0",
-      },
-      "devDependencies": {
-        "@types/node": "^22.20.2",
-        "@types/pg": "^8.15.4",
-        "drizzle-kit": "^0.31.10",
       },
     },
     "packages/schemas": {
@@ -102,9 +77,6 @@
       "version": "0.0.0",
       "dependencies": {
         "@sinclair/typebox": "^0.34.32",
-      },
-      "devDependencies": {
-        "@together/config": "workspace:*",
       },
     },
   },
@@ -361,10 +333,6 @@
 
     "@together/api": ["@together/api@workspace:apps/api"],
 
-    "@together/config": ["@together/config@workspace:packages/config"],
-
-    "@together/db": ["@together/db@workspace:packages/db"],
-
     "@together/schemas": ["@together/schemas@workspace:packages/schemas"],
 
     "@together/web": ["@together/web@workspace:apps/web"],
@@ -461,7 +429,7 @@
 
     "dom-accessibility-api": ["dom-accessibility-api@0.6.3", "", {}, "sha512-7ZgogeTnjuHbo+ct10G9Ffp0mif17idi0IyWNVA/wcwcm7NPOD/WEHVP3n7n3MhXqxoIYm8d6MuZohYWIZ4T3w=="],
 
-    "dotenv": ["dotenv@17.4.2", "", {}, "sha512-nI4U3TottKAcAD9LLud4Cb7b2QztQMUEfHbvhTH09bqXTxnSie8WnjPALV/WMCrJZ6UV/qHJ6L03OqO3LcdYZw=="],
+    "dotenv": ["dotenv@16.6.1", "", {}, "sha512-uBq4egWHTcTt33a72vpSG0z3HnPuIl6NqYcTrKEg2azoEyl2hpW0zqlxysq2pK9HlDIHyHyakeYaYnSAwd8bow=="],
 
     "drizzle-kit": ["drizzle-kit@0.31.10", "", { "dependencies": { "@drizzle-team/brocli": "^0.10.2", "@esbuild-kit/esm-loader": "^2.5.5", "esbuild": "^0.25.4", "tsx": "^4.21.0" }, "bin": { "drizzle-kit": "bin.cjs" } }, "sha512-7OZcmQUrdGI+DUNNsKBn1aW8qSoKuTH7d0mYgSP8bAzdFzKoovxEFnoGQp2dVs82EOJeYycqRtciopszwUf8bw=="],
 

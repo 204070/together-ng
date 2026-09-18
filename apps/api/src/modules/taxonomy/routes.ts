@@ -1,6 +1,6 @@
-import { and, categories, type Db, eq, isNull, skills } from '@together/db';
 import { Category, Skill, Type } from '@together/schemas';
 import { Elysia } from 'elysia';
+import { and, categories, type Db, eq, isNull, skills } from '../../infra/database';
 
 const CategoryList = Type.Array(Category);
 const SkillList = Type.Array(Skill);

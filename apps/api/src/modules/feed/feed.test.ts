@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import { eq, getDatabase, requests } from '@together/db';
-import { MockRedisService } from '../../lib/redis';
+import { eq, getDatabase, requests } from '../../infra/database';
+import { MockRedisService } from '../../infra/redis';
 import {
 	createCategory,
 	createRequestFixture,

@@ -1,5 +1,5 @@
-import { and, type Db, eq, isNull, sql } from '@together/db';
-import { notifications } from '@together/db/schema';
+import { and, type Db, eq, isNull, sql } from '../../infra/database';
+import { notifications } from '../../infra/database/schema';
 
 export interface NotificationRow {
 	id: string;

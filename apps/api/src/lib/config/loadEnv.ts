@@ -4,19 +4,20 @@ import { fileURLToPath } from 'node:url';
 import { type Static, Type, Value, ValueErrorType } from '@together/schemas';
 import { config as loadDotenv } from 'dotenv';
 
-const EnvSchema = Type.Object({
+export const ApiEnvSchema = Type.Object({
 	PORT: Type.Integer({ minimum: 1, default: 4000 }),
-	WEB_PORT: Type.Integer({ minimum: 1, default: 5000 }),
-	ADMIN_PORT: Type.Integer({ minimum: 1, default: 5100 }),
-	NODE_ENV: Type.String({ default: 'development' }),
+	NODE_ENV: Type.Union(
+		[Type.Literal('development'), Type.Literal('production'), Type.Literal('test')],
+		{ default: 'development' },
+	),
+	DATABASE_URL: Type.String({ minLength: 1 }),
+	JWT_SECRET: Type.String({ minLength: 1 }),
+	REDIS_URL: Type.String({ default: '' }),
 	OTP_PROVIDER: Type.Union([Type.Literal('mock'), Type.Literal('termii')], {
 		default: 'mock',
 	}),
-	DATABASE_URL: Type.String({ minLength: 1 }),
-	JWT_SECRET: Type.String({ minLength: 1 }),
 	TERMII_API_KEY: Type.String({ default: '' }),
 	TERMII_SENDER_ID: Type.String({ default: '' }),
-	REDIS_URL: Type.String({ default: '' }),
 	STORAGE_PROVIDER: Type.Union([Type.Literal('mock'), Type.Literal('s3')], {
 		default: 'mock',
 	}),
@@ -28,9 +29,7 @@ const EnvSchema = Type.Object({
 	STORAGE_PUBLIC_URL: Type.String({ default: '' }),
 });
 
-export type ConfigEnv = Static<typeof EnvSchema>;
-
-const INTEGER_KEYS = ['PORT', 'WEB_PORT', 'ADMIN_PORT'] as const;
+export type ApiEnv = Static<typeof ApiEnvSchema>;
 
 function moduleDir(): string | undefined {
 	const meta = import.meta as ImportMeta & { dir?: string };
@@ -46,7 +45,7 @@ function envFilePath(): string | undefined {
 	const candidates = [
 		resolve(process.cwd(), '.env'),
 		resolve(process.cwd(), '../../.env'),
-		resolve(moduleDir() ?? '.', '../../.env'),
+		resolve(moduleDir() ?? '.', '../../../../.env'),
 	];
 	return candidates.find(existsSync);
 }
@@ -65,37 +64,40 @@ function reason(type: ValueErrorType): string {
 	}
 }
 
-function effectiveDefault(varName: string): string {
-	const property = (EnvSchema.properties as Record<string, { default?: unknown }>)[varName];
-	if (property !== undefined && 'default' in property) {
-		return JSON.stringify(property.default);
-	}
-	return '(none)';
-}
-
 function validationErrors(value: unknown): string[] {
 	const messages: string[] = [];
 	const seen = new Set<string>();
-	for (const error of Value.Errors(EnvSchema, value)) {
+	for (const error of Value.Errors(ApiEnvSchema, value)) {
 		const varName = error.path.replace(/^\//, '');
 		if (varName === '' || seen.has(varName)) continue;
 		seen.add(varName);
-		const hint = varName === 'JWT_SECRET' ? ' — set it, e.g. `openssl rand -hex 32`' : '';
-		messages.push(
-			`- ${varName}: ${reason(error.type)} (effective default: ${effectiveDefault(varName)})${hint}`,
-		);
+		messages.push(`- ${varName}: ${reason(error.type)}`);
 	}
 	return messages;
 }
 
-let _env: ConfigEnv | undefined;
-let _loaded = false;
+let cachedEnv: ApiEnv | undefined;
 
-export let env: ConfigEnv;
-
-export function loadEnv(source?: Record<string, unknown>): ConfigEnv {
-	if (_loaded && _env !== undefined) return _env;
-	_loaded = true;
+/**
+ * Loads, parses, and strictly validates environment variables against `ApiEnvSchema`.
+ *
+ * - When called without arguments (`source === undefined`):
+ *   1. Searches candidate locations for `.env` (`cwd`, parent monorepo root, or relative to module)
+ *   2. Loads `.env` via dotenv (overriding ambient vars)
+ *   3. Parses and validates against `ApiEnvSchema` with type coercion and defaults
+ *   4. Caches and freezes the result for subsequent calls in the same process/isolate
+ *
+ * - When called with an explicit `source` (e.g. `{ DATABASE_URL: '...', ... }` in tests):
+ *   Validates and returns the parsed environment without caching or mutating process state.
+ *
+ * @param source Optional dictionary of environment key-value pairs to validate. Defaults to `process.env`.
+ * @throws {Error} If any required environment variable is missing or invalid according to `ApiEnvSchema`.
+ * @returns Strongly typed, validated `ApiEnv` object.
+ */
+export function loadEnv(source?: Record<string, unknown>): ApiEnv {
+	if (source === undefined && cachedEnv !== undefined) {
+		return cachedEnv;
+	}
 
 	if (source === undefined) {
 		const envPath = envFilePath();
@@ -106,26 +108,29 @@ export function loadEnv(source?: Record<string, unknown>): ConfigEnv {
 	}
 
 	const raw: Record<string, unknown> = { ...source };
-	for (const key of INTEGER_KEYS) {
-		if (key in raw) raw[key] = Number(raw[key]);
+	if ('PORT' in raw && typeof raw.PORT === 'string') {
+		raw.PORT = Number(raw.PORT);
 	}
 
 	try {
-		_env = Value.Parse(EnvSchema, raw);
+		const parsed = Value.Parse(ApiEnvSchema, raw);
+		if (source === process.env) {
+			cachedEnv = Object.freeze(parsed);
+		}
+		return parsed;
 	} catch {
 		throw new Error(
-			`Environment validation failed:\n${validationErrors(Value.Default(EnvSchema, raw)).join('\n')}`,
+			`API Environment validation failed:\n${validationErrors(Value.Default(ApiEnvSchema, raw)).join('\n')}`,
 		);
 	}
-
-	env = Object.freeze(_env);
-	return _env;
 }
 
-export const PINNED_VARS = [
-	'DATABASE_URL',
-	'TEST_DATABASE_URL',
-	'PORT',
-	'WEB_PORT',
-	'ADMIN_PORT',
-] as const;
+/**
+ * Resets the in-memory cached environment singleton.
+ *
+ * Useful in unit tests that alter `process.env` and want `loadEnv()` to re-read
+ * and re-validate from scratch.
+ */
+export function resetCachedEnv(): void {
+	cachedEnv = undefined;
+}

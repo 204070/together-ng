@@ -1,10 +1,10 @@
-import type { NewNotification } from '@together/db';
 import type {
 	ContributionComplete,
 	ContributionConfirm,
 	OutcomeSubmit,
 	Static,
 } from '@together/schemas';
+import type { NewNotification } from '../../infra/database';
 import { HttpError } from '../../lib/errors';
 import type { NotificationService } from '../notifications/services';
 import { type ContributionStore, toContributionResponse } from './store';

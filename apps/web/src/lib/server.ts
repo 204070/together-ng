@@ -5,15 +5,15 @@ import { createApiClient } from './api';
 // All API access in loaders/mutations goes through these server functions so
 // it always executes on the server (SSR for first paint, same-origin RPC for
 // client navigations — no CORS, no client-side feed fetch). Dynamic imports
-// keep node-only modules (@together/config, server request helpers) out of
+// keep node-only modules (server request helpers) out of
 // the client bundle: they run exclusively inside server handlers.
 
 const TOKEN_COOKIE = 'together_token';
 
 async function apiBaseUrl(): Promise<string> {
 	if (process.env.API_URL) return process.env.API_URL;
-	const { loadEnv } = await import('@together/config');
-	return `http://localhost:${loadEnv().PORT}`;
+	const port = process.env.PORT || 4000;
+	return `http://localhost:${port}`;
 }
 
 // Authorization for the upstream API call: prefer the incoming Authorization

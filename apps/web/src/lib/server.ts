@@ -229,6 +229,25 @@ export const getAuthUserFn = createServerFn({ method: 'GET' }).handler(async () 
 
 export type AuthState = Awaited<ReturnType<typeof getAuthUserFn>>;
 
+/**
+ * Absolute site origin for the current SSR request (e.g.
+ * `http://localhost:5032`), so `og:url`/`og:image` are absolute canonical
+ * URLs for crawlers. Falls back to `undefined` when no host is visible, in
+ * which case callers emit relative canonical paths.
+ */
+export const getSiteUrlFn = createServerFn({ method: 'GET' }).handler(async () => {
+	try {
+		const { getRequestHeader } = await import('@tanstack/react-start/server');
+		const host = getRequestHeader('x-forwarded-host') ?? getRequestHeader('host');
+		if (!host) return { siteUrl: undefined as string | undefined };
+		const forwardedProto = getRequestHeader('x-forwarded-proto');
+		const proto = forwardedProto?.split(',')[0]?.trim() || 'http';
+		return { siteUrl: `${proto}://${host}` };
+	} catch {
+		return { siteUrl: undefined as string | undefined };
+	}
+});
+
 export const getRequestDetailFn = createServerFn({ method: 'GET' })
 	.validator((id: unknown) => {
 		if (typeof id !== 'string' || id === '') throw new Error('Invalid request id');

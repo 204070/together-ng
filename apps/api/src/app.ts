@@ -13,6 +13,8 @@ import { createCategoryAdminRouter } from './modules/admin/categories/routes';
 import { CategoryAdminService } from './modules/admin/categories/services';
 import { CategoryAdminStore } from './modules/admin/categories/store';
 import { createAdminRouter } from './modules/admin/routes';
+import { AdminService } from './modules/admin/services';
+import { AuditStore, ModerationStore, ReportStore } from './modules/admin/store';
 import { createOtpSender, type OtpSender } from './modules/auth/otp-sender';
 import { createAuthRouter } from './modules/auth/routes';
 import { createAuthServices } from './modules/auth/services';
@@ -88,6 +90,12 @@ export function makeApp(env: AppEnv = {}) {
 
 	const feedService = createFeedService(db, redis);
 
+	const adminService = new AdminService(
+		new ReportStore(db),
+		new ModerationStore(db),
+		new AuditStore(db),
+	);
+
 	const app = new Elysia()
 		.get('/health', () => ({ status: 'ok' as const }))
 		.onError(({ error, code, set, path }) => {
@@ -116,7 +124,13 @@ export function makeApp(env: AppEnv = {}) {
 		})
 		.use(createAuthRouter(authServices))
 		.use(createFeedRouter(feedService))
-		.use(createAdminRouter(authServices))
+		.use(
+			createAdminRouter({
+				store: authServices.store,
+				jwtSecret: authServices.jwtSecret,
+				adminService,
+			}),
+		)
 		.use(createCategoryAdminRouter(categoryAdminService, authContext))
 		.use(createProfileRouter(profileService, authContext))
 		.use(createTaxonomyRouter({ db }))

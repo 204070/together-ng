@@ -1,6 +1,6 @@
 import { jwt } from '@elysiajs/jwt';
 import { Elysia } from 'elysia';
-import { unauthorizedError } from './errors';
+import { forbiddenError, unauthorizedError } from './errors';
 
 export interface AuthenticatedActor {
 	userId: string;
@@ -49,6 +49,37 @@ export async function requireActiveUser<TUser extends ActiveUser>(
 	jwt: JwtVerifier,
 	users: ActiveUserLookup<TUser>,
 ): Promise<{ actor: AuthenticatedActor; user: TUser }> {
+	const { actor, user } = await verifyActor(headers, jwt, users);
+	if (user.status !== 'active' || user.deletedAt !== null) throw unauthorizedError();
+	return { actor, user };
+}
+
+/**
+ * Authenticates an actor like `requireActiveUser`, except a suspended
+ * account is rejected with 403 `ACCOUNT_SUSPENDED` instead of 401 so the
+ * client can tell "logged in but suspended" apart from "not logged in".
+ * Every other non-active account (banned, deactivated, deleted) still gets
+ * 401, exactly as before. Used by endpoints where issue #19 requires the
+ * suspended status to be visible (`GET /auth/me`, `POST /requests`).
+ */
+export async function requireUnsuspendedUser<TUser extends ActiveUser>(
+	headers: { authorization?: string },
+	jwt: JwtVerifier,
+	users: ActiveUserLookup<TUser>,
+): Promise<{ actor: AuthenticatedActor; user: TUser }> {
+	const { actor, user } = await verifyActor(headers, jwt, users);
+	if (user.status === 'suspended' && user.deletedAt === null) {
+		throw forbiddenError('ACCOUNT_SUSPENDED', 'Account suspended');
+	}
+	if (user.status !== 'active' || user.deletedAt !== null) throw unauthorizedError();
+	return { actor, user };
+}
+
+async function verifyActor<TUser extends ActiveUser>(
+	headers: { authorization?: string },
+	jwt: JwtVerifier,
+	users: ActiveUserLookup<TUser>,
+): Promise<{ actor: AuthenticatedActor; user: TUser }> {
 	const token = extractBearer(headers.authorization);
 	if (token === undefined) throw unauthorizedError();
 
@@ -58,7 +89,7 @@ export async function requireActiveUser<TUser extends ActiveUser>(
 	if (typeof sub !== 'string' || typeof sid !== 'string') throw unauthorizedError();
 
 	const user = await users.findUserById(sub);
-	if (user?.status !== 'active' || user.deletedAt !== null) throw unauthorizedError();
+	if (user === undefined) throw unauthorizedError();
 	return { actor: { userId: sub, sessionId: sid }, user };
 }
 

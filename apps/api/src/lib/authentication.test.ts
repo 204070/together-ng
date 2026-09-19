@@ -6,6 +6,7 @@ import {
 	extractBearer,
 	requireActiveActor,
 	requireActiveUser,
+	requireUnsuspendedUser,
 } from './authentication';
 import { HttpError } from './errors';
 
@@ -52,6 +53,36 @@ describe('authentication boundary', () => {
 		);
 		expect(result.actor).toEqual({ userId: 'user-1', sessionId: 'session-1' });
 		expect(result.user).toEqual(userEntity);
+	});
+
+	test('requireUnsuspendedUser maps suspended to 403 ACCOUNT_SUSPENDED', async () => {
+		try {
+			await requireUnsuspendedUser(
+				{ authorization: 'Bearer token' },
+				{ verify: async () => ({ sub: 'user-1', sid: 'session-1' }) },
+				{ findUserById: async () => ({ status: 'suspended', deletedAt: null }) },
+			);
+			expect.unreachable();
+		} catch (error) {
+			expect(error).toBeInstanceOf(HttpError);
+			expect((error as HttpError).status).toBe(403);
+			expect((error as HttpError).code).toBe('ACCOUNT_SUSPENDED');
+		}
+	});
+
+	test('requireUnsuspendedUser keeps 401 for banned accounts', async () => {
+		try {
+			await requireUnsuspendedUser(
+				{ authorization: 'Bearer token' },
+				{ verify: async () => ({ sub: 'user-1', sid: 'session-1' }) },
+				{ findUserById: async () => ({ status: 'banned', deletedAt: null }) },
+			);
+			expect.unreachable();
+		} catch (error) {
+			expect(error).toBeInstanceOf(HttpError);
+			expect((error as HttpError).status).toBe(401);
+			expect((error as HttpError).code).toBe('UNAUTHORIZED');
+		}
 	});
 
 	test('createAuthGuard authenticates requests through scoped derive', async () => {

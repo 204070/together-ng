@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { eq, getDatabase } from '../../infra/database';
 import { users } from '../../infra/database/schema';
-import { adminAuth, makeTestApp, userAuth } from '../../testing/helpers';
+import { adminAuth, createReport, makeTestApp, userAuth } from '../../testing/helpers';
 
 let app: ReturnType<typeof makeTestApp>;
 
@@ -43,11 +43,29 @@ describe('GET /admin/reports', () => {
 		expect(body.message).toBe('Admin access required');
 	});
 
-	test('admin token returns 200 placeholder queue with no user data', async () => {
+	test('admin token returns the real queue (empty when nothing reported)', async () => {
 		const { token } = await adminAuth({ email: 'admin@x.com' });
 		const res = await get('/admin/reports', token);
 		expect(res.status).toBe(200);
-		expect(await readBody(res)).toEqual({ reports: [], total: 0 });
+		const body = await readBody(res);
+		expect(body.total).toBe(0);
+		expect(body.reports).toEqual([]);
+	});
+
+	test('admin queue lists reports without reporter identity', async () => {
+		const { token } = await adminAuth({ email: 'admin@x.com' });
+		await createReport({ reason: 'Spam content' });
+		const res = await get('/admin/reports', token);
+		expect(res.status).toBe(200);
+		const body = await readBody(res);
+		expect(body.total).toBe(1);
+		const [item] = body.reports as Record<string, unknown>[];
+		expect(item?.reason).toBe('Spam content');
+		expect(typeof item?.id).toBe('string');
+		expect(typeof item?.createdAt).toBe('string');
+		expect(item).not.toHaveProperty('reporterId');
+		expect(item).not.toHaveProperty('reporter');
+		expect(JSON.stringify(body)).not.toContain('reporterId');
 	});
 
 	test('admin is resolved per request: promoting after login grants access', async () => {

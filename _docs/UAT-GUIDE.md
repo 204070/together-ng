@@ -321,6 +321,19 @@ After confirmation, the **request author** submits an outcome:
 3. Click any request title to view its details
 4. The feed endpoint is `GET /requests/featured` — it returns the 20 most recent published requests with vote counts
 
+### 17. Admin Category Management (`/admin/categories`)
+
+For a tester with an admin account, to manage the request taxonomy:
+
+1. Open `/admin/categories` in the admin app and sign in as an admin. **Expected:** a list of top-level categories, each showing name, slug, status (Active/Retired), subcategory count and skill count; subcategories appear nested/indented under their parent.
+2. Add a category: type a name (e.g. `Gardening`) in "New category name" and submit. **Expected:** the category appears in the list and immediately in the public category picker backed by `GET /categories`.
+3. Manage a category: click "Manage" on a row. **Expected:** a detail panel with rename, retire/restore, subcategory creation, skill creation, merge, and related-link forms, plus a "Related: ..." line.
+4. Rename: change the name and save. **Expected:** the new name shows in the list and in `GET /categories`; the category id never changes.
+5. Retire: click "Retire category". **Expected:** status flips to Retired and it disappears from the new-request picker, but existing requests in that category still open; "Restore category" brings it back.
+6. Merge: pick another active category under "Merge into" and submit. **Expected:** the source retires with a "merged into" marker and its requests move to the target (none left behind).
+7. Related: pick a category under "Link related" and submit. **Expected:** both categories' detail panels list each other under "Related: ...".
+8. Validation to try: duplicate active names are rejected with a conflict error; merging a category into itself and retiring an already-retired category are rejected with a clear `400` error.
+
 ---
 
 ## Request State Machine

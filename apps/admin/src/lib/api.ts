@@ -4,10 +4,16 @@ import type {
 	AdminCategoryType,
 	AdminMeType as AdminMe,
 	AdminReportsType as AdminReports,
+	AuditLogQueryType,
+	AuditLogResponseType,
 	AuthResponseType,
 	CategoryDetailType,
 	CategoryRelationType,
 	CategoryWithCountsType,
+	ReportActionInputType,
+	ReportActionResponseType,
+	ReportDetailType,
+	ReportsQueryType,
 	SkillType,
 } from '@together/schemas';
 
@@ -78,6 +84,14 @@ export type AdminCategoryDetail = CategoryDetailType;
 export type AdminSkill = SkillType;
 export type AdminCategoryRelation = CategoryRelationType;
 export type AdminCategory = AdminCategoryType;
+export type {
+	AuditLogQueryType,
+	AuditLogResponseType,
+	ReportActionInputType,
+	ReportActionResponseType,
+	ReportDetailType,
+	ReportsQueryType,
+};
 
 /**
  * GET /admin/me. Resolves for admins; throws ApiError 403
@@ -95,15 +109,60 @@ export async function fetchAdminMe(token: string): Promise<AdminMe> {
 	return data;
 }
 
-/** GET /admin/reports placeholder (real queue lands in #19). */
-export async function fetchAdminReports(token: string): Promise<AdminReports> {
+/** GET /admin/reports with pagination and filtering. */
+export async function fetchAdminReports(
+	token: string,
+	params?: ReportsQueryType,
+): Promise<AdminReports> {
 	const { data, error, status } = await api.admin.reports.get({
+		query: params,
 		headers: { authorization: `Bearer ${token}` },
 	});
 	if (error !== null || data === null) {
 		throw toApiError(status, error?.value, 'Admin access required');
 	}
-	return { reports: (data.reports as unknown[]) ?? [], total: data.total ?? 0 };
+	return data;
+}
+
+/** GET /admin/reports/:id for detailed report view. */
+export async function fetchAdminReportDetail(token: string, id: string): Promise<ReportDetailType> {
+	const { data, error, status } = await api.admin.reports({ id }).get({
+		headers: { authorization: `Bearer ${token}` },
+	});
+	if (error !== null || data === null) {
+		throw toApiError(status, error?.value, 'Admin access required');
+	}
+	return data;
+}
+
+/** POST /admin/reports/:id/action to take moderation action. */
+export async function takeReportAction(
+	token: string,
+	id: string,
+	body: ReportActionInputType,
+): Promise<ReportActionResponseType> {
+	const { data, error, status } = await api.admin.reports({ id }).action.post(body, {
+		headers: { authorization: `Bearer ${token}` },
+	});
+	if (error !== null || data === null) {
+		throw toApiError(status, error?.value, 'Admin access required');
+	}
+	return data;
+}
+
+/** GET /admin/audit-log with pagination and filtering. */
+export async function fetchAuditLog(
+	token: string,
+	params?: AuditLogQueryType,
+): Promise<AuditLogResponseType> {
+	const { data, error, status } = await api.admin['audit-log'].get({
+		query: params,
+		headers: { authorization: `Bearer ${token}` },
+	});
+	if (error !== null || data === null) {
+		throw toApiError(status, error?.value, 'Admin access required');
+	}
+	return data;
 }
 
 function authHeaders(token: string) {

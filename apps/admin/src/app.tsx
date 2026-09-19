@@ -1,9 +1,10 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { useAuth } from './lib/auth';
+import { Categories } from './pages/Categories';
 import { Login } from './pages/Login';
 import { NotFound } from './pages/NotFound';
-import { AuditLog, Categories, Dashboard, Reports, Users } from './pages/placeholders';
+import { AuditLog, Dashboard, Reports, Users } from './pages/placeholders';
 
 function RequireAdmin({ children }: { children: React.ReactElement }) {
 	const { session, ready } = useAuth();

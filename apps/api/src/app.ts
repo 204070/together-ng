@@ -9,6 +9,9 @@ import { HttpError } from './lib/errors';
 import { FixedWindowRateLimiter, RedisRateLimiter } from './lib/rate-limit';
 import { validationFields } from './lib/validation';
 import { createVoteWsRouter } from './lib/vote-ws';
+import { createCategoryAdminRouter } from './modules/admin/categories/routes';
+import { CategoryAdminService } from './modules/admin/categories/services';
+import { CategoryAdminStore } from './modules/admin/categories/store';
 import { createAdminRouter } from './modules/admin/routes';
 import { createOtpSender, type OtpSender } from './modules/auth/otp-sender';
 import { createAuthRouter } from './modules/auth/routes';
@@ -61,6 +64,9 @@ export function makeApp(env: AppEnv = {}) {
 	const notificationStore = new NotificationStore(db);
 	const notificationService = new NotificationService(notificationStore);
 
+	const categoryAdminStore = new CategoryAdminStore(db);
+	const categoryAdminService = new CategoryAdminService(categoryAdminStore);
+
 	const fileStorageService: FileStorage = env.storage ?? createFileStorage();
 	const profileStore = new ProfileStore(db);
 	const profileService = new ProfileService(profileStore, fileStorageService);
@@ -111,6 +117,7 @@ export function makeApp(env: AppEnv = {}) {
 		.use(createAuthRouter(authServices))
 		.use(createFeedRouter(feedService))
 		.use(createAdminRouter(authServices))
+		.use(createCategoryAdminRouter(categoryAdminService, authContext))
 		.use(createProfileRouter(profileService, authContext))
 		.use(createTaxonomyRouter({ db }))
 		.use(createRequestRouter(requestService, authContext))

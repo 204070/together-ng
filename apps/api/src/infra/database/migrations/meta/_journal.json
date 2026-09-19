@@ -57,6 +57,13 @@
 			"when": 1789637822867,
 			"tag": "0007_add_vote_count_to_requests",
 			"breakpoints": true
+		},
+		{
+			"idx": 8,
+			"version": "7",
+			"when": 1789810118257,
+			"tag": "0008_add_category_merge_and_related",
+			"breakpoints": true
 		}
 	]
 }

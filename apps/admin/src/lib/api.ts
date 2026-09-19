@@ -1,9 +1,14 @@
 import { treaty } from '@elysiajs/eden';
 import type { App } from '@together/api';
 import type {
+	AdminCategoryType,
 	AdminMeType as AdminMe,
 	AdminReportsType as AdminReports,
 	AuthResponseType,
+	CategoryDetailType,
+	CategoryRelationType,
+	CategoryWithCountsType,
+	SkillType,
 } from '@together/schemas';
 
 /**
@@ -68,6 +73,11 @@ export async function refreshAdminToken(): Promise<string> {
 }
 
 export type { AdminMe, AdminReports };
+export type AdminCategoryListItem = CategoryWithCountsType;
+export type AdminCategoryDetail = CategoryDetailType;
+export type AdminSkill = SkillType;
+export type AdminCategoryRelation = CategoryRelationType;
+export type AdminCategory = AdminCategoryType;
 
 /**
  * GET /admin/me. Resolves for admins; throws ApiError 403
@@ -94,4 +104,118 @@ export async function fetchAdminReports(token: string): Promise<AdminReports> {
 		throw toApiError(status, error?.value, 'Admin access required');
 	}
 	return { reports: (data.reports as unknown[]) ?? [], total: data.total ?? 0 };
+}
+
+function authHeaders(token: string) {
+	return { headers: { authorization: `Bearer ${token}` } };
+}
+
+/** GET /admin/categories — full list with subcategory/skill counts (Eden Treaty). */
+export async function fetchAdminCategories(token: string): Promise<AdminCategoryListItem[]> {
+	const { data, error, status } = await api.admin.categories.get(authHeaders(token));
+	if (error !== null || data === null) {
+		throw toApiError(status, error?.value, 'Could not load categories');
+	}
+	return data;
+}
+
+/** POST /admin/categories — create a top-level category or a subcategory. */
+export async function createAdminCategory(
+	token: string,
+	input: { name: string; description?: string | null; parentId?: number | null },
+): Promise<AdminCategory> {
+	const { data, error, status } = await api.admin.categories.post(input, authHeaders(token));
+	if (error !== null || data === null) {
+		throw toApiError(status, error?.value, 'Could not create category');
+	}
+	return data;
+}
+
+/** GET /admin/categories/:id — detail with subcategories, skills, related. */
+export async function fetchAdminCategoryDetail(
+	token: string,
+	id: number,
+): Promise<AdminCategoryDetail> {
+	const { data, error, status } = await api.admin
+		.categories({ id: String(id) })
+		.get(authHeaders(token));
+	if (error !== null || data === null) {
+		throw toApiError(status, error?.value, 'Could not load category');
+	}
+	return data;
+}
+
+/** PATCH /admin/categories/:id — rename, edit description, retire/restore. */
+export async function updateAdminCategory(
+	token: string,
+	id: number,
+	patch: { name?: string; description?: string | null; retiredAt?: string | null },
+): Promise<AdminCategory> {
+	const { data, error, status } = await api.admin
+		.categories({ id: String(id) })
+		.patch(patch, authHeaders(token));
+	if (error !== null || data === null) {
+		throw toApiError(status, error?.value, 'Could not update category');
+	}
+	return data;
+}
+
+/** POST /admin/categories/:id/merge — reassign content to target, retire source. */
+export async function mergeAdminCategories(
+	token: string,
+	id: number,
+	targetId: number,
+): Promise<AdminCategory> {
+	const { data, error, status } = await api.admin
+		.categories({ id: String(id) })
+		.merge.post({ targetId }, authHeaders(token));
+	if (error !== null || data === null) {
+		throw toApiError(status, error?.value, 'Could not merge categories');
+	}
+	return data;
+}
+
+/** POST /admin/categories/:id/related — link two related categories. */
+export async function relateAdminCategories(
+	token: string,
+	id: number,
+	relatedId: number,
+): Promise<AdminCategoryRelation> {
+	const { data, error, status } = await api.admin
+		.categories({ id: String(id) })
+		.related.post({ relatedId }, authHeaders(token));
+	if (error !== null || data === null) {
+		throw toApiError(status, error?.value, 'Could not link categories');
+	}
+	return data;
+}
+
+/** POST /admin/categories/:id/skills — add a skill under a category. */
+export async function createAdminSkill(
+	token: string,
+	categoryId: number,
+	name: string,
+): Promise<AdminSkill> {
+	const { data, error, status } = await api.admin
+		.categories({ id: String(categoryId) })
+		.skills.post({ name }, authHeaders(token));
+	if (error !== null || data === null) {
+		throw toApiError(status, error?.value, 'Could not create skill');
+	}
+	return data;
+}
+
+/** PATCH /admin/skills/:id — rename or retire/restore a skill. */
+export async function updateAdminSkill(
+	token: string,
+	id: number,
+	patch: { name?: string; retiredAt?: string | null },
+): Promise<AdminSkill> {
+	const { data, error, status } = await api.admin
+		.skills({ id: String(id) })
+		.patch(patch, authHeaders(token));
+	if (error !== null || data === null) {
+		throw toApiError(status, error?.value, 'Could not update skill');
+	}
+	return data;
 }

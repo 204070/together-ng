@@ -16,15 +16,6 @@ export function Reports() {
 	);
 }
 
-export function Categories() {
-	return (
-		<div>
-			<h1>Categories</h1>
-			<p>Category and skill management lands in #20 — placeholder only.</p>
-		</div>
-	);
-}
-
 export function Users() {
 	return (
 		<div>

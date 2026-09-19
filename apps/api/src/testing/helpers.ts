@@ -6,6 +6,7 @@ import {
 	categories,
 	contributorCapabilities,
 	notificationPreferences,
+	reports,
 	requests,
 	skills,
 	users,
@@ -327,6 +328,66 @@ export function makeTestApp(envOverrides: AppEnv = {}): ReturnType<typeof makeAp
 	});
 }
 
+export interface CreateReportOptions {
+	reporterId?: string | null;
+	subjectType?:
+		| 'request'
+		| 'profile'
+		| 'contribution'
+		| 'message'
+		| 'resource'
+		| 'resource_listing'
+		| 'lending_agreement';
+	subjectId?: string;
+	reason?: string;
+	description?: string | null;
+	status?: 'pending' | 'under_review' | 'resolved' | 'dismissed';
+}
+
+/**
+ * Creates a report row. When `subjectId` is omitted, a published request
+ * (with its own author) is created first so the report points at real
+ * content. Returns the report id and the ids it references.
+ */
+export async function createReport(options: CreateReportOptions = {}): Promise<{
+	id: string;
+	reporterId: string | null;
+	subjectType: string;
+	subjectId: string;
+}> {
+	const db = getDatabase();
+	let reporterId: string | null;
+	if (options.reporterId !== undefined) {
+		reporterId = options.reporterId;
+	} else {
+		reporterId = (await createUser()).id;
+	}
+	const subjectType = options.subjectType ?? 'request';
+	let subjectId = options.subjectId;
+	if (!subjectId) {
+		if (subjectType === 'profile') {
+			subjectId = (await createUser()).id;
+		} else if (subjectType === 'request') {
+			subjectId = await createRequest();
+		} else {
+			throw new Error(`createReport needs an explicit subjectId for ${subjectType}`);
+		}
+	}
+	const [row] = await db
+		.insert(reports)
+		.values({
+			reporterId,
+			subjectType: subjectType as 'request',
+			subjectId,
+			reason: options.reason ?? 'Spam content',
+			description: options.description ?? null,
+			status: options.status ?? 'pending',
+		})
+		.returning();
+	if (!row) throw new Error('Failed to create report');
+	return { id: row.id, reporterId, subjectType, subjectId };
+}
+
 /**
  * Unified helper namespace matching the Klump `$` pattern.
  */
@@ -345,5 +406,6 @@ export const $ = {
 	setPrefs,
 	createRequest,
 	createRequestFixture,
+	createReport,
 	makeTestApp,
 };

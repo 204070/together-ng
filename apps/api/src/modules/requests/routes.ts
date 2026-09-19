@@ -1,7 +1,12 @@
 import { jwt } from '@elysiajs/jwt';
 import { RequestDraftCreate, RequestPatch } from '@together/schemas';
 import { Elysia, t } from 'elysia';
-import { createAuthGuard, type JwtVerifier, requireActiveActor } from '../../lib/authentication';
+import {
+	createAuthGuard,
+	type JwtVerifier,
+	requireActiveActor,
+	requireUnsuspendedUser,
+} from '../../lib/authentication';
 import type { RequestService } from './services';
 
 export interface RequestRouteAuth {
@@ -34,27 +39,42 @@ export function createRequestRouter(requestService: RequestService, auth: Reques
 			},
 			{ params: t.Object({ id: t.String({ format: 'uuid' }) }) },
 		)
+		.post(
+			'/requests',
+			async ({ body, headers, jwt: verifier, set }) => {
+				// Suspended accounts are rejected here with 403
+				// ACCOUNT_SUSPENDED (issue #19) rather than the guard's
+				// generic 401, so the client can tell a suspended account
+				// apart from a logged-out one.
+				const { actor } = await requireUnsuspendedUser(
+					headers as { authorization?: string },
+					verifier as unknown as JwtVerifier,
+					{ findUserById: auth.findUserById },
+				);
+				const result = await requestService.createDraft(actor.userId, body);
+				set.status = 201;
+				return result;
+			},
+			{ body: RequestDraftCreate },
+		)
+		.post(
+			'/requests/drafts',
+			async ({ body, headers, jwt: verifier, set }) => {
+				// Same suspended-account handling as POST /requests above.
+				const { actor } = await requireUnsuspendedUser(
+					headers as { authorization?: string },
+					verifier as unknown as JwtVerifier,
+					{ findUserById: auth.findUserById },
+				);
+				const result = await requestService.createDraft(actor.userId, body);
+				set.status = 201;
+				return result;
+			},
+			{ body: RequestDraftCreate },
+		)
 		.use(
 			new Elysia()
 				.use(createAuthGuard({ findUserById: auth.findUserById }, auth.jwtSecret))
-				.post(
-					'/requests',
-					async ({ body, actor, set }) => {
-						const result = await requestService.createDraft(actor.userId, body);
-						set.status = 201;
-						return result;
-					},
-					{ body: RequestDraftCreate },
-				)
-				.post(
-					'/requests/drafts',
-					async ({ body, actor, set }) => {
-						const result = await requestService.createDraft(actor.userId, body);
-						set.status = 201;
-						return result;
-					},
-					{ body: RequestDraftCreate },
-				)
 				.patch(
 					'/requests/:id',
 					async ({ params, body, actor }) => {

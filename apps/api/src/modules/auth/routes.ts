@@ -2,7 +2,7 @@ import { jwt } from '@elysiajs/jwt';
 import { AuthResponse, SendOtpRequest, UserPrivate, VerifyOtpRequest } from '@together/schemas';
 import { type CookieOptions, Elysia, t } from 'elysia';
 
-import { requireActiveUser } from '../../lib/authentication';
+import { requireUnsuspendedUser } from '../../lib/authentication';
 import { unauthorizedError, validationError } from '../../lib/errors';
 import {
 	type AccessTokenSigner,
@@ -104,7 +104,10 @@ export function createAuthRouter(services: AuthServices) {
 		.get(
 			'/auth/me',
 			async ({ headers, jwt: signAccess }) => {
-				const { user } = await requireActiveUser(
+				// Suspended accounts see 403 ACCOUNT_SUSPENDED here (issue
+				// #19) instead of the generic 401, so clients can
+				// distinguish "suspended" from "logged out".
+				const { user } = await requireUnsuspendedUser(
 					headers as { authorization?: string },
 					signAccess as never,
 					services.store,

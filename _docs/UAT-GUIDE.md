@@ -344,6 +344,24 @@ For a tester with an admin account, to manage the request taxonomy:
 6. Open one of your own **draft** request URLs in incognito → **Expected:** "Request not found" with generic metadata (no draft title/description leaks); open it while logged in as the author → **Expected:** the draft renders with a state badge ("only you can see this request in its current state").
 7. Edit the request title, reload, View Source → **Expected:** both the page heading and `og:title` show the new title.
 
+### 19. Admin Report Review and Moderation
+
+Requires an admin account (a user row with `is_admin = true`; sign in via the admin app).
+
+1. Open the admin app and sign in as admin, then go to **Reports** (`/admin/reports`).
+2. **Expected:** The queue lists reported content with Reason, Category, Status, Created date, and a "View report" link per row. As a non-admin you get an access error instead.
+3. Use the **Category** dropdown and select **Requests**.
+4. **Expected:** Only request reports remain listed.
+5. With an empty queue, **Expected:** "No reports pending" (not a blank page). While loading you see a skeleton; on API error a **Retry** button appears.
+6. Click **"View report"** on a row.
+7. **Expected:** Detail shows reason, description, category, status, and the reported content snapshot (request title/body, profile, contribution, etc.) with no reporter name/avatar.
+8. Click **Suspend**, then as the reported user open `GET /auth/me` or try creating a request.
+9. **Expected:** The user gets `403 ACCOUNT_SUSPENDED`. Back as admin, act **Restore** on a new report for the same user — the user can act again.
+10. Open **Audit Log** (`/admin/audit-log`).
+11. **Expected:** Every moderation action appears newest-first with actor, action, target, and timestamp; filter by action (e.g. `suspend`) and page through results. API: `GET /admin/audit-log?page&limit&action=suspend`.
+
+Quick API reference: `GET /admin/reports`, `GET /admin/reports/:id`, `POST /admin/reports/:id/action` with `{ "action": "warn" | "restrict" | "suspend" | "restore" | "dismiss", "reason": "..." }`, `GET /admin/audit-log`.
+
 ---
 
 ## Request State Machine

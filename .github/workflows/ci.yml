@@ -61,10 +61,10 @@ jobs:
 
       - name: Migration drift
         run: |
-          bun run --filter @together/db db:generate
-          output="$(git status --porcelain packages/db/drizzle)"
+          bun run --filter @together/api db:generate
+          output="$(git status --porcelain apps/api/src/infra/database/migrations)"
           if [ -n "$output" ]; then
-            echo "Migration drift detected under packages/db/drizzle:"
+            echo "Migration drift detected under apps/api/src/infra/database/migrations:"
             echo "$output"
             exit 1
           fi
@@ -72,5 +72,5 @@ jobs:
 
       - name: Test
         run: |
-          bun run --filter @together/db db:migrate
+          bun run --filter @together/api db:migrate
           bun run test

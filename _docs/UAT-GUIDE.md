@@ -334,6 +334,16 @@ For a tester with an admin account, to manage the request taxonomy:
 7. Related: pick a category under "Link related" and submit. **Expected:** both categories' detail panels list each other under "Related: ...".
 8. Validation to try: duplicate active names are rejected with a conflict error; merging a category into itself and retiring an already-retired category are rejected with a clear `400` error.
 
+### 18. Sharing a Request (Shareable URL + Social Preview)
+
+1. Publish a request (follow section 5 until the request state is "Receiving responses"), then open its detail page at `http://localhost:5000/requests/<id>` (copy the URL from the address bar).
+2. **Expected:** The page shows the request title, goal summary, category badge, a **Share** button, and (when logged out) a **"Join Together to help"** link — no login required to view.
+3. Click **Share** on a phone/with Web Share support → **Expected:** the native share sheet opens with the title, summary, and link. On desktop → **Expected:** the button changes to **"Link copied"** and a "Link copied" toast appears.
+4. Paste the copied link into a new incognito window → **Expected:** the same title, goal, category, and Join CTA render with no login.
+5. View Source on the detail page → **Expected:** `<meta property="og:title">`, `og:description`, `og:url` (equals the page URL), `og:image` (fallback card), `1200`/`630` dimensions, and `twitter:card = summary_large_image` are all present and non-empty in the initial HTML.
+6. Open one of your own **draft** request URLs in incognito → **Expected:** "Request not found" with generic metadata (no draft title/description leaks); open it while logged in as the author → **Expected:** the draft renders with a state badge ("only you can see this request in its current state").
+7. Edit the request title, reload, View Source → **Expected:** both the page heading and `og:title` show the new title.
+
 ---
 
 ## Request State Machine
